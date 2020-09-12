@@ -4,11 +4,18 @@ use std::io;
 
 #[derive(Debug)]
 pub enum ParserError {
-    IoError(io::Error)
+    IoError(io::Error),
+    FormatError()
 }
 
 impl From<io::Error> for ParserError {
     fn from(error: io::Error) -> Self {
         ParserError::IoError(error)
+    }
+}
+
+impl From<String> for ParserError {
+    fn from(string: String) -> Self {
+        ParserError::FormatError()
     }
 }

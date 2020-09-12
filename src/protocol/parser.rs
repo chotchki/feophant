@@ -38,7 +38,7 @@ impl Parser {
         let bytes_read = self.buff_reader.read(&mut buffer)?;
 
         if bytes_read != 4 {
-            return Err(ParserError{message: format!("Read just {} bytes", bytes_read)});
+            return Err(format!("Read just {} bytes", bytes_read));
         }
 
         //Convert the payload, there is a chance the payload could be too big to fit in memory
