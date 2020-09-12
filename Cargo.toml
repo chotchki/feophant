@@ -5,3 +5,4 @@ authors = ["Christopher Hotchkiss <christopher.hotchkiss@gmail.com>"]
 edition = "2018"
 
 [dependencies]
+threadpool = "1.8.1"
