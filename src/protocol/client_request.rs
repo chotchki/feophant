@@ -1,5 +1,4 @@
 pub struct ClientRequest {
-    message_type : u8,
-    length: u32,
-    payload: Vec<u8>
+    pub message_type : u8,
+    pub payload: Vec<u8>
 }

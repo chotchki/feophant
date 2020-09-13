@@ -1,20 +1,18 @@
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use threadpool::Builder;
 mod protocol;
+use protocol::parser_error::ParserErrors;
 
 
 
 
-fn handle_connection(mut stream: TcpStream) -> std::io::Result<()> {
+fn handle_connection(stream: TcpStream) -> Result<(), ParserErrors> {
     println!("Recieved connection from {}", stream.peer_addr()?.ip());
 
-    let parser = protocol::parser::Parser::new(stream);
+    let mut parser = protocol::parser::Parser::new(Box::new(stream));
+    let client_request = parser.read_request()?.unwrap();
 
-
-
-
-
-
+    println!("Got type {}", client_request.message_type);
     Ok(())
 }
 
@@ -38,7 +36,7 @@ fn main() -> std::io::Result<()> {
             let cstream = stream.unwrap();
             match handle_connection(cstream) {
                 Ok(_) => println!("Client session ended"),
-                Err(e) => println!("Listener thread had an error {}", e)
+                Err(_) => println!("Listener thread had an error")
             }
         });
     }

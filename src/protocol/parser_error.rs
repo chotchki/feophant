@@ -1,21 +1,41 @@
 use std::io;
+use std::num;
 
 //See here for error types: https://doc.rust-lang.org/stable/rust-by-example/error/multiple_error_types/define_error_type.html
 
 #[derive(Debug)]
-pub enum ParserError {
+pub enum ParserErrors {
     IoError(io::Error),
-    FormatError()
+    ClientData(ClientDataError),
+    USizeTooSmall(num::TryFromIntError)
 }
 
-impl From<io::Error> for ParserError {
+impl From<io::Error> for ParserErrors {
     fn from(error: io::Error) -> Self {
-        ParserError::IoError(error)
+        ParserErrors::IoError(error)
     }
 }
 
-impl From<String> for ParserError {
-    fn from(string: String) -> Self {
-        ParserError::FormatError()
+impl From<ClientDataError> for ParserErrors {
+    fn from(error: ClientDataError) -> Self {
+        ParserErrors::ClientData(error)
+    }
+}
+impl From<std::num::TryFromIntError> for ParserErrors {
+    fn from(error: num::TryFromIntError) -> Self {
+        ParserErrors::USizeTooSmall(error)
+    }
+}
+
+#[derive(Debug)]
+pub struct ClientDataError {
+    message: String
+}
+
+impl ClientDataError {
+    pub fn new(mesg: String) -> ClientDataError{
+        ClientDataError {
+            message: mesg
+        }
     }
 }
