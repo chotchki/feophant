@@ -1,46 +1,20 @@
-use std::net::{SocketAddr, TcpListener, TcpStream};
-use threadpool::Builder;
+use tokio::net::{TcpListener, TcpStream};
 mod protocol;
-use protocol::parser_error::ParserErrors;
 
+#[tokio::main]
+async fn main() {
+    //Bind to a fixed port
+    let listener = TcpListener::bind("127.0.0.1:50000").await.unwrap();
 
+    loop {
+        let (socket, _) = listener.accept().await.unwrap();
 
-
-fn handle_connection(stream: TcpStream) -> Result<(), ParserErrors> {
-    println!("Recieved connection from {}", stream.peer_addr()?.ip());
-
-    let mut parser = protocol::parser::Parser::new(Box::new(stream));
-    let client_request = parser.read_request()?.unwrap();
-
-    println!("Got type {}", client_request.message_type);
-    Ok(())
-}
-
-fn main() -> std::io::Result<()> {
-    let pool = Builder::new()
-    .thread_name("Listener".into())
-    .build();
-
-    println!("Threadpool started with {} threads", pool.max_count());
-
-    //Bind to a random port
-    let addrs = [
-        SocketAddr::from(([0, 0, 0, 0], 50000)),
-    ];
-    let listener = TcpListener::bind(&addrs[..])?;
-
-    println!("Listening on {} port", listener.local_addr()?.port());
-
-    for stream in listener.incoming(){
-        pool.execute(|| {
-            let cstream = stream.unwrap();
-            match handle_connection(cstream) {
-                Ok(_) => println!("Client session ended"),
-                Err(_) => println!("Listener thread had an error")
-            }
+        tokio::spawn(async move {
+            process(socket).await;
         });
     }
+}
 
-    println!("Hello, world!");
-    Ok(())
+async fn process(socket: TcpStream) {
+
 }
