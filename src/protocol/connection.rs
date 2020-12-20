@@ -3,9 +3,8 @@ use std::io::{Cursor, Error, ErrorKind};
 use tokio::io::{AsyncReadExt, AsyncWriteExt, BufWriter};
 use tokio::net::TcpStream;
 use super::frame::Frame;
-use super::parser_error::*;
 
-struct Connection {
+pub struct Connection {
     stream: BufWriter<TcpStream>,
     buffer: BytesMut,
     in_startup: bool
@@ -18,6 +17,10 @@ impl Connection {
             buffer: BytesMut::with_capacity(4096),
             in_startup: true
         }
+    }
+
+    pub fn startup_done(&mut self){
+        self.in_startup = false;
     }
 
     pub async fn read_frame(&mut self) -> Result<Option<Frame>, Error> {
@@ -36,7 +39,7 @@ impl Connection {
         }
     }
 
-    pub async fn write_frame(&mut self, frame: &Frame) -> Result<(), ParserErrors> {
+    pub async fn write_frame(&mut self, frame: &Frame) -> Result<(), Error> {
         if frame.message_type == 0 {
             //This is a special type for SSL responses, no type or length will be written
             self.stream.write_all(&frame.payload).await?;
@@ -46,7 +49,7 @@ impl Connection {
             self.stream.write_all(&frame.payload).await?;
         }
 
-        self.stream.flush().await;
+        self.stream.flush().await?;
 
         Ok(())
     }
@@ -67,9 +70,9 @@ impl Connection {
                 Ok(Some(frame))
             }
 
-            Err(IncompleteLength) => Ok(None),
-            Err(IncompleteType) => Ok(None),
-            Err(IncompletePayload) => Ok(None),
+            Err(super::frame::Error::IncompleteLength) => Ok(None),
+            Err(super::frame::Error::IncompleteType) => Ok(None),
+            Err(super::frame::Error::IncompletePayload) => Ok(None),
             Err(e) => Err(e.into())
         }
     }

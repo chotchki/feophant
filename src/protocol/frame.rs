@@ -23,9 +23,17 @@ pub enum Error {
 }
 
 impl Frame {
-    pub fn check(src: &mut Cursor<&[u8]>, inStartup: bool) -> Result<(), Error>{
-        if !inStartup {
-            let msg_type = get_type(src)?;
+    pub fn new(message_type: u8, length: u32, payload: Bytes) -> Frame {
+        Frame{
+            message_type: message_type,
+            length: length,
+            payload: payload
+        }
+    }
+
+    pub fn check(src: &mut Cursor<&[u8]>, in_startup: bool) -> Result<(), Error>{
+        if !in_startup {
+            let _msg_type = get_type(src)?;
 
             //TODO Check for other valid msg types here
         }
@@ -41,9 +49,9 @@ impl Frame {
     }
 
     //Must be called post check to make sure we have a message
-    pub fn parse(src: &mut Cursor<&[u8]>, inStartup: bool) -> Result<Frame, Error> {
+    pub fn parse(src: &mut Cursor<&[u8]>, in_startup: bool) -> Result<Frame, Error> {
         let mut msg_type: u8 = 0;
-        if !inStartup {
+        if !in_startup {
             msg_type = get_type(src)?;
 
             //TODO Check for other valid msg types here
@@ -92,7 +100,8 @@ impl fmt::Display for Error {
         match self {
             Error::IncompleteLength => "stream was missing the u32 length".fmt(fmt),
             Error::IncompleteType => "stream was missing the type byte".fmt(fmt),
-            Error::IncompletePayload => "stream was missing the complete payload".fmt(fmt)
+            Error::IncompletePayload => "stream was missing the complete payload".fmt(fmt),
+            _other => "had an I/O error".fmt(fmt)
         }
     }
 }
