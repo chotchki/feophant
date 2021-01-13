@@ -31,6 +31,7 @@ impl Frame {
         }
     }
 
+    //Protocol documented here: https://www.postgresql.org/docs/13/protocol-message-formats.html
     pub fn check(src: &mut Cursor<&[u8]>, in_startup: bool) -> Result<(), Error>{
         if !in_startup {
             let _msg_type = get_type(src)?;
@@ -60,7 +61,7 @@ impl Frame {
         let length: u32 = get_length(src)?;
         let remaining_len: usize = (length - 4).try_into().unwrap();
 
-        let data = Bytes::copy_from_slice(&src.bytes()[..remaining_len]);
+        let data = Bytes::copy_from_slice(&src.chunk()[..remaining_len]);
         src.advance(remaining_len);
 
         Ok(Frame{

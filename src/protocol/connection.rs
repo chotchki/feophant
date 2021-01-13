@@ -2,29 +2,43 @@ use bytes::{Buf,BytesMut};
 use std::io::{Cursor, Error, ErrorKind};
 use tokio::io::{AsyncReadExt, AsyncWriteExt, BufWriter};
 use tokio::net::TcpStream;
+use tokio::sync::oneshot;
+use tokio::sync::oneshot::Sender;
+use tokio::sync::oneshot::error::TryRecvError;
 use super::frame::Frame;
 
 pub struct Connection {
     stream: BufWriter<TcpStream>,
     buffer: BytesMut,
+    startup_receiver: oneshot::Receiver<bool>,
+    startup_sender: oneshot::Sender<bool>,
     in_startup: bool
 }
 
 impl Connection {
     pub fn new(stream: TcpStream) -> Connection {
+        let(tx, rx) = oneshot::channel();
         Connection {
             stream: BufWriter::new(stream),
             buffer: BytesMut::with_capacity(4096),
+            startup_receiver: rx,
+            startup_sender: tx,
             in_startup: true
         }
     }
 
-    pub fn startup_done(&mut self){
-        self.in_startup = false;
+    pub fn startup_done(self){
+        self.startup_sender.send(true);
     }
 
     pub async fn read_frame(&mut self) -> Result<Option<Frame>, Error> {
         loop {
+            //Check if the startup channel fired
+            if self.in_startup == false {
+                self.in_startup = self.startup_receiver.try_recv().is_ok();
+            }
+
+            //Try to parse a frame
             if let Some(frame) = self.parse_frame()? {
                 return Ok(Some(frame));
             }

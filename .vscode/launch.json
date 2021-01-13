@@ -17,7 +17,7 @@
             "stopOnEntry": false,
             "sourceLanguages": ["rust"],
             "sourceMap": {
-              "/rustc/*": "${env:USERPROFILE}/.rustup/toolchains/stable-x86_64-pc-windows-msvc/lib/rustlib/src/rust"
+              //"/rustc/*": "${env:USERPROFILE}/.rustup/toolchains/stable-x86_64-pc-windows-msvc/lib/rustlib/src/rust"
             }
         },
         {

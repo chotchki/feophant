@@ -1,8 +1,11 @@
-use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::oneshot;
 mod protocol;
 use protocol::connection::Connection;
 use protocol::frame::Frame;
+use protocol::process_frame::process_frame;
+
+use std::sync::Arc;
+use tokio::net::{TcpListener, TcpStream};
+use tokio::sync::oneshot;
 
 #[tokio::main]
 async fn main() {
@@ -19,15 +22,22 @@ async fn main() {
 }
 
 async fn process(socket: TcpStream) {
-    let mut connection = Connection::new(socket);
+    let connection = Arc::new(Connection::new(socket));
 
-    while let Some(frame) = connection.read_frame().await.unwrap() {
-        println!("GOT {:?}", frame);
+    while let Some(frame) = &connection.read_frame().await.unwrap() {
+        //println!("GOT {:?}", frame);
+        //println!("length of payload {}", frame.payload.len());
 
         //Channel to get the response to send back to the client
         let(tx, rx) = oneshot::channel::<Frame>();
         
         //Next we have a task parse the payload
+        let async_conn = connection.clone();
+        let handle = tokio::spawn(async move {
+            process_frame(&async_conn, frame, tx);
+        });
+
+
         //Next we take action on the payload
 
 
