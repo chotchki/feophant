@@ -32,7 +32,17 @@ impl Frame {
     }
 
     //Protocol documented here: https://www.postgresql.org/docs/13/protocol-message-formats.html
+    //More complicated parser is needed due to crappy messages
     pub fn check(src: &mut Cursor<&[u8]>, in_startup: bool) -> Result<(), Error>{
+        let buff_amount = src.remaining();
+
+        if buff_amount == 0 {
+            return Err(Error::IncompleteLength);
+        }
+
+        //Get the first byte to make decisions
+        let first_byte = src.get_u8();
+
         if !in_startup {
             let _msg_type = get_type(src)?;
 
