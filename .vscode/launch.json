@@ -1,62 +1,34 @@
 {
-    // Use IntelliSense to learn about possible attributes.
-    // Hover to view descriptions of existing attributes.
-    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
-        {
-            "type": "lldb",
-            "request": "launch",
-            "name": "Launch",
-            "args": [],
-            "program": "${workspaceFolder}/target/debug/rusty-elephant",
-            "windows": {
-                "program": "${workspaceFolder}/target/debug/rusty-elephant.exe"
-            },
-            "cwd": "${workspaceFolder}",
-            "stopOnEntry": false,
-            "sourceLanguages": ["rust"],
-            "sourceMap": {
-              //"/rustc/*": "${env:USERPROFILE}/.rustup/toolchains/stable-x86_64-pc-windows-msvc/lib/rustlib/src/rust"
-            }
+      {
+        "type": "lldb",
+        "request": "launch",
+        "name": "Launch",
+        "args": [],
+        "program": "${workspaceFolder}/target/debug/rusty-elephant",
+        "windows": {
+            "program": "${workspaceFolder}/target/debug/rusty-elephant.exe"
         },
-        {
-            "type": "lldb",
-            "request": "launch",
-            "name": "Debug executable 'rusty-elephant'",
-            "cargo": {
-                "args": [
-                    "build",
-                    "--bin=rusty-elephant",
-                    "--package=rusty-elephant"
-                ],
-                "filter": {
-                    "name": "rusty-elephant",
-                    "kind": "bin"
-                }
-            },
-            "args": [],
-            "cwd": "${workspaceFolder}",
-            "stdio": null
-        },
-        {
-            "type": "lldb",
-            "request": "launch",
-            "name": "Debug unit tests in executable 'rusty-elephant'",
-            "cargo": {
-                "args": [
-                    "test",
-                    "--no-run",
-                    "--bin=rusty-elephant",
-                    "--package=rusty-elephant"
-                ],
-                "filter": {
-                    "name": "rusty-elephant",
-                    "kind": "bin"
-                }
-            },
-            "args": [],
-            "cwd": "${workspaceFolder}"
+        "cwd": "${workspaceFolder}",
+        "stopOnEntry": false,
+        "sourceLanguages": ["rust"],
+        "sourceMap": {
+          "/rustc/*": "${env:HOME}/.rustup/toolchains/stable-aarch64-apple-darwin/lib/rustlib/src/rust"
         }
+      },
+      {
+        "name": "(Windows) Launch",
+        "type": "cppvsdbg",
+        "request": "launch",
+        "program": "${workspaceFolder}/target/debug/rusty-elephant.exe",
+        "stopAtEntry": false,
+        "cwd": "${workspaceFolder}",
+        "sourceFileMap": {
+          "/rustc/5e1a799842ba6ed4a57e91f7ab9435947482f7d8": "${env:USERPROFILE}/.rustup/toolchains/stable-x86_64-pc-windows-msvc/lib/rustlib/src/rust"
+        },
+        "symbolSearchPath": "https://msdl.microsoft.com/download/symbols",
+        "environment": []
+      }
     ]
-}
+  }
