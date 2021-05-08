@@ -14,3 +14,6 @@ Lauch a postgres client application to test
 # Architecture and structure (for the eighth time or more)
 
 main.rs is the entry point it listens and on connection hands off process handling to a connection object
+
+## Rust Notes
+How to setup modules sanely: https://dev.to/stevepryde/intro-to-rust-modules-3g8k
