@@ -8,6 +8,7 @@ pub struct NetworkFrame {
 }
 
 impl NetworkFrame {
+    //Ugly figure out how to do this as from/Into
     pub fn to_bytes(&self) -> Bytes {  
         if self.message_type == 0 {
             return self.payload.clone();
