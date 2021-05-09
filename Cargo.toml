@@ -6,8 +6,12 @@ edition = "2018"
 
 [dependencies]
 hex-literal = "0.3.1"
-bytes = "1.0.1"
+bytes = "1"
+futures = "0.3"
+log = "0.4"
 nom = "6"
+simplelog = "^0.10.0"
 tokio = { version = "1", features = ["full"] }
+thiserror = "1.0"
 #threadpool = "1.8.1"
 #sm = "0.9.0"

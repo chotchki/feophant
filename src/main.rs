@@ -1,28 +1,47 @@
-mod protocol;
-use protocol::connection::Connection;
-use protocol::frame::Frame;
-use protocol::process_frame::process_frame;
-
-use std::sync::Arc;
+//Vendor Imports
+#[macro_use] 
+extern crate log;
+extern crate simplelog;
+use simplelog::{CombinedLogger, TermLogger, LevelFilter, Config, TerminalMode, ColorChoice};
 use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::oneshot;
+
+
+//Application Imports
+mod protocol;
+use protocol::ConnectionHandler;
 
 #[tokio::main]
 async fn main() {
+    CombinedLogger::init(
+        vec![
+            TermLogger::new(LevelFilter::Debug, Config::default(), TerminalMode::Mixed, ColorChoice::Auto)
+        ]
+    ).unwrap();
+
+    info!("Welcome to the Rusty Elephant!");
+
     //Bind to a fixed port
-    let mut listener = TcpListener::bind("127.0.0.1:50000").await.unwrap();
+    let port:u32 = 50000;
+    let listener = TcpListener::bind(format!("{}{}", "127.0.0.1:", port)).await.unwrap();
+
+    info!("Up and listening on port {}", port);
 
     loop {
-        let (socket, _) = listener.accept().await.unwrap();
+        let (socket, client_addr) = listener.accept().await.unwrap();
 
+        info!("Got a connection from {}", client_addr);
+        
+        //This is the inbound commands
+        let (tx, rx) = tokio::sync::mpsc::channel(1);
+        let mut handler = ConnectionHandler::new(socket, tx);
         tokio::spawn(async move {
-            process(socket).await;
+            handler.process().await;
         });
     }
 }
 
-async fn process(socket: TcpStream) {
-    let connection = Arc::new(Connection::new(socket));
+//async fn process(socket: TcpStream) {
+    
 
     // while let Some(frame) = &connection.read_frame().await.unwrap() {
     //     //println!("GOT {:?}", frame);
@@ -58,4 +77,4 @@ async fn process(socket: TcpStream) {
     //         }
     //     }
     // }
-}
+//}
