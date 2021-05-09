@@ -1,12 +1,17 @@
+//! Implementation hints from here: https://docs.rs/tokio-util/0.6.6/tokio_util/codec/index.html
+
 use tokio_util::codec::{Decoder,Encoder};
 use bytes::{BytesMut, Buf, Bytes};
 use hex_literal::hex;
+use std::convert::TryFrom;
 
 use super::NetworkFrame;
 
 pub struct PgCodec {}
 
 const SSL_PAYLOAD: [u8; 4] = hex!("12 34 56 78");
+
+const MAX:u32 = u32::MAX;
 
 impl Decoder for PgCodec {
     type Item = NetworkFrame;
@@ -77,7 +82,7 @@ impl Decoder for PgCodec {
         src.advance(prefix_len + length_size);
 
         // Convert the data to a string, or fail if it is not valid utf-8.
-        Ok(Some(NetworkFrame::new(message_type, length, Bytes::from(data))))
+        Ok(Some(NetworkFrame::new(message_type, Bytes::from(data))))
     }
 }
 
@@ -85,6 +90,7 @@ impl Encoder<NetworkFrame> for PgCodec {
     type Error = std::io::Error;
 
     fn encode(&mut self, item: NetworkFrame, dst: &mut BytesMut) -> Result<(), Self::Error> {
+        //Messages types of zero are special because they get written out raw. Probably should find a better way to do this
         if item.message_type == 0 {
             // Reserve space in the buffer.
             dst.reserve(item.payload.len());
@@ -99,11 +105,19 @@ impl Encoder<NetworkFrame> for PgCodec {
             dst.extend_from_slice(&[item.message_type][..]);
 
             // Convert the length into a byte array.
-            // Protocol will always fit the u32
-            let len_slice = u32::to_be_bytes(item.length);
-            dst.extend_from_slice(&len_slice);
-        }
+            let length = match u32::try_from(item.payload.len() + 4) {
+                Ok(n) => n,
+                Err(_) => return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    format!("Frame of length {} plus length header is too large.", item.payload.len())
+                ))
+            };
 
+            let len_slice = u32::to_be_bytes(length);
+            dst.extend_from_slice(&len_slice);
+
+            dst.extend_from_slice(&item.payload);
+        }
         Ok(())
     }
 }
