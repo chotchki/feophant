@@ -6,9 +6,6 @@ use futures::stream::StreamExt;
 use simplelog::{CombinedLogger, TermLogger, LevelFilter, Config, TerminalMode, ColorChoice};
 use tokio::net::TcpListener;
 use tokio_util::codec::Framed;
-use hex_literal::hex;
-
-const SSL_PAYLOAD: [u8; 4] = hex!("12 34 56 78");
 
 //Application Imports
 mod codec;
