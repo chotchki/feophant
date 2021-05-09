@@ -4,15 +4,13 @@ extern crate log;
 extern crate simplelog;
 use futures::stream::StreamExt;
 use simplelog::{CombinedLogger, TermLogger, LevelFilter, Config, TerminalMode, ColorChoice};
-use std::sync::Arc;
-use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::Mutex;
+use tokio::net::TcpListener;
 use tokio_util::codec::Framed;
+use hex_literal::hex;
 
-
+const SSL_PAYLOAD: [u8; 4] = hex!("12 34 56 78");
 
 //Application Imports
-mod protocol;
 mod codec;
 use codec::PgCodec;
 

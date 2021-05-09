@@ -2,16 +2,11 @@
 
 use tokio_util::codec::{Decoder,Encoder};
 use bytes::{BytesMut, Buf, Bytes};
-use hex_literal::hex;
 use std::convert::TryFrom;
 
 use super::NetworkFrame;
 
 pub struct PgCodec {}
-
-const SSL_PAYLOAD: [u8; 4] = hex!("12 34 56 78");
-
-const MAX:u32 = u32::MAX;
 
 impl Decoder for PgCodec {
     type Item = NetworkFrame;
@@ -42,14 +37,13 @@ impl Decoder for PgCodec {
         length_bytes.copy_from_slice(&src[(prefix_len-4)..prefix_len]);
 
         let length = u32::from_be_bytes(length_bytes) as u32;
-
         if length < 4 {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
                 format!("Frame length of {} is too small", length)
                 ));
         }
-        let length = length - 4;
+        
         let length_size = u32::from_be_bytes(length_bytes) as usize - 4;
 
 
