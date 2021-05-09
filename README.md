@@ -17,3 +17,6 @@ main.rs is the entry point it listens and on connection hands off process handli
 
 ## Rust Notes
 How to setup modules sanely: https://dev.to/stevepryde/intro-to-rust-modules-3g8k
+
+Reasonable application error type creation: https://github.com/dtolnay/anyhow
+Library Errors: https://github.com/dtolnay/thiserror

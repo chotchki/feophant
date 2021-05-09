@@ -1,4 +1,4 @@
-use bytes::{Buf,BufMut,Bytes,BytesMut};
+use bytes::{BufMut,Bytes,BytesMut};
 
 #[derive(Clone, Debug)]
 pub struct NetworkFrame {
@@ -8,6 +8,15 @@ pub struct NetworkFrame {
 }
 
 impl NetworkFrame {
+    pub fn new(message_type: u8, length: u32, payload: Bytes) -> NetworkFrame {
+        NetworkFrame{
+            message_type: message_type,
+            length: length,
+            payload: payload
+        }
+    }
+
+
     //Ugly figure out how to do this as from/Into
     pub fn to_bytes(&self) -> Bytes {  
         if self.message_type == 0 {
