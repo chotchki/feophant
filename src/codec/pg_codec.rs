@@ -21,6 +21,8 @@ impl Decoder for PgCodec {
             return Ok(None);
         }
 
+        debug!("Got message {:?}", src);
+
         //Read the first byte
         let mut message_bytes = [0u8; 1];
         message_bytes.copy_from_slice(&src[..1]);

@@ -2,15 +2,18 @@
 #[macro_use] 
 extern crate log;
 extern crate simplelog;
+use futures::sink::SinkExt;
 use futures::stream::StreamExt;
 use simplelog::{CombinedLogger, TermLogger, LevelFilter, Config, TerminalMode, ColorChoice};
 use tokio::net::TcpListener;
 use tokio_util::codec::Framed;
 
+
 //Application Imports
 mod codec;
-use codec::PgCodec;
+use codec::{NetworkFrame,PgCodec};
 mod processor;
+use processor::ClientProcessor;
 
 #[tokio::main]
 async fn main() {
@@ -37,9 +40,24 @@ async fn main() {
             let codec = PgCodec{};
             let (mut sink, mut input) = Framed::new(stream, codec).split();
 
+            let process = ClientProcessor{};
             while let Some(Ok(event)) = input.next().await {
-                println!("Event {:?}", event);
-              }
+                let response:NetworkFrame = match process.process(event) {
+                    Ok(response) => response,
+                    Err(e) => {
+                        warn!("Had a processing error {}", e);
+                        break;
+                    }
+                };
+
+                match sink.send(response).await {
+                    Ok(_) => {},
+                    Err(e) => {
+                        warn!("Unable to send response {}", e);
+                        break;
+                    }
+                }
+            }
         });
     }
 }

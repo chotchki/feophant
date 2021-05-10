@@ -1,77 +1,69 @@
 use bytes::Bytes;
 use hex_literal::hex;
-use log;
 use nom::{
     IResult,
     bytes::complete::tag,
-    Err,
-    InputIter,
-    InputLength,
-    InputTake,
-    Needed,
-    UnspecializedInput};
-use std::iter::{Copied, Enumerate};
-use std::slice::Iter;
+    error::ErrorKind::Fix};
 
 use crate::codec::NetworkFrame;
 
 pub struct ClientProcessor {}
 
 impl ClientProcessor {
-    pub fn process(&self, frame: NetworkFrame) -> Result<NetworkFrame, nom::Err<nom::error::Error<bytes::Bytes>>>{
-        if frame.message_type == 0 {
-            let is_ssl = self.is_ssl_request(frame.payload);
+    pub fn process(&self, frame: NetworkFrame) -> Result<NetworkFrame, nom::Err<nom::error::Error<&[u8]>>>{
+        let payload_buff: &[u8] = &frame.payload;
+        if frame.message_type == 0 && is_ssl_request(payload_buff){
+            debug!("Got a SSL Request, no security here... yet");
+            return Ok(NetworkFrame::new(0, Bytes::from_static(b"N")))
+        } else if frame.message_type == 0 && is_gssapi_request(payload_buff) {
+            debug!("Got a GSSAPI Request, no security here... yet");
+            return Ok(NetworkFrame::new(0, Bytes::from_static(b"N")))
         }
+
+        warn!("Got a message we don't understand yet {}", frame.message_type);
+        Err(nom::Err::Failure(nom::error::Error::new(b"Not Implemented", Fix)))
     } 
+}
 
-    fn is_ssl_request(&self, input: Bytes) -> IResult<Bytes, Bytes> {
-        tag(Bytes::from_static(&hex!("12 34 56 78")))(input)
+fn match_ssl_request(input: &[u8]) -> IResult<&[u8], &[u8]> {
+    //From here: https://www.postgresql.org/docs/current/protocol-message-formats.html
+    tag(&hex!("04 D2 16 2F"))(input)
+}
+
+fn is_ssl_request(input: &[u8]) -> bool {
+    match match_ssl_request(input){
+        Ok(_) => return true,
+        Err(_) => return false
     }
 }
 
-impl InputTake for Bytes {
-    fn take(&self, count: usize) -> Self {
-        self.slice(0..count)
-    }
-    fn take_split(&self, count: usize) -> (Self, Self) {
-        let suffix = self.split_off(count);
-        (suffix, *self)
+fn match_gssapi_request(input: &[u8]) -> IResult<&[u8], &[u8]> {
+    tag(&hex!("04 D2 16 30"))(input)
+}
+
+fn is_gssapi_request(input: &[u8]) -> bool {
+    match match_gssapi_request(input){
+        Ok(_) => return true,
+        Err(_) => return false
     }
 }
 
-impl<'a> InputIter for &'a Bytes {
-    type Item = u8;
-    type Iter = Enumerate<Self::IterElem>;
-    type IterElem = Copied<Iter<'a, u8>>;
+#[cfg(test)]
+mod tests {
+    // Note this useful idiom: importing names from outer (for mod tests) scope.
+    use super::*;
 
-    fn iter_indices(&self) -> Self::Iter {
-      self.iter_elements().enumerate()
+    #[test]
+    fn test_ssl_match() {
+        let check = is_ssl_request(&hex!("12 34 56 78"));
+        let result = true;
+        assert_eq!(check, result);
     }
 
-    fn iter_elements(&self) -> Self::IterElem {
-      self.iter().copied()
+    #[test]
+    fn test_ssl_not_match() {
+        let check = is_ssl_request(&hex!("12 34 56"));
+        let result = false;
+        assert_eq!(check, result);
     }
-
-    fn position<P>(&self, predicate: P) -> Option<usize>
-    where
-      P: Fn(Self::Item) -> bool,
-    {
-      self.iter().position(|b| predicate(*b))
-    }
-
-    fn slice_index(&self, count: usize) -> Result<usize, Needed> {
-      if self.len() >= count {
-        Ok(count)
-      } else {
-        Err(Needed::new(count - self.len()))
-      }
-    }
-  }
-
-  impl InputLength for Bytes {
-    fn input_len(&self) -> usize {
-        self.len()
-    }
-  }
-
-  impl UnspecializedInput for Bytes {}
+}
