@@ -1,6 +1,4 @@
 //! This module covers taking a message and parsing it into a command object
 
-#[macro_use]
-extern crate nom;
-
-pub mod message;
+mod client_processor;
+pub use client_processor::ClientProcessor;

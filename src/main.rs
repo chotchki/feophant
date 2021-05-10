@@ -10,6 +10,7 @@ use tokio_util::codec::Framed;
 //Application Imports
 mod codec;
 use codec::PgCodec;
+mod processor;
 
 #[tokio::main]
 async fn main() {
