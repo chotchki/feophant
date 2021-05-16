@@ -33,7 +33,7 @@ mod tests {
 
     #[test]
     fn test_ssl_match() {
-        let check = is_ssl_request(&hex!("12 34 56 78"));
+        let check = is_ssl_request(&hex!("04 D2 16 2F"));
         let result = true;
         assert_eq!(check, result);
     }
