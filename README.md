@@ -13,9 +13,9 @@ Lauch a postgres client application to test
 `./pgbench -h 127.0.0.1 -p 50000`
 
 
-# Architecture and structure (for the eighth time or more)
+# What works
 
-main.rs is the entry point it listens and on connection hands off process handling to a connection object
+You can currently start the server, connect to it and have it throw tons of errors. I'm to the point now I need to start supporting saving data.
 
 ## Rust Notes
 How to setup modules sanely: https://dev.to/stevepryde/intro-to-rust-modules-3g8k
