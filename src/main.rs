@@ -12,6 +12,7 @@ use tokio_util::codec::Framed;
 //Application Imports
 mod codec;
 use codec::{NetworkFrame,PgCodec};
+mod constants;
 mod processor;
 use processor::ClientProcessor;
 

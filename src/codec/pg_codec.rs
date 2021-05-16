@@ -77,6 +77,8 @@ impl Decoder for PgCodec {
         let data = src[prefix_len..prefix_len + length_size].to_vec();
         src.advance(prefix_len + length_size);
 
+        debug!("Got message type {:x} and payload {:?}", message_type, data);
+
         // Convert the data to a string, or fail if it is not valid utf-8.
         Ok(Some(NetworkFrame::new(message_type, Bytes::from(data))))
     }
@@ -86,6 +88,8 @@ impl Encoder<NetworkFrame> for PgCodec {
     type Error = std::io::Error;
 
     fn encode(&mut self, item: NetworkFrame, dst: &mut BytesMut) -> Result<(), Self::Error> {
+        debug!("Sending message type {:x} and payload {:?}", item.message_type, item.payload);
+
         //Messages types of zero are special because they get written out raw. Probably should find a better way to do this
         if item.message_type == 0 {
             // Reserve space in the buffer.

@@ -4,8 +4,10 @@ use thiserror::Error;
 
 use crate::codec::{
     authentication_ok,
+    error_response,
     NetworkFrame,
     ready_for_query};
+use crate::constants::{PgErrorCodes,PgErrorLevels};
 use super::ssl_and_gssapi_parser;
 use super::startup_parser;
 
@@ -34,8 +36,7 @@ impl ClientProcessor {
 
 
         warn!("Got a message we don't understand yet {}", frame.message_type);
-        warn!("Payload is {:?}", frame.payload);
-        Err(ClientProcessorError::Unknown())
+        return Ok(vec!(error_response(PgErrorLevels::Error, PgErrorCodes::SystemError, "Got an unimplemented message".to_string())));
     } 
 }
 
