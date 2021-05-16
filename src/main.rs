@@ -42,19 +42,21 @@ async fn main() {
 
             let process = ClientProcessor{};
             while let Some(Ok(event)) = input.next().await {
-                let response:NetworkFrame = match process.process(event) {
-                    Ok(response) => response,
+                let responses:Vec<NetworkFrame> = match process.process(event) {
+                    Ok(responses) => responses,
                     Err(e) => {
                         warn!("Had a processing error {}", e);
                         break;
                     }
                 };
 
-                match sink.send(response).await {
-                    Ok(_) => {},
-                    Err(e) => {
-                        warn!("Unable to send response {}", e);
-                        break;
+                for response in responses {
+                    match sink.send(response).await {
+                        Ok(_) => {},
+                        Err(e) => {
+                            warn!("Unable to send response {}", e);
+                            break;
+                        }
                     }
                 }
             }

@@ -15,9 +15,17 @@ impl NetworkFrame {
     }
 }
 
-pub fn AuthenticationOk() -> NetworkFrame {
+pub fn authentication_ok() -> NetworkFrame {
     NetworkFrame {
         message_type: b'R',
         payload:  Bytes::from_static(b"\0\0\0\0")
+    }
+}
+
+//Note this claims that the server is ALWAYS ready, even if its not
+pub fn ready_for_query() -> NetworkFrame {
+    NetworkFrame {
+        message_type: b'Z',
+        payload:  Bytes::from_static(b"I")
     }
 }
