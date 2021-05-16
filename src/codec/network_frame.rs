@@ -14,3 +14,10 @@ impl NetworkFrame {
         }
     }
 }
+
+pub fn AuthenticationOk() -> NetworkFrame {
+    NetworkFrame {
+        message_type: b'R',
+        payload:  Bytes::from_static(b"\0\0\0\0")
+    }
+}

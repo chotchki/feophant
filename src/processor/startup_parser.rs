@@ -11,6 +11,7 @@ use nom::{
 use std::collections::HashMap;
 
 pub fn parse_startup(input: &[u8]) -> Result<HashMap<String, String>, nom::Err<nom::error::Error<&[u8]>>> {
+    let (input, _) = tag(b"\0\x03\0\0")(input)?; //Version but don't care
     let (_, items) = parse_key_and_values(input)?;
 
     let mut result: HashMap<String, String> = HashMap::new();
@@ -69,7 +70,7 @@ mod tests {
 
     #[test]
     fn test_start_up_string() {
-        let startup_mesg = b"user\0some_user\0user2\0some_user\0\0";
+        let startup_mesg = b"\0\x03\0\0user\0some_user\0user2\0some_user\0\0";
 
         let mut map: HashMap<String, String> = HashMap::new();
         map.insert("user".to_string(), "some_user".to_string());

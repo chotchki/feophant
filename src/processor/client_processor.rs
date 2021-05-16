@@ -1,13 +1,15 @@
 use bytes::Bytes;
 use nom::error::ErrorKind;
+use thiserror::Error;
 
-use crate::codec::NetworkFrame;
+use crate::codec::{AuthenticationOk,NetworkFrame};
 use super::ssl_and_gssapi_parser;
+use super::startup_parser;
 
 pub struct ClientProcessor {}
 
 impl ClientProcessor {
-    pub fn process(&self, frame: NetworkFrame) -> Result<NetworkFrame, nom::Err<nom::error::Error<&[u8]>>>{
+    pub fn process(&self, frame: NetworkFrame) -> Result<NetworkFrame, ClientProcessorError>{
         let payload_buff: &[u8] = &frame.payload;
         if frame.message_type == 0 && ssl_and_gssapi_parser::is_ssl_request(payload_buff){
             debug!("Got a SSL Request, no security here... yet");
@@ -15,29 +17,29 @@ impl ClientProcessor {
         } else if frame.message_type == 0 && ssl_and_gssapi_parser::is_gssapi_request(payload_buff) {
             debug!("Got a GSSAPI Request, no security here... yet");
             return Ok(NetworkFrame::new(0, Bytes::from_static(b"N")))
+        } else if frame.message_type == 0 {
+            debug!("Got a startup message!");
+            let message = startup_parser::parse_startup(payload_buff).or_else(|_| Err(ClientProcessorError::BadStartup()))?;
+
+            //TODO: Upon getting a startup message we should be checking for a database and user
+            //We should also check for configured authentication methods... maybe later!
+            //   we're just going to let them in so we can get further on message parsing.
+            info!("Just going to let {:?} in", message.get("user"));
+            return Ok(AuthenticationOk())
         }
 
 
 
         warn!("Got a message we don't understand yet {}", frame.message_type);
         warn!("Payload is {:?}", frame.payload);
-        Err(nom::Err::Failure(nom::error::Error::new(b"Not Implemented", ErrorKind::Fix)))
+        Err(ClientProcessorError::Unknown())
     } 
 }
 
-
-/*fn till_null(i: &[u8]) -> IResult<&[u8], &[u8]> {
-    terminated(alpha1, char(b'\0'))(i)
+#[derive(Error, Debug)]
+pub enum ClientProcessorError {
+    #[error("Malformed Startup Packet")]
+    BadStartup(),
+    #[error("Unknown Message")]
+    Unknown(),
 }
-
-fn parse_startup_message(input: &[u8]) -> IResult<&[u8], HashMap<String, String>> {
-    let (i, _) = tag(&hex!("00 03 00 00"))(input)?; //Version but don't care
-    let (i, items) = many0(till_null)(i)?;
-    let m: HashMap<_, _> = items.into_iter().collect();
-
-    let mut it = iterator(i, terminated(tag(b"\0"), tag(b"\0")));
-
-    let parsed = it.map(|v| (v, v.len())).collect::<HashMap<String, String>>();
-    let res: IResult<_,_> = it.finish();
-    res
-}*/
