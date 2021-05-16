@@ -16,6 +16,8 @@ pub struct ClientProcessor {}
 impl ClientProcessor {
     pub fn process(&self, frame: NetworkFrame) -> Result<Vec<NetworkFrame>, ClientProcessorError>{
         let payload_buff: &[u8] = &frame.payload;
+
+        //Startup stuff
         if frame.message_type == 0 && ssl_and_gssapi_parser::is_ssl_request(payload_buff){
             debug!("Got a SSL Request, no security here... yet");
             return Ok(vec!(NetworkFrame::new(0, Bytes::from_static(b"N"))))
@@ -31,6 +33,13 @@ impl ClientProcessor {
             //   we're just going to let them in so we can get further on message parsing.
             info!("Just going to let {:?} in", message.get("user"));
             return Ok(vec!(authentication_ok(),ready_for_query()))
+        }
+
+        //Support basic query
+        if frame.message_type == b'Q' {
+            debug!("Got query {:?}", payload_buff);
+
+            
         }
 
 
