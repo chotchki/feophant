@@ -1,5 +1,7 @@
 Welcome to Rusty Elephant! Chris's attempt to learn rust. As a toy I'm implementing a SQL database that can accept pgbench input.
 
+[![Build Status](https://travis-ci.org/chotchki/rusty-elephant.svg?branch=main)](https://travis-ci.org/chotchki/rusty-elephant)
+
 Just a toy but it's already taught me a lot about Rust.
 
 # Launch
