@@ -1,7 +1,6 @@
 //! Constant error codes found from here: https://www.postgresql.org/docs/current/errcodes-appendix.html
-#![feature(const_if_match)]
 
-use bytes::{Buf,Bytes};
+use bytes::Bytes;
 
 //https://stackoverflow.com/a/62759252/160208
 pub enum PgErrorCodes {

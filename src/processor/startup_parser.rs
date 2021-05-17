@@ -1,7 +1,6 @@
 use nom::{
     bytes::complete::{is_not,tag},
-    combinator::{iterator,map,map_res},
-    Err,
+    combinator::{map,map_res},
     IResult,
     multi::many_till,
     sequence::pair,
@@ -24,7 +23,7 @@ pub fn parse_startup(input: &[u8]) -> Result<HashMap<String, String>, nom::Err<n
 }
 
 fn parse_key_and_values(input: &[u8]) -> IResult<&[u8], Vec<(String, String)>> {
-    map(many_till(pair(till_null, till_null), tag(b"\0")), |(k,v)| k)(input)
+    map(many_till(pair(till_null, till_null), tag(b"\0")), |(k,_)| k)(input)
 }
 
 fn till_null(input: &[u8]) -> IResult<&[u8], String> {

@@ -1,5 +1,4 @@
 use bytes::Bytes;
-use nom::error::ErrorKind;
 use thiserror::Error;
 
 use crate::codec::{
@@ -39,7 +38,7 @@ impl ClientProcessor {
         if frame.message_type == b'Q' {
             debug!("Got query {:?}", payload_buff);
 
-            
+
         }
 
 
@@ -53,6 +52,6 @@ impl ClientProcessor {
 pub enum ClientProcessorError {
     #[error("Malformed Startup Packet")]
     BadStartup(),
-    #[error("Unknown Message")]
-    Unknown(),
+    //#[error("Unknown Message")]
+    //Unknown(),
 }
