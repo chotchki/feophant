@@ -17,6 +17,19 @@ Lauch a postgres client application to test
 
 You can currently start the server, connect to it and have it throw tons of errors. I'm to the point now I need to start supporting saving data.
 
+# Next TODO
+
+Need to support the concept of a table that can be read and written to, in memory.
+First working on the concept of transaction IDs.
+
+# Postgres Divergance
+
+Its kinda pointless to blindly reproduce what has already been done so I'm making the following changes to the db server design vs Postgres.
+
+* Multi-threaded design based on Tokio instead of Postgres's multi-process design.
+* Want to avoid vaccuum for transaction wrap around. Will try 64-bit transaction IDs but might go to 128-bit.
+* Might replace OIDs with UUIDs.
+
 ## Rust Notes
 How to setup modules sanely: https://dev.to/stevepryde/intro-to-rust-modules-3g8k
 
