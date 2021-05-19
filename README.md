@@ -30,7 +30,7 @@ Its kinda pointless to blindly reproduce what has already been done so I'm makin
 
 * Multi-threaded design based on Tokio instead of Postgres's multi-process design.
 * Want to avoid vaccuum for transaction wrap around. Will try 64-bit transaction IDs but might go to 128-bit.
-* Might replace OIDs with UUIDs.
+* Replacing OIDs with UUIDv4s.
 
 ## Rust Notes
 How to setup modules sanely: https://dev.to/stevepryde/intro-to-rust-modules-3g8k
