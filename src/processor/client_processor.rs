@@ -38,6 +38,27 @@ impl ClientProcessor {
         if frame.message_type == b'Q' {
             debug!("Got query {:?}", payload_buff);
 
+            //first query is "create table foo(bar u32);"
+            //Parse to the following commands
+                //Get XID
+                    //Call to TransGen
+                //Does table already exist? -> Error
+                    //Scan pg_class for table name
+                        //Look up definition of pg_class (hardcoded)
+                            //command::getDefinition(name) -> Result<PgTable, Err>
+                        //Use that info to parse a page of data for rows
+                        //Check each row to match on table name
+                        //return row if found
+                //Add entry for table
+                    //Look up definition of pg_class (hardcoded)
+                    //Prepare new row entry
+                    //Scan for a page with the empty space for the row
+                    //Rewrite the page with the row
+                    //Replace page with new row
+                //Add entry for column + type
+                    //Do the same thing for the table type with pg_attribute
+
+            //let commands:vec[Commands] = Parse the query
 
         }
 

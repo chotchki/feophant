@@ -20,7 +20,9 @@ You can currently start the server, connect to it and have it throw tons of erro
 # Next TODO
 
 Need to support the concept of a table that can be read and written to, in memory.
-First working on the concept of transaction IDs.
+
+Next step is the implement a memory location to hold internal tables
+
 
 # Postgres Divergance
 
