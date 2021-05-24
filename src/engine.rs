@@ -1,4 +1,5 @@
 mod commands;
+mod io;
 pub mod objects;
 
 mod transaction_generator;
