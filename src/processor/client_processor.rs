@@ -1,4 +1,5 @@
 use bytes::Bytes;
+use std::sync::Arc;
 use thiserror::Error;
 
 use crate::codec::{
@@ -7,12 +8,21 @@ use crate::codec::{
     NetworkFrame,
     ready_for_query};
 use crate::constants::{PgErrorCodes,PgErrorLevels};
+use super::super::engine::io::PageManager;
 use super::ssl_and_gssapi_parser;
 use super::startup_parser;
 
-pub struct ClientProcessor {}
+pub struct ClientProcessor {
+    page_manager: Arc<PageManager>
+}
 
 impl ClientProcessor {
+    pub fn new(page_manager: Arc<PageManager>) -> ClientProcessor {
+        ClientProcessor{
+            page_manager: page_manager
+        }
+    }
+
     pub fn process(&self, frame: NetworkFrame) -> Result<Vec<NetworkFrame>, ClientProcessorError>{
         let payload_buff: &[u8] = &frame.payload;
 

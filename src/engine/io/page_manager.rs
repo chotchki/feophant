@@ -11,13 +11,13 @@ use super::super::objects::PgTable;
 const PAGE_SIZE: usize = 4096; //4KB Pages
 
 pub struct PageManager {
-    data: Arc<RwLock<HashMap<Uuid, Arc<RwLock<Vec<Bytes>>>>>> //Yes this is the naive implementation
+    data: RwLock<HashMap<Uuid, Arc<RwLock<Vec<Bytes>>>>> //Yes this is the naive implementation
 }
 
 impl PageManager {
     pub fn new() -> PageManager {
         PageManager {
-            data: Arc::new(RwLock::new(HashMap::new()))
+            data: RwLock::new(HashMap::new())
         }
     }
 
