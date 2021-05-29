@@ -14,4 +14,12 @@ pub trait SqlType {
 pub enum SqlTypeError {
     #[error("Not enough space for a uuid, got {0}")]
     LengthTooShort(usize),
+    #[error("Buffer passed to deserialize is empty")]
+    EmptyBuffer(),
+    #[error("Buffer too short to deserialize")]
+    BufferTooShort(),
+    #[error("Length encoded {0}, length found {1}")]
+    InvalidStringLength(usize, usize),
+    #[error("Invalid utf8")]
+    InvalidUtf8(#[from] std::string::FromUtf8Error)
 }
