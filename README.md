@@ -21,7 +21,7 @@ You can currently start the server, connect to it and have it throw tons of erro
 
 Need to support the concept of a table that can be read and written to, in memory.
 
-Next step is the implement a memory location to hold internal tables
+Memory based pages are complete now need a concept of taking a table definition (hardcoded pg_class first) and storing an entry in a page
 
 
 # Postgres Divergance
