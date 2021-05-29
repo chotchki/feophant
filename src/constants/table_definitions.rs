@@ -16,7 +16,7 @@ impl TableDefinitions {
         use TableDefinitions::*;
         match self {
             PgClass => {
-                PgTable::new(Uuid::from_bytes(hex!("EE919E33D9054F4889537EBB6CC911EB")), "pg_class".to_string(), Vec::new())
+                PgTable::new_existing(Uuid::from_bytes(hex!("EE919E33D9054F4889537EBB6CC911EB")), "pg_class".to_string(), Vec::new())
             }
         }
     }

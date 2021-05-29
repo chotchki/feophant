@@ -4,6 +4,9 @@ version = "0.1.0"
 authors = ["Christopher Hotchkiss <christopher.hotchkiss@gmail.com>"]
 edition = "2018"
 
+[dev-dependencies]
+tokio-test = "0.4.2"
+
 [dependencies]
 atomic-counter = "1.0.1"
 hex-literal = "0.3.1"

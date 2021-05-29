@@ -1,9 +1,12 @@
 //! Eventually this will handle reading / writing pages from disk but for now, hashmap + vector!
+//! 
+//! Was stupid with the implementation, should have supported an append api only since vector only works that way
 use bytes::Bytes;
 use std::collections::HashMap;
-use std::sync::{Arc,RwLock};
+use std::sync::{Arc,RwLockReadGuard};
 use std::vec::Vec;
 use thiserror::Error;
+use tokio::sync::RwLock;
 use uuid::Uuid;
 
 use super::super::objects::PgTable;
@@ -11,7 +14,7 @@ use super::super::objects::PgTable;
 const PAGE_SIZE: usize = 4096; //4KB Pages
 
 pub struct PageManager {
-    data: RwLock<HashMap<Uuid, Arc<RwLock<Vec<Bytes>>>>> //Yes this is the naive implementation
+    data: RwLock<HashMap<Uuid, Box<Vec<Bytes>>>> //Yes this is the naive implementation
 }
 
 impl PageManager {
@@ -21,12 +24,38 @@ impl PageManager {
         }
     }
 
-    pub fn get_page(table: PgTable, offset: usize) -> Result<Bytes, PageManagerError>{
-        Err(PageManagerError::NotImplemented())
+    pub async fn get_page(&self, table: PgTable, offset: usize) -> Option<Bytes>{
+        let read_lock = self.data.read().await;
+
+        let value = read_lock.get(&table.id);
+        if value.is_none() {
+            return None;
+        }
+
+        let existing_value = value.unwrap();
+        let maybe_page = existing_value.get(offset);
+        if maybe_page.is_none() {
+            return None;
+        }
+        let page = maybe_page.unwrap();
+        let copy = page.slice(0..page.len());
+        Some(copy)
     }
 
-    pub fn put_page(table: PgTable, offset: usize) -> Result<Bytes, PageManagerError> {
-        Err(PageManagerError::NotImplemented())
+    // Unoptimized since this is a temporary solution
+    pub async fn add_page(&self, table: PgTable, page: Bytes) {
+        let mut write_lock = self.data.write().await;
+
+        let value = write_lock.get_mut(&table.id);
+        if value.is_none() {
+            let mut vec_holder = Vec::with_capacity(1);
+            vec_holder.push(page);
+            write_lock.insert(table.id, Box::new(vec_holder));
+            return;
+        }
+        
+        let existing_value = value.unwrap();
+        existing_value.push(page);
     }
 }
 
@@ -34,4 +63,36 @@ impl PageManager {
 pub enum PageManagerError {
     #[error("I should implement this")]
     NotImplemented()
+}
+
+#[cfg(test)]
+mod tests {
+    // Note this useful idiom: importing names from outer (for mod tests) scope.
+    use super::*;
+    use bytes::{BytesMut, BufMut};
+    use super::super::super::objects::PgTable;
+    use uuid::Uuid;
+
+    //Async testing help can be found here: https://blog.x5ff.xyz/blog/async-tests-tokio-rust/
+    macro_rules! aw {
+        ($e:expr) => {
+            tokio_test::block_on($e)
+        };
+    }
+
+    #[test]
+    fn test_get_and_put() {
+        let mut buf = BytesMut::with_capacity(4096);
+        for _ in 0..4095{
+            buf.put_u8(1);
+        }
+        let buf_frozen = buf.freeze();
+        
+        let pm = PageManager::new();
+        let table = PgTable::new("test".to_string(), Vec::new());
+
+        aw!(pm.add_page(table.clone(), buf_frozen.clone()));
+        let check = aw!(pm.get_page(table.clone(), 0)).unwrap();
+        assert_eq!(check, buf_frozen.clone());
+    }
 }

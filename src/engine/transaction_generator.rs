@@ -28,7 +28,7 @@ impl TransactionGenerator {
 
 #[derive(Error, Debug)]
 pub enum TransactionGeneratorError {
-    #[error("Could not convert uszie to u64, you must have a super fancy computer!")]
+    #[error("Could not convert usize to u64, you must have a super fancy computer!")]
     ConversionError(),
     #[error("Exceeded counter limit, restart server to fix!")]
     LimitReached(),

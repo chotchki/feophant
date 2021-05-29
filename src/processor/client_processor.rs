@@ -9,17 +9,20 @@ use crate::codec::{
     ready_for_query};
 use crate::constants::{PgErrorCodes,PgErrorLevels};
 use super::super::engine::io::PageManager;
+use super::super::engine::TransactionGenerator;
 use super::ssl_and_gssapi_parser;
 use super::startup_parser;
 
 pub struct ClientProcessor {
-    page_manager: Arc<PageManager>
+    page_manager: Arc<PageManager>,
+    transaction_generator: Arc<TransactionGenerator>
 }
 
 impl ClientProcessor {
-    pub fn new(page_manager: Arc<PageManager>) -> ClientProcessor {
+    pub fn new(page_manager: Arc<PageManager>, transaction_generator: Arc<TransactionGenerator>) -> ClientProcessor {
         ClientProcessor{
-            page_manager: page_manager
+            page_manager: page_manager,
+            transaction_generator: transaction_generator
         }
     }
 
