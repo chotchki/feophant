@@ -57,12 +57,30 @@ impl PageManager {
         let existing_value = value.unwrap();
         existing_value.push(page);
     }
+
+    pub async fn update_page(&self, table: PgTable, page: Bytes, offset: usize) -> Result<(), PageManagerError>{
+        let mut write_lock = self.data.write().await;
+
+        let value = write_lock.get_mut(&table.id);
+        if(value.is_none()){
+            return Err(PageManagerError::NoSuchTable(table.name));
+        }
+
+        let existing_value = value.unwrap();
+        if existing_value.len() < offset {
+            return Err(PageManagerError::InvalidPage(offset));
+        }
+        existing_value[offset] = page;
+        Ok(())
+    }
 }
 
 #[derive(Debug, Error)]
 pub enum PageManagerError {
-    #[error("I should implement this")]
-    NotImplemented()
+    #[error("No such table {0}")]
+    NoSuchTable(String),
+    #[error("Invalid Page number {0}")]
+    InvalidPage(usize)
 }
 
 #[cfg(test)]
@@ -80,13 +98,17 @@ mod tests {
         };
     }
 
-    #[test]
-    fn test_get_and_put() {
+    fn get_bytes(data: u8) -> Bytes {
         let mut buf = BytesMut::with_capacity(4096);
         for _ in 0..4095{
-            buf.put_u8(1);
+            buf.put_u8(data);
         }
-        let buf_frozen = buf.freeze();
+        buf.freeze()
+    }
+
+    #[test]
+    fn test_get_and_put() {
+        let buf_frozen = get_bytes(1);
         
         let pm = PageManager::new();
         let table = PgTable::new("test".to_string(), Vec::new());
@@ -94,5 +116,24 @@ mod tests {
         aw!(pm.add_page(table.clone(), buf_frozen.clone()));
         let check = aw!(pm.get_page(table.clone(), 0)).unwrap();
         assert_eq!(check, buf_frozen.clone());
+    }
+
+    #[test]
+    fn test_edit_page() {
+        let buf_1 = get_bytes(1);
+        let buf_2 = get_bytes(2);
+
+        let pm = PageManager::new();
+        let table = PgTable::new("test".to_string(), Vec::new());
+
+        aw!(pm.add_page(table.clone(), buf_1.clone()));
+        aw!(pm.add_page(table.clone(), buf_1.clone()));
+        let check_1 = aw!(pm.get_page(table.clone(), 1)).unwrap();
+        assert_eq!(buf_1.clone(), check_1.clone());
+
+        aw!(pm.update_page(table.clone(), buf_2.clone(), 1));
+        let check_2 = aw!(pm.get_page(table.clone(), 1)).unwrap();
+        assert_eq!(buf_2.clone(), check_2.clone());
+        assert_ne!(buf_1.clone(), check_2.clone());
     }
 }
