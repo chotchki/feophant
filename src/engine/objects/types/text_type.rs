@@ -3,13 +3,13 @@ use bytes::{Buf,Bytes};
 use super::super::SqlType;
 use super::super::SqlTypeError;
 
-pub struct StringType {
+pub struct TextType {
     data: String
 }
 
-impl StringType {
-    pub fn new(data: String) -> StringType {
-        StringType {
+impl TextType {
+    pub fn new(data: String) -> TextType {
+        TextType {
             data
         }
     }
@@ -19,7 +19,7 @@ impl StringType {
     }
 }
 
-impl SqlType for StringType {
+impl SqlType for TextType {
     fn serialize(&self) -> Bytes {
         let mut length = self.data.len();
 
@@ -40,7 +40,7 @@ impl SqlType for StringType {
         Bytes::copy_from_slice(&buff)
     }
 
-    fn deserialize(mut bytes: Bytes) -> Result<Box<StringType>, SqlTypeError> {
+    fn deserialize(mut bytes: Bytes) -> Result<Box<TextType>, SqlTypeError> {
         if bytes.len() == 0 {
             return Err(SqlTypeError::EmptyBuffer())
         }
@@ -70,7 +70,7 @@ impl SqlType for StringType {
         
         let value_str = String::from_utf8(bytes.slice(0..length).to_vec()).map_err(|e| SqlTypeError::InvalidUtf8(e))?;
 
-        let value = StringType {
+        let value = TextType {
             data: value_str
         };
 
@@ -83,10 +83,10 @@ mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
 
-    fn roundtrip(input: String) -> Box<StringType> {
-        let stype = StringType::new(input.to_string());
+    fn roundtrip(input: String) -> Box<TextType> {
+        let stype = TextType::new(input.to_string());
         let serialized = stype.serialize();
-        StringType::deserialize(serialized).unwrap()
+        TextType::deserialize(serialized).unwrap()
     }
 
     #[test]
