@@ -2,13 +2,13 @@
 //! should be able to fallback to reading new ones off disk
 use thiserror::Error;
 
-use super::super::objects::PgTable;
+use super::super::objects::Table;
 use super::super::super::constants::TableDefinitions;
 
 pub struct DefinitionLookup {}
 
 impl DefinitionLookup {
-    pub fn get_definition(name: String) -> Result<PgTable, DefinitionLookupError> {
+    pub fn get_definition(name: String) -> Result<Table, DefinitionLookupError> {
         let system_tables = TableDefinitions::values;
         for i in 0..system_tables.len() {
             if system_tables[i].value().name == name {

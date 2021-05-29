@@ -9,7 +9,7 @@ use thiserror::Error;
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
-use super::super::objects::PgTable;
+use super::super::objects::Table;
 
 const PAGE_SIZE: usize = 4096; //4KB Pages
 
@@ -24,7 +24,7 @@ impl PageManager {
         }
     }
 
-    pub async fn get_page(&self, table: PgTable, offset: usize) -> Option<Bytes>{
+    pub async fn get_page(&self, table: Table, offset: usize) -> Option<Bytes>{
         let read_lock = self.data.read().await;
 
         let value = read_lock.get(&table.id);
@@ -43,7 +43,7 @@ impl PageManager {
     }
 
     // Unoptimized since this is a temporary solution
-    pub async fn add_page(&self, table: PgTable, page: Bytes) {
+    pub async fn add_page(&self, table: Table, page: Bytes) {
         let mut write_lock = self.data.write().await;
 
         let value = write_lock.get_mut(&table.id);
@@ -58,7 +58,7 @@ impl PageManager {
         existing_value.push(page);
     }
 
-    pub async fn update_page(&self, table: PgTable, page: Bytes, offset: usize) -> Result<(), PageManagerError>{
+    pub async fn update_page(&self, table: Table, page: Bytes, offset: usize) -> Result<(), PageManagerError>{
         let mut write_lock = self.data.write().await;
 
         let value = write_lock.get_mut(&table.id);
@@ -88,7 +88,7 @@ mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
     use bytes::{BytesMut, BufMut};
-    use super::super::super::objects::PgTable;
+    use super::super::super::objects::Table;
     use uuid::Uuid;
 
     //Async testing help can be found here: https://blog.x5ff.xyz/blog/async-tests-tokio-rust/
@@ -111,7 +111,7 @@ mod tests {
         let buf_frozen = get_bytes(1);
         
         let pm = PageManager::new();
-        let table = PgTable::new("test".to_string(), Vec::new());
+        let table = Table::new("test".to_string(), Vec::new());
 
         aw!(pm.add_page(table.clone(), buf_frozen.clone()));
         let check = aw!(pm.get_page(table.clone(), 0)).unwrap();
@@ -124,7 +124,7 @@ mod tests {
         let buf_2 = get_bytes(2);
 
         let pm = PageManager::new();
-        let table = PgTable::new("test".to_string(), Vec::new());
+        let table = Table::new("test".to_string(), Vec::new());
 
         aw!(pm.add_page(table.clone(), buf_1.clone()));
         aw!(pm.add_page(table.clone(), buf_1.clone()));

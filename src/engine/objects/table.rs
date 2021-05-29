@@ -1,0 +1,27 @@
+//! Postgres doc: https://www.postgresql.org/docs/current/catalog-pg-class.html
+
+use serde::{Serialize, Deserialize};
+use uuid::Uuid;
+
+use super::Attribute;
+
+#[derive(Serialize, Clone, Deserialize, Debug)]
+pub struct Table {
+    pub id: Uuid,
+    pub name: String,
+    pub attributes: Vec<Attribute>   
+}
+
+impl Table {
+    pub fn new_existing(id: Uuid, name: String, attributes: Vec<Attribute> ) -> Table {
+        Table{
+            id: id,
+            name: name,
+            attributes: attributes
+        }
+    }
+
+    pub fn new(name: String, attributes: Vec<Attribute>) -> Table {
+        Table::new_existing(Uuid::new_v4(), name, attributes)
+    }
+}

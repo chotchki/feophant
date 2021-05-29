@@ -1,7 +1,10 @@
 
 
-mod pg_attribute;
-pub use pg_attribute::PgAttribute;
+mod attribute;
+pub use attribute::Attribute;
 
-mod pg_table;
-pub use pg_table::PgTable;
+mod table;
+pub use table::Table;
+
+mod sql_type;
+pub use sql_type::SqlType;
