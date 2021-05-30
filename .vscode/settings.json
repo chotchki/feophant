@@ -2,4 +2,5 @@
     //"lldb.library": "/Applications/Xcode.app/Contents/SharedFrameworks/LLDB.framework/Versions/A/LLDB",
     //"lldb.adapterEnv": { "LLDB_DEBUGSERVER_PATH": "/Users/chotchki/workspace/rusty-elephant/debug.sh" }
     "github-actions.workflows.pinned.workflows": [".github/workflows/rust.yml"],
+    "github-actions.workflows.pinned.refresh.enabled": true
 }
