@@ -38,11 +38,9 @@ impl PageManager {
         let mut write_lock = self.data.write().await;
 
         match write_lock.get_mut(&table.id) {
-            Some(v) => {
-                v.push(page)
-            },
+            Some(v) => v.push(page),
             None => {
-                let vec_holder = vec!(page);
+                let vec_holder = vec![page];
                 write_lock.insert(table.id, vec_holder);
             }
         }
