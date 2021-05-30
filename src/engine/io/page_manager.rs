@@ -14,7 +14,7 @@ use super::super::objects::Table;
 const PAGE_SIZE: usize = 4096; //4KB Pages
 
 pub struct PageManager {
-    data: RwLock<HashMap<Uuid, Box<Vec<Bytes>>>>, //Yes this is the naive implementation
+    data: RwLock<HashMap<Uuid, Vec<Bytes>>>, //Yes this is the naive implementation
 }
 
 impl PageManager {
@@ -27,17 +27,9 @@ impl PageManager {
     pub async fn get_page(&self, table: Table, offset: usize) -> Option<Bytes> {
         let read_lock = self.data.read().await;
 
-        let value = read_lock.get(&table.id);
-        if value.is_none() {
-            return None;
-        }
+        let value = read_lock.get(&table.id)?;
 
-        let existing_value = value.unwrap();
-        let maybe_page = existing_value.get(offset);
-        if maybe_page.is_none() {
-            return None;
-        }
-        let page = maybe_page.unwrap();
+        let page = value.get(offset)?;
         let copy = page.slice(0..page.len());
         Some(copy)
     }
@@ -48,9 +40,8 @@ impl PageManager {
 
         let value = write_lock.get_mut(&table.id);
         if value.is_none() {
-            let mut vec_holder = Vec::with_capacity(1);
-            vec_holder.push(page);
-            write_lock.insert(table.id, Box::new(vec_holder));
+            let vec_holder = vec!(page);
+            write_lock.insert(table.id, vec_holder);
             return;
         }
 
