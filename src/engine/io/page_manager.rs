@@ -3,7 +3,6 @@
 //! Was stupid with the implementation, should have supported an append api only since vector only works that way
 use bytes::Bytes;
 use std::collections::HashMap;
-use std::sync::{Arc, RwLockReadGuard};
 use std::vec::Vec;
 use thiserror::Error;
 use tokio::sync::RwLock;
@@ -38,15 +37,15 @@ impl PageManager {
     pub async fn add_page(&self, table: Table, page: Bytes) {
         let mut write_lock = self.data.write().await;
 
-        let value = write_lock.get_mut(&table.id);
-        if value.is_none() {
-            let vec_holder = vec!(page);
-            write_lock.insert(table.id, vec_holder);
-            return;
+        match write_lock.get_mut(&table.id) {
+            Some(v) => {
+                v.push(page)
+            },
+            None => {
+                let vec_holder = vec!(page);
+                write_lock.insert(table.id, vec_holder);
+            }
         }
-
-        let existing_value = value.unwrap();
-        existing_value.push(page);
     }
 
     pub async fn update_page(
