@@ -9,7 +9,7 @@ jobs:
   release:
     name: Release Packaging
     env:
-      PROJECT_NAME_UNDERSCORE: rusty_elephant
+      PROJECT_NAME_UNDERSCORE: rusty-elephant
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
