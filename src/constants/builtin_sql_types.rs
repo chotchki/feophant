@@ -7,6 +7,7 @@ pub enum BuiltinSqlTypes {
 }
 
 //This is effectively a selector for BuiltinSqlTypes since I can't figure out a better method :(
+#[derive(Clone, Debug)]
 pub enum DeserializeTypes { 
     Text,
     Uuid
