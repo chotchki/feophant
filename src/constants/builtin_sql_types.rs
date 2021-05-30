@@ -1,21 +1,19 @@
 use bytes::{Buf,Bytes};
-use uuid::Uuid;
-
-use super::super::engine::objects::{SqlType,SqlTypeError};
-use super::super::engine::objects::types::{TextType,UuidType};
+use thiserror::Error;
 
 pub enum BuiltinSqlTypes {
+    Text(String),
     Uuid(uuid::Uuid),
-    Text(String)
 }
 
 //This is effectively a selector for BuiltinSqlTypes since I can't figure out a better method :(
 pub enum DeserializeTypes { 
-    Uuid,
-    Text
+    Text,
+    Uuid
 }
 
 impl BuiltinSqlTypes {
+    pub const VALUES: [DeserializeTypes; 2] = [DeserializeTypes::Text, DeserializeTypes::Uuid];
     fn serialize(&self) -> Bytes {
         match *self {
             BuiltinSqlTypes::Uuid(ref value) => {
@@ -97,6 +95,20 @@ impl BuiltinSqlTypes {
             _ => panic!("Should not get here")
         }
     }
+}
+
+#[derive(Error, Debug)]
+pub enum SqlTypeError {
+    #[error("Not enough space for a uuid, got {0}")]
+    LengthTooShort(usize),
+    #[error("Buffer passed to deserialize is empty")]
+    EmptyBuffer(),
+    #[error("Buffer too short to deserialize")]
+    BufferTooShort(),
+    #[error("Length encoded {0}, length found {1}")]
+    InvalidStringLength(usize, usize),
+    #[error("Invalid utf8")]
+    InvalidUtf8(#[from] std::string::FromUtf8Error)
 }
 
 #[cfg(test)]

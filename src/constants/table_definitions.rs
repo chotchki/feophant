@@ -11,7 +11,7 @@ pub enum TableDefinitions {
 }
 
 impl TableDefinitions {
-    pub const values: [TableDefinitions; 1] = [TableDefinitions::PgClass];
+    pub const VALUES: [TableDefinitions; 1] = [TableDefinitions::PgClass];
     pub fn value(self) -> Table {
         use TableDefinitions::*;
         match self {
