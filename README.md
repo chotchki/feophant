@@ -1,6 +1,6 @@
 Welcome to Rusty Elephant! Chris's attempt to learn rust. As a toy I'm implementing a SQL database that can accept pgbench input.
 
-[![Rust](https://github.com/chotchki/rusty-elephant/actions/workflows/rust.yml/badge.svg)](https://github.com/chotchki/rusty-elephant/actions/workflows/rust.yml) [![codecov](https://codecov.io/gh/chotchki/rusty-elephant/branch/main/graph/badge.svg?token=6JV9391LY0)](https://codecov.io/gh/chotchki/rusty-elephant)
+[![Test with Code Coverage](https://github.com/chotchki/rusty-elephant/actions/workflows/test.yaml/badge.svg)](https://github.com/chotchki/rusty-elephant/actions/workflows/test.yaml) [![codecov](https://codecov.io/gh/chotchki/rusty-elephant/branch/main/graph/badge.svg?token=6JV9391LY0)](https://codecov.io/gh/chotchki/rusty-elephant)
 
 Just a toy but it's already taught me a lot about Rust.
 
