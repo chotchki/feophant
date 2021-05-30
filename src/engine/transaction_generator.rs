@@ -2,6 +2,7 @@
 
 use atomic_counter::{AtomicCounter, ConsistentCounter};
 use std::convert::TryInto;
+use std::num::TryFromIntError;
 use thiserror::Error;
 
 pub struct TransactionGenerator {
@@ -22,7 +23,7 @@ impl TransactionGenerator {
             .counter
             .inc()
             .try_into()
-            .or_else(|_| Err(TransactionGeneratorError::ConversionError()))?;
+            .map_err(|e| TransactionGeneratorError::ConversionError(e))?;
         match self.offset.checked_add(next) {
             Some(s) => return Ok(s),
             None => return Err(TransactionGeneratorError::LimitReached()),
@@ -33,7 +34,7 @@ impl TransactionGenerator {
 #[derive(Error, Debug)]
 pub enum TransactionGeneratorError {
     #[error("Could not convert usize to u64, you must have a super fancy computer!")]
-    ConversionError(),
+    ConversionError(#[from] TryFromIntError),
     #[error("Exceeded counter limit, restart server to fix!")]
     LimitReached(),
 }

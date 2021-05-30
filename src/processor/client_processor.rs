@@ -39,7 +39,7 @@ impl ClientProcessor {
         } else if frame.message_type == 0 {
             debug!("Got a startup message!");
             let message = startup_parser::parse_startup(payload_buff)
-                .or_else(|_| Err(ClientProcessorError::BadStartup()))?;
+                .map_err(|_| ClientProcessorError::BadStartup())?;
 
             //TODO: Upon getting a startup message we should be checking for a database and user
             //We should also check for configured authentication methods... maybe later!
@@ -79,11 +79,11 @@ impl ClientProcessor {
             "Got a message we don't understand yet {}",
             frame.message_type
         );
-        return Ok(vec![error_response(
+        Ok(vec![error_response(
             PgErrorLevels::Error,
             PgErrorCodes::SystemError,
             "Got an unimplemented message".to_string(),
-        )]);
+        )])
     }
 }
 

@@ -8,8 +8,8 @@ fn match_ssl_request(input: &[u8]) -> IResult<&[u8], &[u8]> {
 
 pub fn is_ssl_request(input: &[u8]) -> bool {
     match match_ssl_request(input) {
-        Ok(_) => return true,
-        Err(_) => return false,
+        Ok(_) => true,
+        Err(_) => false,
     }
 }
 
@@ -19,8 +19,8 @@ fn match_gssapi_request(input: &[u8]) -> IResult<&[u8], &[u8]> {
 
 pub fn is_gssapi_request(input: &[u8]) -> bool {
     match match_gssapi_request(input) {
-        Ok(_) => return true,
-        Err(_) => return false,
+        Ok(_) => true,
+        Err(_) => false,
     }
 }
 
