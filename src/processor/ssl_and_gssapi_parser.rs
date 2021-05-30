@@ -26,14 +26,18 @@ mod tests {
     #[test]
     fn test_ssl_match() {
         let check = is_ssl_request(&hex!("04 D2 16 2F"));
-        let result = true;
-        assert_eq!(check, result);
+        assert_eq!(check, true);
     }
 
     #[test]
     fn test_ssl_not_match() {
         let check = is_ssl_request(&hex!("12 34 56"));
-        let result = false;
-        assert_eq!(check, result);
+        assert_eq!(check, false);
+    }
+
+    #[test]
+    fn test_gsspai_match() {
+        let check = is_gssapi_request(&hex!("04 D2 16 30"));
+        assert_eq!(check, true);
     }
 }
