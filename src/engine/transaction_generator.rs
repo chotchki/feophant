@@ -23,10 +23,10 @@ impl TransactionGenerator {
             .counter
             .inc()
             .try_into()
-            .map_err(|e| TransactionGeneratorError::ConversionError(e))?;
+            .map_err(TransactionGeneratorError::ConversionError)?;
         match self.offset.checked_add(next) {
-            Some(s) => return Ok(s),
-            None => return Err(TransactionGeneratorError::LimitReached()),
+            Some(s) => Ok(s),
+            None => Err(TransactionGeneratorError::LimitReached()),
         }
     }
 }
