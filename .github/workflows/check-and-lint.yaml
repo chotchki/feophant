@@ -1,3 +1,4 @@
+# Thanks to https://github.com/BamPeers/rust-ci-github-actions-workflow for the workflows!
 on:
   pull_request:
   push:
