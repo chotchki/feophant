@@ -88,7 +88,6 @@ impl BuiltinSqlTypes {
 
                 Ok(value)
             }
-            _ => panic!("Should not get here"),
         }
     }
 }

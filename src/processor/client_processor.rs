@@ -20,8 +20,8 @@ impl ClientProcessor {
         transaction_generator: Arc<TransactionGenerator>,
     ) -> ClientProcessor {
         ClientProcessor {
-            page_manager: page_manager,
-            transaction_generator: transaction_generator,
+            page_manager,
+            transaction_generator,
         }
     }
 

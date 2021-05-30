@@ -12,10 +12,6 @@ pub struct Attribute {
 
 impl Attribute {
     pub fn new(id: Uuid, name: String, sql_type: DeserializeTypes) -> Attribute {
-        Attribute {
-            id: id,
-            name: name,
-            sql_type: sql_type,
-        }
+        Attribute { id, name, sql_type }
     }
 }

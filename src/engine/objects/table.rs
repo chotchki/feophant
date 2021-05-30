@@ -14,9 +14,9 @@ pub struct Table {
 impl Table {
     pub fn new_existing(id: Uuid, name: String, attributes: Vec<Attribute>) -> Table {
         Table {
-            id: id,
-            name: name,
-            attributes: attributes,
+            id,
+            name,
+            attributes,
         }
     }
 

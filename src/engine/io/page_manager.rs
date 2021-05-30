@@ -55,7 +55,7 @@ impl PageManager {
         let mut write_lock = self.data.write().await;
 
         let value = write_lock.get_mut(&table.id);
-        if (value.is_none()) {
+        if value.is_none() {
             return Err(PageManagerError::NoSuchTable(table.name));
         }
 

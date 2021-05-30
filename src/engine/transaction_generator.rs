@@ -13,7 +13,7 @@ pub struct TransactionGenerator {
 impl TransactionGenerator {
     pub fn new(offset: u64) -> TransactionGenerator {
         TransactionGenerator {
-            offset: offset,
+            offset,
             counter: ConsistentCounter::new(0),
         }
     }
