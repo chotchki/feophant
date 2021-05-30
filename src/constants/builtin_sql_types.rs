@@ -5,18 +5,18 @@ use super::super::engine::objects::{SqlType,SqlTypeError};
 use super::super::engine::objects::types::{TextType,UuidType};
 
 pub enum BuiltinSqlTypes {
-    Uuid(UuidType),
-    Text(TextType)
+    Uuid(uuid::Uuid),
+    Text(String)
 }
 
 impl BuiltinSqlTypes {
     fn serialize(&self) -> Bytes {
         match *self {
             BuiltinSqlTypes::Uuid(ref value) => {
-                Bytes::copy_from_slice(value.get().as_bytes())
+                Bytes::copy_from_slice(value.as_bytes())
             },
             BuiltinSqlTypes::Text(ref value) => {
-                let mut length = value.get().len();
+                let mut length = value.len();
 
                 let mut buff = Vec::new();
         
@@ -30,7 +30,7 @@ impl BuiltinSqlTypes {
                     buff.push(digit);
                 }
         
-                buff.extend_from_slice(value.get().as_bytes());
+                buff.extend_from_slice(value.as_bytes());
         
                 Bytes::copy_from_slice(&buff)
             },
@@ -47,7 +47,7 @@ impl BuiltinSqlTypes {
                 dest.copy_from_slice(&bytes.slice(0..bytes.len()));
         
                 let value = BuiltinSqlTypes::Uuid(
-                    UuidType::new(uuid::Uuid::from_bytes(dest))
+                    uuid::Uuid::from_bytes(dest)
                 );
         
                 Ok(value)
@@ -83,7 +83,7 @@ impl BuiltinSqlTypes {
                 let value_str = String::from_utf8(bytes.slice(0..length).to_vec()).map_err(|e| SqlTypeError::InvalidUtf8(e))?;
         
                 let value = BuiltinSqlTypes::Text(
-                    TextType::new(value_str)
+                    value_str
                 );
         
                 Ok(value)
@@ -98,8 +98,8 @@ mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
 
-    fn roundtrip(input: String) -> TextType {
-        let stype = BuiltinSqlTypes::Text(TextType::new(input.to_string()));
+    fn roundtrip(input: String) -> String {
+        let stype = BuiltinSqlTypes::Text(input);
         let serialized = stype.serialize();
         let result = BuiltinSqlTypes::deserialize("text", serialized).unwrap();
         match result {
@@ -115,7 +115,7 @@ mod tests {
         let test = "Short String";
         let output = roundtrip(test.to_string());
 
-        assert_eq!(output.get(), test);
+        assert_eq!(output, test);
     }
 
     #[test]
@@ -123,6 +123,6 @@ mod tests {
         let test = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Donec vel porta enim. Sed interdum egestas velit et porttitor. Vestibulum sollicitudin mi enim, in fringilla lectus tincidunt quis. Morbi eget.";
         let output = roundtrip(test.to_string());
 
-        assert_eq!(output.get(), test);
+        assert_eq!(output, test);
     }
 }
