@@ -1,7 +1,5 @@
 use hex_literal::hex;
-use nom::{
-    IResult,
-    bytes::complete::tag};
+use nom::{bytes::complete::tag, IResult};
 
 fn match_ssl_request(input: &[u8]) -> IResult<&[u8], &[u8]> {
     //From here: https://www.postgresql.org/docs/current/protocol-message-formats.html
@@ -9,9 +7,9 @@ fn match_ssl_request(input: &[u8]) -> IResult<&[u8], &[u8]> {
 }
 
 pub fn is_ssl_request(input: &[u8]) -> bool {
-    match match_ssl_request(input){
+    match match_ssl_request(input) {
         Ok(_) => return true,
-        Err(_) => return false
+        Err(_) => return false,
     }
 }
 
@@ -20,9 +18,9 @@ fn match_gssapi_request(input: &[u8]) -> IResult<&[u8], &[u8]> {
 }
 
 pub fn is_gssapi_request(input: &[u8]) -> bool {
-    match match_gssapi_request(input){
+    match match_gssapi_request(input) {
         Ok(_) => return true,
-        Err(_) => return false
+        Err(_) => return false,
     }
 }
 

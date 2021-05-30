@@ -11,7 +11,7 @@ impl PgErrorCodes {
     pub const fn value(self) -> Bytes {
         use PgErrorCodes::*;
         match self {
-            SystemError => Bytes::from_static(b"58000")
+            SystemError => Bytes::from_static(b"58000"),
         }
     }
 }

@@ -1,9 +1,9 @@
 //! Eventually this will handle reading / writing pages from disk but for now, hashmap + vector!
-//! 
+//!
 //! Was stupid with the implementation, should have supported an append api only since vector only works that way
 use bytes::Bytes;
 use std::collections::HashMap;
-use std::sync::{Arc,RwLockReadGuard};
+use std::sync::{Arc, RwLockReadGuard};
 use std::vec::Vec;
 use thiserror::Error;
 use tokio::sync::RwLock;
@@ -14,17 +14,17 @@ use super::super::objects::Table;
 const PAGE_SIZE: usize = 4096; //4KB Pages
 
 pub struct PageManager {
-    data: RwLock<HashMap<Uuid, Box<Vec<Bytes>>>> //Yes this is the naive implementation
+    data: RwLock<HashMap<Uuid, Box<Vec<Bytes>>>>, //Yes this is the naive implementation
 }
 
 impl PageManager {
     pub fn new() -> PageManager {
         PageManager {
-            data: RwLock::new(HashMap::new())
+            data: RwLock::new(HashMap::new()),
         }
     }
 
-    pub async fn get_page(&self, table: Table, offset: usize) -> Option<Bytes>{
+    pub async fn get_page(&self, table: Table, offset: usize) -> Option<Bytes> {
         let read_lock = self.data.read().await;
 
         let value = read_lock.get(&table.id);
@@ -53,16 +53,21 @@ impl PageManager {
             write_lock.insert(table.id, Box::new(vec_holder));
             return;
         }
-        
+
         let existing_value = value.unwrap();
         existing_value.push(page);
     }
 
-    pub async fn update_page(&self, table: Table, page: Bytes, offset: usize) -> Result<(), PageManagerError>{
+    pub async fn update_page(
+        &self,
+        table: Table,
+        page: Bytes,
+        offset: usize,
+    ) -> Result<(), PageManagerError> {
         let mut write_lock = self.data.write().await;
 
         let value = write_lock.get_mut(&table.id);
-        if(value.is_none()){
+        if (value.is_none()) {
             return Err(PageManagerError::NoSuchTable(table.name));
         }
 
@@ -80,15 +85,15 @@ pub enum PageManagerError {
     #[error("No such table {0}")]
     NoSuchTable(String),
     #[error("Invalid Page number {0}")]
-    InvalidPage(usize)
+    InvalidPage(usize),
 }
 
 #[cfg(test)]
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
-    use super::*;
-    use bytes::{BytesMut, BufMut};
     use super::super::super::objects::Table;
+    use super::*;
+    use bytes::{BufMut, BytesMut};
     use uuid::Uuid;
 
     //Async testing help can be found here: https://blog.x5ff.xyz/blog/async-tests-tokio-rust/
@@ -100,7 +105,7 @@ mod tests {
 
     fn get_bytes(data: u8) -> Bytes {
         let mut buf = BytesMut::with_capacity(4096);
-        for _ in 0..4095{
+        for _ in 0..4095 {
             buf.put_u8(data);
         }
         buf.freeze()
@@ -109,7 +114,7 @@ mod tests {
     #[test]
     fn test_get_and_put() {
         let buf_frozen = get_bytes(1);
-        
+
         let pm = PageManager::new();
         let table = Table::new("test".to_string(), Vec::new());
 

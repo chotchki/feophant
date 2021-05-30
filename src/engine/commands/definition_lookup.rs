@@ -1,9 +1,9 @@
-//! This command will look up ONLY hardcoded table definitions first, 
+//! This command will look up ONLY hardcoded table definitions first,
 //! should be able to fallback to reading new ones off disk
 use thiserror::Error;
 
-use super::super::objects::Table;
 use super::super::super::constants::TableDefinitions;
+use super::super::objects::Table;
 
 pub struct DefinitionLookup {}
 
@@ -23,7 +23,7 @@ impl DefinitionLookup {
 #[derive(Debug, Error)]
 pub enum DefinitionLookupError {
     #[error("{0} is not a valid table")]
-    TableDoesNotExist(String)
+    TableDoesNotExist(String),
 }
 
 #[cfg(test)]
@@ -42,7 +42,7 @@ mod tests {
         let pg_class_def = DefinitionLookup::get_definition("something_random".to_string());
         match pg_class_def {
             Ok(_) => assert!(false),
-            Err(DefinitionLookupError::TableDoesNotExist(_)) => assert!(true)
+            Err(DefinitionLookupError::TableDoesNotExist(_)) => assert!(true),
         }
     }
 }

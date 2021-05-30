@@ -1,4 +1,4 @@
-use bytes::{Buf,Bytes};
+use bytes::{Buf, Bytes};
 use thiserror::Error;
 
 pub enum BuiltinSqlTypes {
@@ -8,23 +8,21 @@ pub enum BuiltinSqlTypes {
 
 //This is effectively a selector for BuiltinSqlTypes since I can't figure out a better method :(
 #[derive(Clone, Debug)]
-pub enum DeserializeTypes { 
+pub enum DeserializeTypes {
     Text,
-    Uuid
+    Uuid,
 }
 
 impl BuiltinSqlTypes {
     pub const VALUES: [DeserializeTypes; 2] = [DeserializeTypes::Text, DeserializeTypes::Uuid];
     fn serialize(&self) -> Bytes {
         match *self {
-            BuiltinSqlTypes::Uuid(ref value) => {
-                Bytes::copy_from_slice(value.as_bytes())
-            },
+            BuiltinSqlTypes::Uuid(ref value) => Bytes::copy_from_slice(value.as_bytes()),
             BuiltinSqlTypes::Text(ref value) => {
                 let mut length = value.len();
 
                 let mut buff = Vec::new();
-        
+
                 while length > 0 {
                     let last_length = length as u8;
                     let mut digit: u8 = last_length & 0x7f;
@@ -34,11 +32,11 @@ impl BuiltinSqlTypes {
                     }
                     buff.push(digit);
                 }
-        
+
                 buff.extend_from_slice(value.as_bytes());
-        
+
                 Bytes::copy_from_slice(&buff)
-            },
+            }
         }
     }
 
@@ -50,50 +48,47 @@ impl BuiltinSqlTypes {
                 }
                 let mut dest = [0; 16];
                 dest.copy_from_slice(&bytes.slice(0..bytes.len()));
-        
-                let value = BuiltinSqlTypes::Uuid(
-                    uuid::Uuid::from_bytes(dest)
-                );
-        
+
+                let value = BuiltinSqlTypes::Uuid(uuid::Uuid::from_bytes(dest));
+
                 Ok(value)
-            },
+            }
             DeserializeTypes::Text => {
                 if bytes.len() == 0 {
-                    return Err(SqlTypeError::EmptyBuffer())
+                    return Err(SqlTypeError::EmptyBuffer());
                 }
-        
-                let mut length:usize = 0;
-        
+
+                let mut length: usize = 0;
+
                 let mut high_bit = 1;
                 let mut loop_count = 0;
                 while high_bit == 1 {
                     if !bytes.has_remaining() {
                         return Err(SqlTypeError::BufferTooShort());
                     }
-        
+
                     let b = bytes.get_u8();
                     high_bit = b >> 7;
-        
-                    let mut low_bits:usize = (b & 0x7f).into();
-                    low_bits = low_bits<<(7*loop_count);
+
+                    let mut low_bits: usize = (b & 0x7f).into();
+                    low_bits = low_bits << (7 * loop_count);
                     loop_count = loop_count + 1;
-        
+
                     length = length + low_bits;
                 }
-        
+
                 if length != bytes.remaining() {
                     return Err(SqlTypeError::InvalidStringLength(length, bytes.remaining()));
                 }
-                
-                let value_str = String::from_utf8(bytes.slice(0..length).to_vec()).map_err(|e| SqlTypeError::InvalidUtf8(e))?;
-        
-                let value = BuiltinSqlTypes::Text(
-                    value_str
-                );
-        
+
+                let value_str = String::from_utf8(bytes.slice(0..length).to_vec())
+                    .map_err(|e| SqlTypeError::InvalidUtf8(e))?;
+
+                let value = BuiltinSqlTypes::Text(value_str);
+
                 Ok(value)
             }
-            _ => panic!("Should not get here")
+            _ => panic!("Should not get here"),
         }
     }
 }
@@ -109,7 +104,7 @@ pub enum SqlTypeError {
     #[error("Length encoded {0}, length found {1}")]
     InvalidStringLength(usize, usize),
     #[error("Invalid utf8")]
-    InvalidUtf8(#[from] std::string::FromUtf8Error)
+    InvalidUtf8(#[from] std::string::FromUtf8Error),
 }
 
 #[cfg(test)]

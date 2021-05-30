@@ -1,8 +1,7 @@
 //!Postgres Doc: https://www.postgresql.org/docs/current/catalog-pg-attribute.html
 
-use uuid::Uuid;
-
 use super::super::super::constants::DeserializeTypes;
+use uuid::Uuid;
 
 #[derive(Clone, Debug)]
 pub struct Attribute {
@@ -13,10 +12,10 @@ pub struct Attribute {
 
 impl Attribute {
     pub fn new(id: Uuid, name: String, sql_type: DeserializeTypes) -> Attribute {
-        Attribute{
+        Attribute {
             id: id,
             name: name,
-            sql_type: sql_type
+            sql_type: sql_type,
         }
     }
 }

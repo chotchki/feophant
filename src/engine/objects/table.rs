@@ -8,15 +8,15 @@ use super::Attribute;
 pub struct Table {
     pub id: Uuid,
     pub name: String,
-    pub attributes: Vec<Attribute>   
+    pub attributes: Vec<Attribute>,
 }
 
 impl Table {
-    pub fn new_existing(id: Uuid, name: String, attributes: Vec<Attribute> ) -> Table {
-        Table{
+    pub fn new_existing(id: Uuid, name: String, attributes: Vec<Attribute>) -> Table {
+        Table {
             id: id,
             name: name,
-            attributes: attributes
+            attributes: attributes,
         }
     }
 

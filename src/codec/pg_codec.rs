@@ -1,8 +1,8 @@
 //! Implementation hints from here: https://docs.rs/tokio-util/0.6.6/tokio_util/codec/index.html
 
-use tokio_util::codec::{Decoder,Encoder};
-use bytes::{BytesMut, Buf, Bytes};
+use bytes::{Buf, Bytes, BytesMut};
 use std::convert::TryFrom;
+use tokio_util::codec::{Decoder, Encoder};
 
 use super::NetworkFrame;
 
@@ -12,10 +12,7 @@ impl Decoder for PgCodec {
     type Item = NetworkFrame;
     type Error = std::io::Error;
 
-    fn decode(
-        &mut self,
-        src: &mut BytesMut
-    ) -> Result<Option<Self::Item>, Self::Error> {
+    fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
         if src.len() < 5 {
             // Not enough data to make a decision.
             return Ok(None);
@@ -36,18 +33,17 @@ impl Decoder for PgCodec {
             prefix_len = 5;
         }
         let mut length_bytes = [0u8; 4];
-        length_bytes.copy_from_slice(&src[(prefix_len-4)..prefix_len]);
+        length_bytes.copy_from_slice(&src[(prefix_len - 4)..prefix_len]);
 
         let length = u32::from_be_bytes(length_bytes) as u32;
         if length < 4 {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
-                format!("Frame length of {} is too small", length)
-                ));
+                format!("Frame length of {} is too small", length),
+            ));
         }
-        
-        let length_size = u32::from_be_bytes(length_bytes) as usize - 4;
 
+        let length_size = u32::from_be_bytes(length_bytes) as usize - 4;
 
         // TODO - Unsure how to stop DDOS when the protocol allows up to 2GB of data
         //          Would be great to know if the user is authenticated
@@ -88,7 +84,10 @@ impl Encoder<NetworkFrame> for PgCodec {
     type Error = std::io::Error;
 
     fn encode(&mut self, item: NetworkFrame, dst: &mut BytesMut) -> Result<(), Self::Error> {
-        debug!("Sending message type {:x} and payload {:?}", item.message_type, item.payload);
+        debug!(
+            "Sending message type {:x} and payload {:?}",
+            item.message_type, item.payload
+        );
 
         //Messages types of zero are special because they get written out raw. Probably should find a better way to do this
         if item.message_type == 0 {
@@ -107,10 +106,15 @@ impl Encoder<NetworkFrame> for PgCodec {
             // Convert the length into a byte array.
             let length = match u32::try_from(item.payload.len() + 4) {
                 Ok(n) => n,
-                Err(_) => return Err(std::io::Error::new(
-                    std::io::ErrorKind::InvalidData,
-                    format!("Frame of length {} plus length header is too large.", item.payload.len())
-                ))
+                Err(_) => {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        format!(
+                            "Frame of length {} plus length header is too large.",
+                            item.payload.len()
+                        ),
+                    ))
+                }
             };
 
             let len_slice = u32::to_be_bytes(length);
