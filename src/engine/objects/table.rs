@@ -1,11 +1,10 @@
 //! Postgres doc: https://www.postgresql.org/docs/current/catalog-pg-class.html
 
-use serde::{Serialize, Deserialize};
 use uuid::Uuid;
 
 use super::Attribute;
 
-#[derive(Serialize, Clone, Deserialize, Debug)]
+#[derive(Clone, Debug)]
 pub struct Table {
     pub id: Uuid,
     pub name: String,
