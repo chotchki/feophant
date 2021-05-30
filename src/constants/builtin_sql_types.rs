@@ -36,9 +36,7 @@ impl BuiltinSqlTypes {
             },
         }
     }
-    pub fn new<F>(constructor: F) -> Self where F: Fn(Option<String>) -> Self {
-        (constructor)(None)
-    }
+
     fn deserialize(target_type: &str, mut bytes: Bytes) -> Result<Self, SqlTypeError> {
         match target_type {
             "uuid" => {
