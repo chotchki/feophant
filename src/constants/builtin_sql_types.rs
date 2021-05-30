@@ -54,7 +54,7 @@ impl BuiltinSqlTypes {
                 Ok(value)
             }
             DeserializeTypes::Text => {
-                if bytes.len() == 0 {
+                if bytes.is_empty() {
                     return Err(SqlTypeError::EmptyBuffer());
                 }
 
@@ -71,10 +71,10 @@ impl BuiltinSqlTypes {
                     high_bit = b >> 7;
 
                     let mut low_bits: usize = (b & 0x7f).into();
-                    low_bits = low_bits << (7 * loop_count);
-                    loop_count = loop_count + 1;
+                    low_bits <<= 7 * loop_count;
+                    loop_count += 1;
 
-                    length = length + low_bits;
+                    length += low_bits;
                 }
 
                 if length != bytes.remaining() {
@@ -82,7 +82,7 @@ impl BuiltinSqlTypes {
                 }
 
                 let value_str = String::from_utf8(bytes.slice(0..length).to_vec())
-                    .map_err(|e| SqlTypeError::InvalidUtf8(e))?;
+                    .map_err(SqlTypeError::InvalidUtf8)?;
 
                 let value = BuiltinSqlTypes::Text(value_str);
 

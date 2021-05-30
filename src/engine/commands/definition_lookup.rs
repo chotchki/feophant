@@ -10,9 +10,9 @@ pub struct DefinitionLookup {}
 impl DefinitionLookup {
     pub fn get_definition(name: String) -> Result<Table, DefinitionLookupError> {
         let system_tables = TableDefinitions::VALUES;
-        for i in 0..system_tables.len() {
-            if system_tables[i].value().name == name {
-                return Ok(system_tables[i].value());
+        for i in &system_tables {
+            if i.value().name == name {
+                return Ok(i.value());
             }
         }
 
