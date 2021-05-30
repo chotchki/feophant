@@ -9,6 +9,12 @@ pub enum BuiltinSqlTypes {
     Text(String)
 }
 
+//This is effectively a selector for BuiltinSqlTypes since I can't figure out a better method :(
+pub enum DeserializeTypes { 
+    Uuid,
+    Text
+}
+
 impl BuiltinSqlTypes {
     fn serialize(&self) -> Bytes {
         match *self {
@@ -37,9 +43,9 @@ impl BuiltinSqlTypes {
         }
     }
 
-    fn deserialize(target_type: &str, mut bytes: Bytes) -> Result<Self, SqlTypeError> {
+    fn deserialize(target_type: DeserializeTypes, mut bytes: Bytes) -> Result<Self, SqlTypeError> {
         match target_type {
-            "uuid" => {
+            DeserializeTypes::Uuid => {
                 if bytes.len() < 16 {
                     return Err(SqlTypeError::LengthTooShort(bytes.len()));
                 }
@@ -52,7 +58,7 @@ impl BuiltinSqlTypes {
         
                 Ok(value)
             },
-            "text" => {
+            DeserializeTypes::Text => {
                 if bytes.len() == 0 {
                     return Err(SqlTypeError::EmptyBuffer())
                 }
@@ -101,7 +107,7 @@ mod tests {
     fn roundtrip(input: String) -> String {
         let stype = BuiltinSqlTypes::Text(input);
         let serialized = stype.serialize();
-        let result = BuiltinSqlTypes::deserialize("text", serialized).unwrap();
+        let result = BuiltinSqlTypes::deserialize(DeserializeTypes::Text, serialized).unwrap();
         match result {
             BuiltinSqlTypes::Text(t) => t,
             BuiltinSqlTypes::Uuid(_) => {
