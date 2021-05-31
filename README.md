@@ -29,7 +29,11 @@ What I need:
 * A way to say to a function with this list of types (which may be different), parse this data into something sane. (got this)
 * Next need to hook this up with column definitions.
 
-
+# # Longer Term TODO
+This is stuff that I should get to but aren't vital to getting to a minimal viable product.
+* Right now the main function runs the server from primitives. The Tokio Tower layer will probably do it better.
+* The codec that parses the network traffic is pretty naive. You could make the server allocate 2GB of data for a DDOS easily.
+* * We should either add state to the codec or change how it parses to produce chunked requests. That means that when the 2GB offer is reached the server can react and terminate before we accept too much data. Its a little more nuanced than that, 2GB input might be okay but we should make decisions based on users and roles.
 
 # Postgres Divergance
 
