@@ -5,7 +5,6 @@ Welcome to Rusty Elephant! Chris's attempt to learn rust. As a toy I'm implement
 Just a toy but it's already taught me a lot about Rust.
 
 # Launch
-
 Launch the server
 `./rusty-elephant`
 
@@ -14,11 +13,9 @@ Lauch a postgres client application to test
 
 
 # What works
-
 You can currently start the server, connect to it and have it throw tons of errors. I'm to the point now I need to start supporting saving data.
 
 # Next TODO
-
 Need to support the concept of a table that can be read and written to, in memory.
 
 Memory based pages are complete now need a concept of taking a table definition (hardcoded pg_class first) and storing an entry in a page. This has morphed into figuring out the type system, Argh!
