@@ -43,8 +43,12 @@ mod tests {
     #[test]
     fn test_new() {
         let test = Attribute::new(Uuid::new_v4(), "test".to_string(), DeserializeTypes::Text);
-        let test_existing =
-            Attribute::new_existing(test.id.clone(), test.pg_class_id.clone(), test.name.clone(), DeserializeTypes::Text);
+        let test_existing = Attribute::new_existing(
+            test.id.clone(),
+            test.pg_class_id.clone(),
+            test.name.clone(),
+            DeserializeTypes::Text,
+        );
 
         assert_eq!(test, test_existing);
     }
