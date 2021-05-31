@@ -3,7 +3,8 @@
 use hex_literal::hex;
 use uuid::Uuid;
 
-use super::super::engine::objects::Table;
+use super::super::constants::DeserializeTypes;
+use super::super::engine::objects::{Attribute, Table};
 
 #[derive(Copy, Clone)]
 pub enum TableDefinitions {
@@ -18,7 +19,20 @@ impl TableDefinitions {
             PgClass => Table::new_existing(
                 Uuid::from_bytes(hex!("EE919E33D9054F4889537EBB6CC911EB")),
                 "pg_class".to_string(),
-                Vec::new(),
+                vec![
+                    Attribute::new_existing(
+                        Uuid::from_bytes(hex!("3BC7F6F30FAA4084AA9F463CB323A1A5")),
+                        Uuid::from_bytes(hex!("EE919E33D9054F4889537EBB6CC911EB")),
+                        "id".to_string(),
+                        DeserializeTypes::Uuid,
+                    ),
+                    Attribute::new_existing(
+                        Uuid::from_bytes(hex!("1C1D1831357A493AAE048AA560E351A2")),
+                        Uuid::from_bytes(hex!("EE919E33D9054F4889537EBB6CC911EB")),
+                        "name".to_string(),
+                        DeserializeTypes::Uuid,
+                    ),
+                ],
             ),
         }
     }
