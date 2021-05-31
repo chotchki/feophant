@@ -7,7 +7,7 @@ pub enum BuiltinSqlTypes {
 }
 
 //This is effectively a selector for BuiltinSqlTypes since I can't figure out a better method :(
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum DeserializeTypes {
     Text,
     Uuid,
@@ -108,7 +108,6 @@ pub enum SqlTypeError {
 
 #[cfg(test)]
 mod tests {
-    // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
 
     fn roundtrip(input: String) -> String {
