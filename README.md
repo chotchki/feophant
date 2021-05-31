@@ -24,7 +24,8 @@ What I need:
 * To support various data types for use on columns/rows.
 * A way to serialize and deserialize them to bytes (have that for text+uuid)
 * A way to say to a function with this list of types (which may be different), parse this data into something sane. (got this)
-* Next need to hook this up with column definitions.
+* Need to hook this up with column definitions. (got this)
+* Need to simply insert a row into a table via pages
 
 # # Longer Term TODO
 This is stuff that I should get to but aren't vital to getting to a minimal viable product.
