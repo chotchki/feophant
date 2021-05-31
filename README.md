@@ -36,7 +36,6 @@ This is stuff that I should get to but aren't vital to getting to a minimal viab
 * * We should either add state to the codec or change how it parses to produce chunked requests. That means that when the 2GB offer is reached the server can react and terminate before we accept too much data. Its a little more nuanced than that, 2GB input might be okay but we should make decisions based on users and roles.
 
 # Postgres Divergance
-
 Its kinda pointless to blindly reproduce what has already been done so I'm making the following changes to the db server design vs Postgres.
 
 * Multi-threaded design based on Tokio instead of Postgres's multi-process design.
