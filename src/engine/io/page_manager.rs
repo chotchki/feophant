@@ -77,7 +77,6 @@ pub enum PageManagerError {
 #[cfg(test)]
 mod tests {
     #![allow(unused_must_use)]
-    // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::super::super::objects::Table;
     use super::*;
     use bytes::{BufMut, BytesMut};
