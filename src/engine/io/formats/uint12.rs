@@ -3,9 +3,9 @@
 pub const PAGE_SIZE: u16 = 4096;
 
 #[derive(Debug, PartialEq)]
-pub struct PageOffset(u16);
+pub struct UInt12(u16);
 
-impl PageOffset {
+impl UInt12 {
     fn is_in_range(val: u16) -> bool {
         val < PAGE_SIZE
     }
@@ -18,28 +18,28 @@ impl PageOffset {
         val
     }
 
-    pub fn new(val: u16) -> Option<PageOffset> {
-        if PageOffset::is_in_range(val) {
-            Some(PageOffset(val))
+    pub fn new(val: u16) -> Option<UInt12> {
+        if UInt12::is_in_range(val) {
+            Some(UInt12(val))
         } else {
             None
         }
     }
 
-    pub fn add(&self, other: PageOffset) -> PageOffset {
-        PageOffset(PageOffset::clamp(self.0.saturating_add(other.0)))
+    pub fn add(&self, other: UInt12) -> UInt12 {
+        UInt12(UInt12::clamp(self.0.saturating_add(other.0)))
     }
 
-    pub fn subtract(&self, other: PageOffset) -> PageOffset {
-        PageOffset(PageOffset::clamp(self.0.saturating_sub(other.0)))
+    pub fn subtract(&self, other: UInt12) -> UInt12 {
+        UInt12(UInt12::clamp(self.0.saturating_sub(other.0)))
     }
 
     pub fn to_u16(&self) -> u16 {
         self.0
     }
 
-    pub fn max() -> PageOffset {
-        PageOffset(PAGE_SIZE - 1)
+    pub fn max() -> UInt12 {
+        UInt12(PAGE_SIZE - 1)
     }
 }
 
@@ -49,7 +49,7 @@ mod tests {
 
     #[test]
     fn test_normal() {
-        let test = PageOffset::new(1).unwrap();
+        let test = UInt12::new(1).unwrap();
 
         assert_eq!(test.to_u16(), 1);
     }

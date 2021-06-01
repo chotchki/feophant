@@ -1,21 +1,21 @@
 //! See https://www.postgresql.org/docs/current/storage-page-layout.html for reference documentation
 //! I'm only implementing enough for my needs until proven otherwise
-use super::PageOffset;
+use super::UInt12;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::mem::size_of;
 use thiserror::Error;
 
 #[derive(Debug, PartialEq)]
 pub struct PageHeader {
-    pd_lower: PageOffset,
-    pd_upper: PageOffset,
+    pd_lower: UInt12,
+    pd_upper: UInt12,
 }
 
 impl PageHeader {
     pub fn new() -> PageHeader {
         PageHeader {
-            pd_lower: PageOffset::new((size_of::<PageHeader>() - 1) as u16).unwrap(),
-            pd_upper: PageOffset::max(),
+            pd_lower: UInt12::new((size_of::<PageHeader>() - 1) as u16).unwrap(),
+            pd_upper: UInt12::max(),
         }
     }
 
@@ -31,9 +31,9 @@ impl PageHeader {
             return Err(PageHeaderError::InsufficentData(input.len()));
         }
         let pd_lower =
-            PageOffset::new(input.get_u16_le()).ok_or_else(PageHeaderError::LowerOffsetTooLarge)?;
+            UInt12::new(input.get_u16_le()).ok_or_else(PageHeaderError::LowerOffsetTooLarge)?;
         let pd_upper =
-            PageOffset::new(input.get_u16_le()).ok_or_else(PageHeaderError::UpperOffsetTooLarge)?;
+            UInt12::new(input.get_u16_le()).ok_or_else(PageHeaderError::UpperOffsetTooLarge)?;
         Ok(PageHeader { pd_lower, pd_upper })
     }
 }
