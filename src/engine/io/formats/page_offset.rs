@@ -2,6 +2,7 @@
 
 pub const PAGE_SIZE: u16 = 4096;
 
+#[derive(Debug, PartialEq)]
 pub struct PageOffset(u16);
 
 impl PageOffset {
@@ -48,8 +49,8 @@ mod tests {
 
     #[test]
     fn test_normal() {
-        let test = PageOffset::new(1);
+        let test = PageOffset::new(1).unwrap();
 
-        assert_eq!(test, 1);
+        assert_eq!(test.to_u16(), 1);
     }
 }

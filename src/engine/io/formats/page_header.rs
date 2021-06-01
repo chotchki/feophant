@@ -1,10 +1,11 @@
 //! See https://www.postgresql.org/docs/current/storage-page-layout.html for reference documentation
 //! I'm only implementing enough for my needs until proven otherwise
-use super::super::super::constants::PageOffset;
-use bytes::{BufMut, Bytes, BytesMut};
+use super::PageOffset;
+use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::mem::size_of;
 use thiserror::Error;
 
+#[derive(Debug, PartialEq)]
 pub struct PageHeader {
     pd_lower: PageOffset,
     pd_upper: PageOffset,
@@ -25,17 +26,22 @@ impl PageHeader {
         buf.freeze()
     }
 
-    fn parse(input: [u8; 4]) -> Result<Self, PageHeaderError> {
-        let pd_lower = PageOffset::new(u16::from_le_bytes([input[0], input[1]]))
-            .ok_or_else(PageHeaderError::LowerOffsetTooLarge)?;
-        let pd_upper = PageOffset::new(u16::from_le_bytes([input[2], input[3]]))
-            .ok_or_else(PageHeaderError::UpperOffsetTooLarge)?;
+    fn parse(mut input: Bytes) -> Result<Self, PageHeaderError> {
+        if input.len() < 4 {
+            return Err(PageHeaderError::InsufficentData(input.len()));
+        }
+        let pd_lower =
+            PageOffset::new(input.get_u16_le()).ok_or_else(PageHeaderError::LowerOffsetTooLarge)?;
+        let pd_upper =
+            PageOffset::new(input.get_u16_le()).ok_or_else(PageHeaderError::UpperOffsetTooLarge)?;
         Ok(PageHeader { pd_lower, pd_upper })
     }
 }
 
 #[derive(Debug, Error)]
 pub enum PageHeaderError {
+    #[error("Not enough data has {0} bytes")]
+    InsufficentData(usize),
     #[error("Lower offset is too large")]
     LowerOffsetTooLarge(),
     #[error("Upper offset is too large")]
@@ -50,7 +56,7 @@ mod tests {
     fn test_roundtrip() {
         let test = PageHeader::new();
         let test_serial = test.serialize();
-        let test_rt = PageHeader::parse(test_serial);
+        let test_rt = PageHeader::parse(test_serial).unwrap();
 
         let test_new = PageHeader::new();
         assert_eq!(test_rt, test_new);
