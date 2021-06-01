@@ -1,6 +1,10 @@
 //Vendor Imports
 #[macro_use]
+extern crate bitflags;
+
+#[macro_use]
 extern crate log;
+
 extern crate simplelog;
 use futures::sink::SinkExt;
 use futures::stream::StreamExt;
