@@ -44,6 +44,7 @@ Its kinda pointless to blindly reproduce what has already been done so I'm makin
 How to setup modules sanely: https://dev.to/stevepryde/intro-to-rust-modules-3g8k
 
 Reasonable application error type creation: https://github.com/dtolnay/anyhow
+
 Library Errors: https://github.com/dtolnay/thiserror
 
 Rust's inability to treat enum variants as a type is a HUGE pain. I cheated and separated serialization from deserialization.
