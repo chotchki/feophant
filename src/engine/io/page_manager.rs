@@ -10,8 +10,7 @@ use uuid::Uuid;
 
 use super::super::objects::Table;
 
-const PAGE_SIZE: usize = 4096; //4KB Pages
-
+#[derive(Debug)]
 pub struct PageManager {
     data: RwLock<HashMap<Uuid, Vec<Bytes>>>, //Yes this is the naive implementation
 }
@@ -33,7 +32,6 @@ impl PageManager {
         Some(copy)
     }
 
-    // Unoptimized since this is a temporary solution
     pub async fn add_page(&self, table: Table, page: Bytes) {
         let mut write_lock = self.data.write().await;
 
