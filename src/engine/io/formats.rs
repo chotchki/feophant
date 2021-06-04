@@ -4,6 +4,9 @@ pub use info_mask::InfoMask;
 mod item_id_data;
 pub use item_id_data::ItemIdData;
 
+mod null_mask;
+pub use null_mask::NullMask;
+
 mod page_header;
 pub use page_header::PageHeader;
 
