@@ -1,6 +1,6 @@
 //We are only going to support 4kb pages to match most common underlying I/O subsystems
 
-pub const PAGE_SIZE: u16 = 4096;
+const PAGE_SIZE: u16 = 4096;
 
 #[derive(Debug, PartialEq)]
 pub struct UInt12(u16);
