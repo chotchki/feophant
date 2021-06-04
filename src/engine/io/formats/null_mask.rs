@@ -13,11 +13,13 @@ impl NullMask {
 
         let mut buffer = BytesMut::new();
         let mut any_null = false;
+
         let mut value: u8 = 0;
+        let mut mask: u8 = 0x80;
         let mut i = 0;
         loop {
             if input[i].is_none() {
-                value |= 1;
+                value |= mask;
                 any_null = true;
             }
 
@@ -31,8 +33,9 @@ impl NullMask {
             if (i + 1) % 8 == 0 && i > 0 {
                 buffer.put_u8(value);
                 value = 0;
+                mask = 0x80;
             } else {
-                value <<= 1;
+                mask >>= 1;
             }
 
             i += 1;
@@ -49,8 +52,8 @@ impl NullMask {
 
         for b in input {
             let mut temp = b;
-            loop {
-                if temp & 0x7f > 0 {
+            for _ in 0..8 {
+                if temp & 0x80 > 0 {
                     buffer.push(true);
                 } else {
                     buffer.push(false);
@@ -92,7 +95,7 @@ mod tests {
 
         let result = NullMask::serialize(test);
 
-        assert_eq!(hex!("aa 02").to_vec(), result.to_vec());
+        assert_eq!(hex!("aa 80").to_vec(), result.to_vec());
     }
 
     #[test]
@@ -101,7 +104,7 @@ mod tests {
 
         let result = NullMask::serialize(test);
 
-        assert_eq!(hex!("01").to_vec(), result.to_vec());
+        assert_eq!(hex!("80").to_vec(), result.to_vec());
     }
 
     #[test]
@@ -116,10 +119,10 @@ mod tests {
     #[test]
     fn test_null_mask_parse() {
         let test = vec![
-            false, true, false, true, false, true, false, true, false, true,
+            true, false, true, false, true, false, true, false, true, false,
         ];
 
-        let result = NullMask::parse(Bytes::from_static(&hex!("aa 02")), 10);
+        let result = NullMask::parse(Bytes::from_static(&hex!("aa 80")), 10);
 
         assert_eq!(result, test);
     }
@@ -153,7 +156,8 @@ mod tests {
         ];
 
         let result = NullMask::serialize(test);
-        let parse = NullMask::parse(Bytes::from_static(&hex!("aa 02")), 12);
+        assert_eq!(Bytes::from_static(&hex!("aa 80")), result);
+        let parse = NullMask::parse(result, 12);
 
         assert_eq!(end, parse);
     }
