@@ -1,7 +1,6 @@
 //! Implementation of the null bit flags to know if a column is null or not
 //! I'm not using a standard library because the bitvector library collides with nom
 use bytes::{BufMut, Bytes, BytesMut};
-use thiserror::Error;
 
 pub struct NullMask {}
 
@@ -65,12 +64,6 @@ impl NullMask {
         buffer.resize(column_count, false);
         buffer
     }
-}
-
-#[derive(Debug, Error)]
-pub enum NullMaskError {
-    #[error("No idea")]
-    Unknown(),
 }
 
 #[cfg(test)]
