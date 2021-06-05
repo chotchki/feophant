@@ -1,7 +1,7 @@
 use hex_literal::hex;
 use nom::{bytes::complete::tag, IResult};
 
-fn match_ssl_request(input: &[u8]) -> IResult<&[u8], &[u8]> {
+pub fn match_ssl_request(input: &[u8]) -> IResult<&[u8], &[u8]> {
     //From here: https://www.postgresql.org/docs/current/protocol-message-formats.html
     tag(&hex!("04 D2 16 2F"))(input)
 }

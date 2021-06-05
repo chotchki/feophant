@@ -125,3 +125,23 @@ impl Encoder<NetworkFrame> for PgCodec {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::super::super::processor::ssl_and_gssapi_parser;
+    use super::*;
+    use hex_literal::hex;
+
+    #[test]
+    fn test_decode() {
+        let input = hex!("00 00 00 08 04 D2 16 2F");
+        let mut buf = BytesMut::new();
+        buf.extend_from_slice(&input);
+
+        let mut codec = PgCodec {};
+        let msg = codec.decode(&mut buf).unwrap().unwrap();
+
+        assert_eq!(msg.message_type, 0);
+        assert_eq!(ssl_and_gssapi_parser::is_ssl_request(&msg.payload), true);
+    }
+}
