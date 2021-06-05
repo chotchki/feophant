@@ -36,7 +36,7 @@ jobs:
           key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('Cargo.lock') }}
       - name: Generate test result and coverage report
         run: |
-          cargo install llvm-tools-preview cargo2junit grcov;
+          cargo install llvm-tools cargo2junit grcov;
           cargo build --verbose
           LLVM_PROFILE_FILE="your_name-%p-%m.profraw" cargo test --verbose
           grcov . --binary-path ./target/debug/ -s . -t lcov --branch --ignore-not-existing --ignore "/*" -o lcov.info
