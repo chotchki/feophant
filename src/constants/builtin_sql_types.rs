@@ -1,13 +1,15 @@
-use bytes::{Buf, Bytes};
+use bytes::{Buf, BufMut, Bytes, BytesMut};
+use std::mem;
 use thiserror::Error;
 
+#[derive(Debug, PartialEq)]
 pub enum BuiltinSqlTypes {
     Text(String),
     Uuid(uuid::Uuid),
 }
 
 //This is effectively a selector for BuiltinSqlTypes since I can't figure out a better method :(
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum DeserializeTypes {
     Text,
     Uuid,
@@ -15,13 +17,17 @@ pub enum DeserializeTypes {
 
 impl BuiltinSqlTypes {
     pub const VALUES: [DeserializeTypes; 2] = [DeserializeTypes::Text, DeserializeTypes::Uuid];
-    fn serialize(&self) -> Bytes {
+    pub fn serialize(&self) -> Bytes {
         match *self {
-            BuiltinSqlTypes::Uuid(ref value) => Bytes::copy_from_slice(value.as_bytes()),
+            BuiltinSqlTypes::Uuid(ref value) => {
+                let mut buff = BytesMut::with_capacity(mem::size_of::<u128>());
+                buff.put_u128_le(value.as_u128());
+                buff.freeze()
+            }
             BuiltinSqlTypes::Text(ref value) => {
                 let mut length = value.len();
 
-                let mut buff = Vec::new();
+                let mut buff = BytesMut::with_capacity((length + 6) / 7);
 
                 while length > 0 {
                     let last_length = length as u8;
@@ -30,44 +36,44 @@ impl BuiltinSqlTypes {
                     if length > 0 {
                         digit |= 0x80;
                     }
-                    buff.push(digit);
+                    buff.put_u8(digit);
                 }
 
                 buff.extend_from_slice(value.as_bytes());
 
-                Bytes::copy_from_slice(&buff)
+                buff.freeze()
             }
         }
     }
 
-    fn deserialize(target_type: DeserializeTypes, mut bytes: Bytes) -> Result<Self, SqlTypeError> {
+    pub fn deserialize(
+        target_type: DeserializeTypes,
+        mut buffer: impl Buf,
+    ) -> Result<Self, SqlTypeError> {
         match target_type {
             DeserializeTypes::Uuid => {
-                if bytes.len() < 16 {
-                    return Err(SqlTypeError::LengthTooShort(bytes.len()));
+                if buffer.remaining() < mem::size_of::<u128>() {
+                    return Err(SqlTypeError::LengthTooShort(buffer.remaining()));
                 }
-                let mut dest = [0; 16];
-                dest.copy_from_slice(&bytes.slice(0..bytes.len()));
-
-                let value = BuiltinSqlTypes::Uuid(uuid::Uuid::from_bytes(dest));
+                let dest = buffer.get_u128_le();
+                let value = BuiltinSqlTypes::Uuid(uuid::Uuid::from_u128(dest));
 
                 Ok(value)
             }
             DeserializeTypes::Text => {
-                if bytes.is_empty() {
+                if !buffer.has_remaining() {
                     return Err(SqlTypeError::EmptyBuffer());
                 }
 
                 let mut length: usize = 0;
-
                 let mut high_bit = 1;
                 let mut loop_count = 0;
                 while high_bit == 1 {
-                    if !bytes.has_remaining() {
+                    if !buffer.has_remaining() {
                         return Err(SqlTypeError::BufferTooShort());
                     }
 
-                    let b = bytes.get_u8();
+                    let b = buffer.get_u8();
                     high_bit = b >> 7;
 
                     let mut low_bits: usize = (b & 0x7f).into();
@@ -77,12 +83,16 @@ impl BuiltinSqlTypes {
                     length += low_bits;
                 }
 
-                if length != bytes.remaining() {
-                    return Err(SqlTypeError::InvalidStringLength(length, bytes.remaining()));
+                if length > buffer.remaining() {
+                    return Err(SqlTypeError::InvalidStringLength(
+                        length,
+                        buffer.remaining(),
+                    ));
                 }
 
-                let value_str = String::from_utf8(bytes.slice(0..length).to_vec())
-                    .map_err(SqlTypeError::InvalidUtf8)?;
+                let value_buff = buffer.copy_to_bytes(length);
+                let value_str =
+                    String::from_utf8(value_buff.to_vec()).map_err(SqlTypeError::InvalidUtf8)?;
 
                 let value = BuiltinSqlTypes::Text(value_str);
 

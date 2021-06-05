@@ -5,7 +5,7 @@ use bytes::{BufMut, Bytes, BytesMut};
 pub struct NullMask {}
 
 impl NullMask {
-    pub fn serialize<T>(input: Vec<Option<T>>) -> Bytes {
+    pub fn serialize<T>(input: &Vec<Option<T>>) -> Bytes {
         if input.len() == 0 {
             return Bytes::new();
         }
@@ -46,11 +46,11 @@ impl NullMask {
         buffer.freeze()
     }
 
-    pub fn parse(input: Bytes, column_count: usize) -> Vec<bool> {
+    pub fn parse(input: &Bytes, column_count: usize) -> Vec<bool> {
         let mut buffer = vec![];
 
         for b in input {
-            let mut temp = b;
+            let mut temp = *b;
             for _ in 0..8 {
                 if temp & 0x80 > 0 {
                     buffer.push(true);
@@ -86,7 +86,7 @@ mod tests {
             Some(true),
         ];
 
-        let result = NullMask::serialize(test);
+        let result = NullMask::serialize(&test);
 
         assert_eq!(hex!("aa 80").to_vec(), result.to_vec());
     }
@@ -95,7 +95,7 @@ mod tests {
     fn test_null_mask_single() {
         let test: Vec<Option<bool>> = vec![None];
 
-        let result = NullMask::serialize(test);
+        let result = NullMask::serialize(&test);
 
         assert_eq!(hex!("80").to_vec(), result.to_vec());
     }
@@ -104,7 +104,7 @@ mod tests {
     fn test_null_mask_all_false() {
         let test = vec![Some(true), Some(true), Some(true)];
 
-        let result = NullMask::serialize(test);
+        let result = NullMask::serialize(&test);
 
         assert_eq!(Bytes::new(), result);
     }
@@ -115,7 +115,7 @@ mod tests {
             true, false, true, false, true, false, true, false, true, false,
         ];
 
-        let result = NullMask::parse(Bytes::from_static(&hex!("aa 80")), 10);
+        let result = NullMask::parse(&Bytes::from_static(&hex!("aa 80")), 10);
 
         assert_eq!(result, test);
     }
@@ -124,7 +124,7 @@ mod tests {
     fn test_null_mask_parse_short() {
         let test = vec![true, false, false, false, false, false, false, false, false];
 
-        let result = NullMask::parse(Bytes::from_static(&hex!("80")), 9);
+        let result = NullMask::parse(&Bytes::from_static(&hex!("80")), 9);
 
         assert_eq!(result, test);
     }
@@ -148,9 +148,9 @@ mod tests {
             true, false, true, false, true, false, true, false, true, false, false, false,
         ];
 
-        let result = NullMask::serialize(test);
+        let result = NullMask::serialize(&test);
         assert_eq!(Bytes::from_static(&hex!("aa 80")), result);
-        let parse = NullMask::parse(result, 12);
+        let parse = NullMask::parse(&result, 12);
 
         assert_eq!(end, parse);
     }

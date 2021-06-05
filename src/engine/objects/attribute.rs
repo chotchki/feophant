@@ -8,7 +8,7 @@ pub struct Attribute {
     id: Uuid,
     pg_class_id: Uuid,
     name: String,
-    sql_type: DeserializeTypes,
+    pub sql_type: DeserializeTypes,
 }
 
 impl Attribute {

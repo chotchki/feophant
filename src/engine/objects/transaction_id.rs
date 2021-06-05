@@ -1,6 +1,6 @@
 //! A simple wrapper around a primitive so I can play with transaction id sizes.
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub struct TransactionId(u64);
 
 impl TransactionId {
