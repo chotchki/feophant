@@ -39,3 +39,14 @@ pub enum TransactionGeneratorError {
     #[error("Exceeded counter limit, restart server to fix!")]
     LimitReached(),
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn simple_next() {
+        let tg = TransactionGenerator::new(41);
+        assert_eq!(tg.next().unwrap(), 42);
+    }
+}
