@@ -11,13 +11,13 @@ use uuid::Uuid;
 use super::super::objects::Table;
 
 #[derive(Debug)]
-pub struct PageManager {
+pub struct IOManager {
     data: RwLock<HashMap<Uuid, Vec<Bytes>>>, //Yes this is the naive implementation
 }
 
-impl PageManager {
-    pub fn new() -> PageManager {
-        PageManager {
+impl IOManager {
+    pub fn new() -> IOManager {
+        IOManager {
             data: RwLock::new(HashMap::new()),
         }
     }
@@ -100,7 +100,7 @@ mod tests {
     fn test_get_and_put() {
         let buf_frozen = get_bytes(1);
 
-        let pm = PageManager::new();
+        let pm = IOManager::new();
         let table = Table::new("test".to_string(), Vec::new());
 
         aw!(pm.add_page(table.clone(), buf_frozen.clone()));
@@ -113,7 +113,7 @@ mod tests {
         let buf_1 = get_bytes(1);
         let buf_2 = get_bytes(2);
 
-        let pm = PageManager::new();
+        let pm = IOManager::new();
         let table = Table::new("test".to_string(), Vec::new());
 
         aw!(pm.add_page(table.clone(), buf_1.clone()));

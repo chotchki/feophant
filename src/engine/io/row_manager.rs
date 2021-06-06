@@ -7,18 +7,18 @@
 use super::super::super::constants::BuiltinSqlTypes;
 use super::super::objects::{Attribute, Table, TransactionId};
 use super::row_formats::RowData;
-use super::PageManager;
+use super::IOManager;
 
 use bytes::BytesMut;
 use thiserror::Error;
 
 #[derive(Debug)]
 pub struct RowManager {
-    page_manager: PageManager,
+    page_manager: IOManager,
 }
 
 impl RowManager {
-    fn new(page_manager: PageManager) -> RowManager {
+    fn new(page_manager: IOManager) -> RowManager {
         RowManager { page_manager }
     }
 

@@ -1,7 +1,7 @@
 mod page_formats;
 
-mod page_manager;
-pub use page_manager::PageManager;
+mod io_manager;
+pub use io_manager::IOManager;
 
 mod row_formats;
 
