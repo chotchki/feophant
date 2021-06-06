@@ -15,7 +15,7 @@ impl TransactionGenerator {
     pub fn new(offset: u64) -> TransactionGenerator {
         TransactionGenerator {
             offset,
-            counter: ConsistentCounter::new(0),
+            counter: ConsistentCounter::new(1),
         }
     }
 
@@ -47,6 +47,6 @@ mod tests {
     #[test]
     fn simple_next() {
         let tg = TransactionGenerator::new(41);
-        assert_eq!(tg.next().unwrap(), 42);
+        assert_eq!(tg.next().unwrap(), TransactionId::new(42));
     }
 }
