@@ -14,12 +14,12 @@ use thiserror::Error;
 
 #[derive(Debug)]
 pub struct RowManager {
-    page_manager: IOManager,
+    io_manager: IOManager,
 }
 
 impl RowManager {
-    fn new(page_manager: IOManager) -> RowManager {
-        RowManager { page_manager }
+    fn new(io_manager: IOManager) -> RowManager {
+        RowManager { io_manager }
     }
 
     fn insert_row(
@@ -32,7 +32,7 @@ impl RowManager {
 
         let mut page_num = 0;
         loop {
-            let page = self.page_manager.get_page(&table, page_num);
+            let page = self.io_manager.get_page(&table, page_num);
             //if page.is_none() {
             //Make the page
             //}

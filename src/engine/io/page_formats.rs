@@ -6,6 +6,8 @@ pub use page_data::PageData;
 
 mod page_header;
 pub use page_header::PageHeader;
+pub use page_header::PageHeaderError;
 
 mod uint12;
 pub use uint12::UInt12;
+pub use uint12::UInt12Error;
