@@ -36,7 +36,7 @@ impl TransactionGenerator {
 pub enum TransactionGeneratorError {
     #[error("Could not convert usize to u64, you must have a super fancy computer!")]
     ConversionError(#[from] TryFromIntError),
-    #[error("Exceeded counter limit, restart server to fix!")]
+    #[error("Exceeded counter limit, at the moment your only option is reimporting the database.")]
     LimitReached(),
 }
 
