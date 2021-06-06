@@ -6,7 +6,7 @@
 
 use super::super::super::constants::BuiltinSqlTypes;
 use super::super::objects::{Attribute, Table, TransactionId};
-use super::formats::RowData;
+use super::row_formats::RowData;
 use super::PageManager;
 
 use bytes::BytesMut;
