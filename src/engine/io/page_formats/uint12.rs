@@ -48,9 +48,7 @@ impl Add for UInt12 {
 
 impl AddAssign for UInt12 {
     fn add_assign(&mut self, other: Self) {
-        *self = Self {
-            0: self.0 + other.0,
-        };
+        *self = UInt12(UInt12::clamp(self.0.saturating_add(other.0)))
     }
 }
 
@@ -63,9 +61,7 @@ impl Sub for UInt12 {
 
 impl SubAssign for UInt12 {
     fn sub_assign(&mut self, other: Self) {
-        *self = Self {
-            0: self.0 - other.0,
-        };
+        *self = UInt12(UInt12::clamp(self.0.saturating_sub(other.0)))
     }
 }
 
