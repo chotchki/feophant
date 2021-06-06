@@ -25,6 +25,7 @@ What I need:
 * A way to serialize and deserialize them to bytes (have that for text+uuid)
 * A way to say to a function with this list of types (which may be different), parse this data into something sane. (got this)
 * Need to hook this up with column definitions. (got this)
+* Need a way to save and load a row (got this)
 * Need to simply insert a row into a table via pages
 
 # # Longer Term TODO
@@ -37,6 +38,7 @@ This is stuff that I should get to but aren't vital to getting to a minimal viab
 Its kinda pointless to blindly reproduce what has already been done so I'm making the following changes to the db server design vs Postgres.
 
 * Multi-threaded design based on Tokio instead of Postgres's multi-process design.
+* * Perk of this is not needing to manage SYSV shared memory. (Postgres largely fixed this but I think its still worth noting).
 * Want to avoid vaccuum for transaction wrap around. Will try 64-bit transaction IDs but might go to 128-bit.
 * Replacing OIDs with UUIDv4s.
 
