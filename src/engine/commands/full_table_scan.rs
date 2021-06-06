@@ -1,9 +1,9 @@
 use super::super::super::constants::TableDefinitions;
-use super::super::io::PageManager;
+use super::super::io::IOManager;
 use super::super::objects::{Attribute, Table};
 
 pub struct FullTableScan {
-    pm: PageManager,
+    pm: IOManager,
 }
 
 impl FullTableScan {
