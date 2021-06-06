@@ -22,7 +22,7 @@ impl PageManager {
         }
     }
 
-    pub async fn get_page(&self, table: Table, offset: usize) -> Option<Bytes> {
+    pub async fn get_page(&self, table: &Table, offset: usize) -> Option<Bytes> {
         let read_lock = self.data.read().await;
 
         let value = read_lock.get(&table.id)?;
@@ -104,7 +104,7 @@ mod tests {
         let table = Table::new("test".to_string(), Vec::new());
 
         aw!(pm.add_page(table.clone(), buf_frozen.clone()));
-        let check = aw!(pm.get_page(table.clone(), 0)).unwrap();
+        let check = aw!(pm.get_page(&table, 0)).unwrap();
         assert_eq!(check, buf_frozen.clone());
     }
 
@@ -118,11 +118,11 @@ mod tests {
 
         aw!(pm.add_page(table.clone(), buf_1.clone()));
         aw!(pm.add_page(table.clone(), buf_1.clone()));
-        let check_1 = aw!(pm.get_page(table.clone(), 1)).unwrap();
+        let check_1 = aw!(pm.get_page(&table, 1)).unwrap();
         assert_eq!(buf_1.clone(), check_1.clone());
 
         aw!(pm.update_page(table.clone(), buf_2.clone(), 1));
-        let check_2 = aw!(pm.get_page(table.clone(), 1)).unwrap();
+        let check_2 = aw!(pm.get_page(&table, 1)).unwrap();
         assert_eq!(buf_2.clone(), check_2.clone());
         assert_ne!(buf_1.clone(), check_2.clone());
     }

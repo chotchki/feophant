@@ -5,7 +5,8 @@
 // to insert a row
 
 use super::super::super::constants::BuiltinSqlTypes;
-use super::super::objects::{Attribute, Table};
+use super::super::objects::{Attribute, Table, TransactionId};
+use super::formats::RowData;
 use super::PageManager;
 
 use bytes::BytesMut;
@@ -22,14 +23,20 @@ impl RowManager {
     }
 
     fn insert_row(
-        tran_id: u64,
+        &mut self,
+        tran_id: TransactionId,
         table: Table,
         data: Vec<Option<BuiltinSqlTypes>>,
     ) -> Result<(), RowManagerError> {
-        let row_buffer = BytesMut::new();
+        let row_data = RowData::new(tran_id, None, data);
 
-        //Assemble the data into a row -> row length.
-        //  Option is used to figure out the null
+        let mut page_num = 0;
+        loop {
+            let page = self.page_manager.get_page(&table, page_num);
+            //if page.is_none() {
+            //Make the page
+            //}
+        }
         //Scan forward for a page with enough free space for the row plus the pointers
         //  If no page found, add a new one on the end
         //  Make the page skeleton format
