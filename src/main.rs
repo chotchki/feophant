@@ -18,7 +18,7 @@ mod codec;
 use codec::{NetworkFrame, PgCodec};
 mod constants;
 mod engine;
-use engine::io::PageManager;
+use engine::io::IOManager;
 use engine::TransactionGenerator;
 mod processor;
 use processor::ClientProcessor;
@@ -36,7 +36,7 @@ async fn main() {
     info!("Welcome to the Rusty Elephant!");
 
     //Start the I/O system first
-    let page_manager = Arc::new(PageManager::new());
+    let page_manager = Arc::new(IOManager::new());
 
     let transaction_generator = Arc::new(TransactionGenerator::new(0));
 
