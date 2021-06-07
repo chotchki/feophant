@@ -32,7 +32,7 @@ impl PageData {
         let item_data = self
             .page_header
             .add_item(row_data_len)
-            .map_err(PageDataError::InsufficentFreeSpace)?;
+            .map_err(PageDataError::PageHeaderParseError)?;
 
         self.rows.push((item_data, row_data));
         Ok(())
@@ -60,6 +60,11 @@ impl PageData {
     }
 
     pub fn parse(table: &Table, mut page_buffer: impl Buf) -> Result<PageData, PageDataError> {
+        let page_header =
+            PageHeader::parse(page_buffer).map_err(PageDataError::PageHeaderParseError)?;
+
+        //let item_count = page_header.
+
         Err(PageDataError::Unknown())
     }
 
@@ -68,8 +73,8 @@ impl PageData {
 
 #[derive(Debug, Error)]
 pub enum PageDataError {
-    #[error("Not Enough Free Space")]
-    InsufficentFreeSpace(#[from] PageHeaderError),
+    #[error("Page Header Parse Error")]
+    PageHeaderParseError(#[from] PageHeaderError),
 
     #[error("Not enough max data need {0} got {1}")]
     MissingMaxData(usize, usize),
@@ -83,5 +88,46 @@ pub enum PageDataError {
 
 #[cfg(test)]
 mod tests {
+    use super::super::super::super::super::constants::{
+        BuiltinSqlTypes, DeserializeTypes, SqlTypeError,
+    };
+    use super::super::super::super::objects::{Attribute, Table, TransactionId};
     use super::*;
+
+    #[test]
+    fn test_page_data_roundtrip() {
+        let table = Arc::new(Table::new(
+            "test_table".to_string(),
+            vec![
+                Attribute::new(
+                    uuid::Uuid::new_v4(),
+                    "header".to_string(),
+                    DeserializeTypes::Text,
+                ),
+                Attribute::new(
+                    uuid::Uuid::new_v4(),
+                    "id".to_string(),
+                    DeserializeTypes::Uuid,
+                ),
+                Attribute::new(
+                    uuid::Uuid::new_v4(),
+                    "header3".to_string(),
+                    DeserializeTypes::Text,
+                ),
+            ],
+        ));
+
+        let test = RowData::new(table.clone(),
+            TransactionId::new(1),
+            None,
+            vec![
+                Some(BuiltinSqlTypes::Text("this is a test".to_string())),
+                None,
+                Some(BuiltinSqlTypes::Text("blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah".to_string())),
+            ],
+        );
+
+        let mut pg = PageData::new(table);
+        assert!(pg.store(test.clone()).is_ok());
+    }
 }

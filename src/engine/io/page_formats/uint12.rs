@@ -106,6 +106,16 @@ mod tests {
     }
 
     #[test]
+    fn test_subtraction() {
+        let left = UInt12::new(10).unwrap();
+        let right = UInt12::new(5).unwrap();
+
+        let result = left - right;
+
+        assert_eq!(result, right);
+    }
+
+    #[test]
     fn test_usize() {
         let large: usize = 400;
         let test = UInt12::try_from(large).unwrap();

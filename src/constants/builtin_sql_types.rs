@@ -2,7 +2,7 @@ use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::mem;
 use thiserror::Error;
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum BuiltinSqlTypes {
     Text(String),
     Uuid(uuid::Uuid),

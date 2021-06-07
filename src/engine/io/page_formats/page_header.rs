@@ -15,17 +15,28 @@ pub struct PageHeader {
 impl PageHeader {
     pub fn new() -> PageHeader {
         PageHeader {
-            pd_lower: UInt12::new((size_of::<PageHeader>() - 1) as u16).unwrap(),
+            pd_lower: UInt12::new((size_of::<PageHeader>()) as u16).unwrap(),
             pd_upper: UInt12::max(),
         }
     }
 
+    pub fn get_item_count(&self) -> usize {
+        let lower: usize = self.pd_lower.to_u16().into();
+        (lower - size_of::<PageHeader>()) / size_of::<ItemIdData>()
+    }
+
     pub fn get_free_space(&self) -> usize {
-        (self.pd_upper - self.pd_lower).to_u16() as usize
+        //Handle no free space
+        if self.pd_upper < self.pd_lower {
+            return 0;
+        }
+        (self.pd_upper - self.pd_lower).to_u16() as usize + 1
     }
 
     pub fn can_store(&self, row_size: usize) -> bool {
-        self.get_free_space() > (row_size + size_of::<Self>())
+        let needed = row_size + size_of::<ItemIdData>();
+        let have = self.get_free_space();
+        have >= needed
     }
 
     pub fn add_item(&mut self, row_size: usize) -> Result<ItemIdData, PageHeaderError> {
@@ -49,14 +60,14 @@ impl PageHeader {
         buf.freeze()
     }
 
-    pub fn parse(mut input: Bytes) -> Result<Self, PageHeaderError> {
-        if input.len() < 4 {
-            return Err(PageHeaderError::InsufficentData(input.len()));
+    pub fn parse(mut buffer: impl Buf) -> Result<Self, PageHeaderError> {
+        if buffer.remaining() < size_of::<PageHeader>() {
+            return Err(PageHeaderError::InsufficentData(buffer.remaining()));
         }
         let pd_lower =
-            UInt12::new(input.get_u16_le()).ok_or_else(PageHeaderError::LowerOffsetTooLarge)?;
+            UInt12::new(buffer.get_u16_le()).ok_or_else(PageHeaderError::LowerOffsetTooLarge)?;
         let pd_upper =
-            UInt12::new(input.get_u16_le()).ok_or_else(PageHeaderError::UpperOffsetTooLarge)?;
+            UInt12::new(buffer.get_u16_le()).ok_or_else(PageHeaderError::UpperOffsetTooLarge)?;
         Ok(PageHeader { pd_lower, pd_upper })
     }
 }
@@ -87,5 +98,46 @@ mod tests {
 
         let test_new = PageHeader::new();
         assert_eq!(test_rt, test_new);
+    }
+
+    #[test]
+    fn test_initial_freespace() {
+        let test = PageHeader::new();
+
+        let default_free_space: usize =
+            (UInt12::max().to_u16() as usize) + 1 - size_of::<PageHeader>();
+        let found_free_space = test.get_free_space();
+        assert_eq!(found_free_space, default_free_space);
+    }
+
+    #[test]
+    fn test_item_count() {
+        let mut test = PageHeader::new();
+
+        test.add_item(5);
+        test.add_item(5);
+
+        assert_eq!(test.get_item_count(), 2);
+
+        let remain_free = (UInt12::max().to_u16() as usize) + 1 //Initial
+            - size_of::<PageHeader>() //Header
+            - (size_of::<ItemIdData>() * 2) //Two items
+            - 10; //Their data
+        assert_eq!(test.get_free_space(), remain_free)
+    }
+
+    #[test]
+    fn test_too_big() {
+        let mut test = PageHeader::new();
+
+        let needed = (UInt12::max().to_u16() as usize) + 1
+            - size_of::<PageHeader>()
+            - size_of::<ItemIdData>();
+        test.add_item(needed).unwrap(); //Should be maxed out
+
+        assert_eq!(test.get_item_count(), 1); //Should have an item
+        assert_eq!(test.get_free_space(), 0); //Should be full
+        assert!(!test.can_store(1)); //Should not be able to store a tiny item
+        assert!(test.add_item(0).is_err()); //Adding more should fail
     }
 }

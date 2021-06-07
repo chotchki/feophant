@@ -10,7 +10,7 @@ use std::ops::Deref;
 use std::sync::Arc;
 use thiserror::Error;
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct RowData {
     table: Arc<Table>,
     min: TransactionId,
