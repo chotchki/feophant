@@ -4,7 +4,7 @@ use uuid::Uuid;
 
 use super::Attribute;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Table {
     pub id: Uuid,
     pub name: String,

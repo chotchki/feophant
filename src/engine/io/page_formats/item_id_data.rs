@@ -16,14 +16,14 @@ impl ItemIdData {
         ItemIdData { offset, length }
     }
 
-    fn serialize(&self) -> Bytes {
+    pub fn serialize(&self) -> Bytes {
         let mut buf = BytesMut::with_capacity(size_of::<ItemIdData>());
         buf.put_u16_le(self.offset.to_u16());
         buf.put_u16_le(self.length.to_u16());
         buf.freeze()
     }
 
-    fn parse(mut input: Bytes) -> Result<Self, ItemIdDataError> {
+    pub fn parse(mut input: Bytes) -> Result<Self, ItemIdDataError> {
         if input.len() < 4 {
             return Err(ItemIdDataError::InsufficentData(input.len()));
         }

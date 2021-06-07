@@ -6,10 +6,13 @@ use super::super::super::objects::{Attribute, Table, TransactionId};
 use super::{InfoMask, NullMask};
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::mem;
+use std::ops::Deref;
+use std::sync::Arc;
 use thiserror::Error;
 
 #[derive(Debug, PartialEq)]
 pub struct RowData {
+    table: Arc<Table>,
     min: TransactionId,
     max: Option<TransactionId>,
     user_data: Vec<Option<BuiltinSqlTypes>>,
@@ -17,18 +20,20 @@ pub struct RowData {
 
 impl RowData {
     pub fn new(
+        table: Arc<Table>,
         min: TransactionId,
         max: Option<TransactionId>,
         user_data: Vec<Option<BuiltinSqlTypes>>,
     ) -> RowData {
         RowData {
+            table,
             min,
             max,
             user_data,
         }
     }
 
-    pub fn serialize(&self, table: &Table) -> Bytes {
+    pub fn serialize(&self) -> Bytes {
         let mut buffer = BytesMut::new();
         buffer.put_u64_le(self.min.get_u64());
         buffer.put_u64_le(self.max.unwrap_or(TransactionId::new(0)).get_u64());
@@ -59,7 +64,7 @@ impl RowData {
         buffer.freeze()
     }
 
-    pub fn parse(table: &Table, mut row_buffer: impl Buf) -> Result<RowData, RowDataError> {
+    pub fn parse(table: Arc<Table>, mut row_buffer: impl Buf) -> Result<RowData, RowDataError> {
         if row_buffer.remaining() < mem::size_of::<TransactionId>() {
             return Err(RowDataError::MissingMinData(
                 mem::size_of::<TransactionId>(),
@@ -80,7 +85,7 @@ impl RowData {
             _ => Some(TransactionId::new(max_temp)),
         };
 
-        let null_mask = RowData::get_null_mask(table, &mut row_buffer)?;
+        let null_mask = RowData::get_null_mask(table.clone(), &mut row_buffer)?;
 
         let mut user_data = vec![];
         for (column, mask) in table.attributes.iter().zip(null_mask.iter()) {
@@ -94,11 +99,14 @@ impl RowData {
             }
         }
 
-        Ok(RowData::new(min, max, user_data))
+        Ok(RowData::new(table, min, max, user_data))
     }
 
     //Gets the null mask, if it doesn't exist it will return a vector of all not nulls
-    fn get_null_mask(table: &Table, mut row_buffer: impl Buf) -> Result<Vec<bool>, RowDataError> {
+    fn get_null_mask(
+        table: Arc<Table>,
+        mut row_buffer: impl Buf,
+    ) -> Result<Vec<bool>, RowDataError> {
         if row_buffer.remaining() < mem::size_of::<InfoMask>() {
             return Err(RowDataError::MissingInfoMaskData(
                 mem::size_of::<TransactionId>(),
@@ -151,29 +159,30 @@ mod tests {
 
     #[test]
     fn test_row_data_single_text() {
-        let table = Table::new(
+        let table = Arc::new(Table::new(
             "test_table".to_string(),
             vec![Attribute::new(
                 uuid::Uuid::new_v4(),
                 "header".to_string(),
                 DeserializeTypes::Text,
             )],
-        );
+        ));
 
         let test = RowData::new(
+            table.clone(),
             TransactionId::new(1),
             None,
             vec![Some(BuiltinSqlTypes::Text("this is a test".to_string()))],
         );
 
-        let test_serial = test.serialize(&table);
-        let test_parse = RowData::parse(&table, test_serial).unwrap();
+        let test_serial = test.serialize();
+        let test_parse = RowData::parse(table, test_serial).unwrap();
         assert_eq!(test, test_parse);
     }
 
     #[test]
     fn test_row_data_double_text() {
-        let table = Table::new(
+        let table = Arc::new(Table::new(
             "test_table".to_string(),
             vec![
                 Attribute::new(
@@ -187,9 +196,10 @@ mod tests {
                     DeserializeTypes::Text,
                 ),
             ],
-        );
+        ));
 
         let test = RowData::new(
+            table.clone(),
             TransactionId::new(1),
             None,
             vec![
@@ -198,36 +208,37 @@ mod tests {
             ],
         );
 
-        let test_serial = test.serialize(&table);
-        let test_parse = RowData::parse(&table, test_serial).unwrap();
+        let test_serial = test.serialize();
+        let test_parse = RowData::parse(table, test_serial).unwrap();
         assert_eq!(test, test_parse);
     }
 
     #[test]
     fn test_row_uuid_roundtrip() {
-        let table = Table::new(
+        let table = Arc::new(Table::new(
             "test_table".to_string(),
             vec![Attribute::new(
                 uuid::Uuid::new_v4(),
                 "header".to_string(),
                 DeserializeTypes::Uuid,
             )],
-        );
+        ));
 
         let test = RowData::new(
+            table.clone(),
             TransactionId::new(1),
             None,
             vec![Some(BuiltinSqlTypes::Uuid(uuid::Uuid::new_v4()))],
         );
 
-        let test_serial = test.serialize(&table);
-        let test_parse = RowData::parse(&table, test_serial).unwrap();
+        let test_serial = test.serialize();
+        let test_parse = RowData::parse(table, test_serial).unwrap();
         assert_eq!(test, test_parse);
     }
 
     #[test]
     fn test_row_uuid_double_roundtrip() {
-        let table = Table::new(
+        let table = Arc::new(Table::new(
             "test_table".to_string(),
             vec![
                 Attribute::new(
@@ -241,9 +252,10 @@ mod tests {
                     DeserializeTypes::Uuid,
                 ),
             ],
-        );
+        ));
 
         let test = RowData::new(
+            table.clone(),
             TransactionId::new(1),
             None,
             vec![
@@ -252,14 +264,14 @@ mod tests {
             ],
         );
 
-        let test_serial = test.serialize(&table);
-        let test_parse = RowData::parse(&table, test_serial).unwrap();
+        let test_serial = test.serialize();
+        let test_parse = RowData::parse(table, test_serial).unwrap();
         assert_eq!(test, test_parse);
     }
 
     #[test]
     fn test_row_uuid_double_opt_roundtrip() {
-        let table = Table::new(
+        let table = Arc::new(Table::new(
             "test_table".to_string(),
             vec![
                 Attribute::new(
@@ -273,23 +285,24 @@ mod tests {
                     DeserializeTypes::Uuid,
                 ),
             ],
-        );
+        ));
 
         let test = RowData::new(
+            table.clone(),
             TransactionId::new(1),
             None,
             vec![Some(BuiltinSqlTypes::Uuid(uuid::Uuid::new_v4())), None],
         );
 
-        let test_serial = test.serialize(&table);
+        let test_serial = test.serialize();
         println!("{:?}", test_serial.len());
-        let test_parse = RowData::parse(&table, test_serial).unwrap();
+        let test_parse = RowData::parse(table, test_serial).unwrap();
         assert_eq!(test, test_parse);
     }
 
     #[test]
     fn test_row_complex_data_roundtrip() {
-        let table = Table::new(
+        let table = Arc::new(Table::new(
             "test_table".to_string(),
             vec![
                 Attribute::new(
@@ -308,9 +321,9 @@ mod tests {
                     DeserializeTypes::Text,
                 ),
             ],
-        );
+        ));
 
-        let test = RowData::new(
+        let test = RowData::new(table.clone(),
             TransactionId::new(1),
             None,
             vec![
@@ -320,8 +333,8 @@ mod tests {
             ],
         );
 
-        let test_serial = test.serialize(&table);
-        let test_parse = RowData::parse(&table, test_serial).unwrap();
+        let test_serial = test.serialize();
+        let test_parse = RowData::parse(table, test_serial).unwrap();
         assert_eq!(test, test_parse);
     }
 }

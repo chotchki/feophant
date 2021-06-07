@@ -28,7 +28,7 @@ impl RowManager {
         table: Table,
         data: Vec<Option<BuiltinSqlTypes>>,
     ) -> Result<(), RowManagerError> {
-        let row_data = RowData::new(tran_id, None, data);
+        //let row_data = RowData::new(tran_id, None, data);
 
         let mut page_num = 0;
         loop {
