@@ -111,10 +111,10 @@ impl RowData {
             if *mask {
                 user_data.push(None);
             } else {
-                user_data.push(Some(
-                    BuiltinSqlTypes::deserialize(column.sql_type, &mut row_buffer)
-                        .map_err(RowDataError::ColumnParseError)?,
-                ));
+                user_data.push(Some(BuiltinSqlTypes::deserialize(
+                    column.sql_type,
+                    &mut row_buffer,
+                )?));
             }
         }
 

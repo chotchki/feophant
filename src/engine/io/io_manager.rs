@@ -3,6 +3,7 @@
 //! Was stupid with the implementation, should have supported an append api only since vector only works that way
 use bytes::Bytes;
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::vec::Vec;
 use thiserror::Error;
 use tokio::sync::RwLock;
@@ -22,7 +23,7 @@ impl IOManager {
         }
     }
 
-    pub async fn get_page(&self, table: &Table, offset: usize) -> Option<Bytes> {
+    pub async fn get_page(&self, table: Arc<Table>, offset: usize) -> Option<Bytes> {
         let read_lock = self.data.read().await;
 
         let value = read_lock.get(&table.id)?;
@@ -32,7 +33,7 @@ impl IOManager {
         Some(copy)
     }
 
-    pub async fn add_page(&self, table: Table, page: Bytes) {
+    pub async fn add_page(&self, table: Arc<Table>, page: Bytes) {
         let mut write_lock = self.data.write().await;
 
         match write_lock.get_mut(&table.id) {
@@ -46,20 +47,20 @@ impl IOManager {
 
     pub async fn update_page(
         &self,
-        table: Table,
+        table: Arc<Table>,
         page: Bytes,
         offset: usize,
-    ) -> Result<(), PageManagerError> {
+    ) -> Result<(), IOManagerError> {
         let mut write_lock = self.data.write().await;
 
         let value = write_lock.get_mut(&table.id);
         if value.is_none() {
-            return Err(PageManagerError::NoSuchTable(table.name));
+            return Err(IOManagerError::NoSuchTable(table.name.clone()));
         }
 
         let existing_value = value.unwrap();
         if existing_value.len() < offset {
-            return Err(PageManagerError::InvalidPage(offset));
+            return Err(IOManagerError::InvalidPage(offset));
         }
         existing_value[offset] = page;
         Ok(())
@@ -67,7 +68,7 @@ impl IOManager {
 }
 
 #[derive(Debug, Error)]
-pub enum PageManagerError {
+pub enum IOManagerError {
     #[error("No such table {0}")]
     NoSuchTable(String),
     #[error("Invalid Page number {0}")]
@@ -101,10 +102,10 @@ mod tests {
         let buf_frozen = get_bytes(1);
 
         let pm = IOManager::new();
-        let table = Table::new("test".to_string(), Vec::new());
+        let table = Arc::new(Table::new("test".to_string(), Vec::new()));
 
         aw!(pm.add_page(table.clone(), buf_frozen.clone()));
-        let check = aw!(pm.get_page(&table, 0)).unwrap();
+        let check = aw!(pm.get_page(table, 0)).unwrap();
         assert_eq!(check, buf_frozen.clone());
     }
 
@@ -114,15 +115,15 @@ mod tests {
         let buf_2 = get_bytes(2);
 
         let pm = IOManager::new();
-        let table = Table::new("test".to_string(), Vec::new());
+        let table = Arc::new(Table::new("test".to_string(), Vec::new()));
 
         aw!(pm.add_page(table.clone(), buf_1.clone()));
         aw!(pm.add_page(table.clone(), buf_1.clone()));
-        let check_1 = aw!(pm.get_page(&table, 1)).unwrap();
+        let check_1 = aw!(pm.get_page(table.clone(), 1)).unwrap();
         assert_eq!(buf_1.clone(), check_1.clone());
 
         aw!(pm.update_page(table.clone(), buf_2.clone(), 1));
-        let check_2 = aw!(pm.get_page(&table, 1)).unwrap();
+        let check_2 = aw!(pm.get_page(table, 1)).unwrap();
         assert_eq!(buf_2.clone(), check_2.clone());
         assert_ne!(buf_1.clone(), check_2.clone());
     }

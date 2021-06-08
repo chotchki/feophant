@@ -44,10 +44,9 @@ impl PageHeader {
             return Err(PageHeaderError::InsufficentFreeSpace());
         }
 
-        let row_u12 = UInt12::try_from(row_size).map_err(PageHeaderError::TooLarge)?;
+        let row_u12 = UInt12::try_from(row_size)?;
 
-        self.pd_lower +=
-            UInt12::try_from(size_of::<ItemIdData>()).map_err(PageHeaderError::TooLarge)?;
+        self.pd_lower += UInt12::try_from(size_of::<ItemIdData>())?;
         self.pd_upper -= row_u12;
 
         //Need to increment the offset by 1 since the pointer is now pointing a free space

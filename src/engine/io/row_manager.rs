@@ -1,13 +1,16 @@
-//! This is the next level above a page manager but is still a naive interface.
+//! The current goal of the row manager is to provide an interative interface over a table's pages.
 //!
-//! The goal of the row manager is to provide an interative interface over a table's pages. If that ends up being too complicated I'll break it down more.
-
-// to insert a row
+//! It will provide a raw scan over a table, insert and update.
+//!
+//! NO LOCKING or transaction control yet. I did implement it at the IO layer but its probably wrong.
 
 use super::super::super::constants::BuiltinSqlTypes;
 use super::super::objects::{Attribute, Table, TransactionId};
+use super::page_formats::{PageData, PageDataError};
 use super::row_formats::RowData;
-use super::IOManager;
+use super::{IOManager, IOManagerError};
+use std::slice::Iter;
+use std::sync::Arc;
 
 use bytes::BytesMut;
 use thiserror::Error;
@@ -22,35 +25,48 @@ impl RowManager {
         RowManager { io_manager }
     }
 
-    fn insert_row(
+    pub async fn insert_row(
         &mut self,
-        tran_id: TransactionId,
-        table: Table,
-        data: Vec<Option<BuiltinSqlTypes>>,
+        current_tran_id: TransactionId,
+        table: Arc<Table>,
+        row: RowData,
     ) -> Result<(), RowManagerError> {
-        //let row_data = RowData::new(tran_id, None, data);
+        let row_len = row.serialize().len();
 
         let mut page_num = 0;
         loop {
-            let page = self.io_manager.get_page(&table, page_num);
-            //if page.is_none() {
-            //Make the page
-            //}
+            let page_bytes = self.io_manager.get_page(table.clone(), page_num).await;
+            match page_bytes {
+                Some(p) => {
+                    let mut page = PageData::parse(table.clone(), p)?;
+                    if page.can_fit(row_len) {
+                        page.store(row)?;
+                        let new_page_bytes = page.serialize();
+                        self.io_manager
+                            .update_page(table, new_page_bytes, page_num)
+                            .await?;
+                        return Ok(());
+                    } else {
+                        continue;
+                    }
+                }
+                None => {
+                    let mut new_page = PageData::new(table.clone());
+                    new_page.store(row)?; //TODO Will NOT handle overly large rows
+                    self.io_manager.add_page(table, new_page.serialize()).await;
+                    return Ok(());
+                }
+            }
         }
-        //Scan forward for a page with enough free space for the row plus the pointers
-        //  If no page found, add a new one on the end
-        //  Make the page skeleton format
-        //Take the page and add the row in
-        //Save the page
-
-        Err(RowManagerError::NotImplemented())
     }
 }
 
 #[derive(Error, Debug)]
 pub enum RowManagerError {
-    #[error("I should develop more")]
-    NotImplemented(),
+    #[error("Page Data Parse Error")]
+    PageDataParseError(#[from] PageDataError),
+    #[error("IO Manager Error")]
+    IOManagerError(#[from] IOManagerError),
 }
 
 #[cfg(test)]

@@ -4,6 +4,7 @@ pub use item_id_data::ItemIdDataError;
 
 mod page_data;
 pub use page_data::PageData;
+pub use page_data::PageDataError;
 
 mod page_header;
 pub use page_header::PageHeader;

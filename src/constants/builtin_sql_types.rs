@@ -107,8 +107,7 @@ impl BuiltinSqlTypes {
                 }
 
                 let value_buff = buffer.copy_to_bytes(length);
-                let value_str =
-                    String::from_utf8(value_buff.to_vec()).map_err(SqlTypeError::InvalidUtf8)?;
+                let value_str = String::from_utf8(value_buff.to_vec())?;
 
                 let value = BuiltinSqlTypes::Text(value_str);
 

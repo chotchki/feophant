@@ -29,13 +29,11 @@ impl PageData {
         self.page_header.can_fit(row_data_size)
     }
 
+    //TODO debating if this should be row_data or bytes
     pub fn store(&mut self, row_data: RowData) -> Result<(), PageDataError> {
         let row_data_len = row_data.serialize().len();
 
-        let item_data = self
-            .page_header
-            .add_item(row_data_len)
-            .map_err(PageDataError::PageHeaderParseError)?;
+        let item_data = self.page_header.add_item(row_data_len)?;
         self.item_ids.push(item_data);
         self.rows.push(row_data);
         Ok(())
@@ -84,8 +82,7 @@ impl PageData {
         //Note since we need random access, everything MUST work off slices otherwise counts will be off
 
         let mut page_header_slice = buffer.slice(0..mem::size_of::<PageHeader>());
-        let page_header = PageHeader::parse(&mut page_header_slice)
-            .map_err(PageDataError::PageHeaderParseError)?;
+        let page_header = PageHeader::parse(&mut page_header_slice)?;
 
         let mut item_ids: Vec<ItemIdData> = Vec::with_capacity(page_header.get_item_count());
         let mut rows: Vec<RowData> = Vec::with_capacity(page_header.get_item_count());
@@ -95,8 +92,7 @@ impl PageData {
             let iid_upper_offset =
                 mem::size_of::<PageHeader>() + (mem::size_of::<ItemIdData>() * (i + 1));
             let mut iid_slice = buffer.slice(iid_lower_offset..iid_upper_offset);
-            let iid =
-                ItemIdData::parse(&mut iid_slice).map_err(PageDataError::ItemIdDataParseError)?;
+            let iid = ItemIdData::parse(&mut iid_slice)?;
 
             let row_slice = buffer.slice(iid.get_range());
             let row = RowData::parse(table.clone(), row_slice)?;

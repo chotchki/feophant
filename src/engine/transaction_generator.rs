@@ -20,11 +20,7 @@ impl TransactionGenerator {
     }
 
     pub fn next(&self) -> Result<TransactionId, TransactionGeneratorError> {
-        let next: u64 = self
-            .counter
-            .inc()
-            .try_into()
-            .map_err(TransactionGeneratorError::ConversionError)?;
+        let next: u64 = self.counter.inc().try_into()?;
         match self.offset.checked_add(next) {
             Some(s) => Ok(TransactionId::new(s)),
             None => Err(TransactionGeneratorError::LimitReached()),
