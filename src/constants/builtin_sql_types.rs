@@ -123,10 +123,10 @@ impl fmt::Display for BuiltinSqlTypes {
         match self {
             BuiltinSqlTypes::Uuid(ref value) => {
                 write!(f, "{}", value)
-            },
+            }
             BuiltinSqlTypes::Text(ref value) => {
                 write!(f, "{}", value)
-            },
+            }
         }
     }
 }
@@ -136,10 +136,10 @@ impl fmt::Display for DeserializeTypes {
         match self {
             DeserializeTypes::Uuid => {
                 write!(f, "Uuid")
-            },
+            }
             DeserializeTypes::Text => {
                 write!(f, "Text")
-            },
+            }
         }
     }
 }

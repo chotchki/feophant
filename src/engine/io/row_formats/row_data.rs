@@ -151,13 +151,6 @@ impl RowData {
         Ok(NullMask::parse(&null_mask_raw, table.attributes.len()))
     }
 }
-/*
-    min: TransactionId,
-    max: Option<TransactionId>, //0 is spec
-    info_mask: InfoMask,        //At the moment only good for if there are null columns
-    null_fields: Option<Bytes>,
-    user_data: Vec<BuiltinSqlTypes>,
-*/
 
 #[derive(Debug, Error)]
 pub enum RowDataError {
@@ -231,7 +224,8 @@ mod tests {
                 Some(BuiltinSqlTypes::Text("this is a test".to_string())),
                 Some(BuiltinSqlTypes::Text("this is not a test".to_string())),
             ],
-        ).unwrap();
+        )
+        .unwrap();
 
         let test_serial = test.serialize();
         let test_parse = RowData::parse(table, test_serial).unwrap();
@@ -254,7 +248,8 @@ mod tests {
             TransactionId::new(1),
             None,
             vec![Some(BuiltinSqlTypes::Uuid(uuid::Uuid::new_v4()))],
-        ).unwrap();
+        )
+        .unwrap();
 
         let test_serial = test.serialize();
         let test_parse = RowData::parse(table, test_serial).unwrap();
@@ -287,7 +282,8 @@ mod tests {
                 Some(BuiltinSqlTypes::Uuid(uuid::Uuid::new_v4())),
                 Some(BuiltinSqlTypes::Uuid(uuid::Uuid::new_v4())),
             ],
-        ).unwrap();
+        )
+        .unwrap();
 
         let test_serial = test.serialize();
         let test_parse = RowData::parse(table, test_serial).unwrap();
@@ -317,7 +313,8 @@ mod tests {
             TransactionId::new(1),
             None,
             vec![Some(BuiltinSqlTypes::Uuid(uuid::Uuid::new_v4())), None],
-        ).unwrap();
+        )
+        .unwrap();
 
         let test_serial = test.serialize();
         println!("{:?}", test_serial.len());
