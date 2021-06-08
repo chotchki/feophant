@@ -2,11 +2,10 @@
 //! Format from here: https://www.postgresql.org/docs/current/storage-page-layout.html
 //! As always I'm only implementing what I need and will extend once I need more
 use super::super::super::super::constants::{BuiltinSqlTypes, DeserializeTypes, SqlTypeError};
-use super::super::super::objects::{Attribute, Table, TransactionId};
+use super::super::super::objects::{Table, TransactionId};
 use super::{InfoMask, NullMask};
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::mem;
-use std::ops::Deref;
 use std::sync::Arc;
 use thiserror::Error;
 
@@ -172,6 +171,7 @@ pub enum RowDataError {
 
 #[cfg(test)]
 mod tests {
+    use super::super::super::super::objects::Attribute;
     use super::*;
 
     #[test]
