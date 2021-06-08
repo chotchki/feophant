@@ -1,5 +1,6 @@
 mod item_id_data;
 pub use item_id_data::ItemIdData;
+pub use item_id_data::ItemIdDataError;
 
 mod page_data;
 pub use page_data::PageData;

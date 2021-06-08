@@ -6,3 +6,4 @@ pub use null_mask::NullMask;
 
 mod row_data;
 pub use row_data::RowData;
+pub use row_data::RowDataError;

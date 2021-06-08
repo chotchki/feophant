@@ -33,14 +33,14 @@ impl PageHeader {
         (self.pd_upper - self.pd_lower).to_u16() as usize + 1
     }
 
-    pub fn can_store(&self, row_size: usize) -> bool {
+    pub fn can_fit(&self, row_size: usize) -> bool {
         let needed = row_size + size_of::<ItemIdData>();
         let have = self.get_free_space();
         have >= needed
     }
 
     pub fn add_item(&mut self, row_size: usize) -> Result<ItemIdData, PageHeaderError> {
-        if !self.can_store(row_size) {
+        if !self.can_fit(row_size) {
             return Err(PageHeaderError::InsufficentFreeSpace());
         }
 
@@ -50,7 +50,10 @@ impl PageHeader {
             UInt12::try_from(size_of::<ItemIdData>()).map_err(PageHeaderError::TooLarge)?;
         self.pd_upper -= row_u12;
 
-        Ok(ItemIdData::new(self.pd_upper, row_u12))
+        //Need to increment the offset by 1 since the pointer is now pointing a free space
+        let item_offset = self.pd_upper + UInt12::new(1).unwrap();
+
+        Ok(ItemIdData::new(item_offset, row_u12))
     }
 
     pub fn serialize(&self) -> Bytes {
@@ -60,7 +63,7 @@ impl PageHeader {
         buf.freeze()
     }
 
-    pub fn parse(mut buffer: impl Buf) -> Result<Self, PageHeaderError> {
+    pub fn parse(buffer: &mut impl Buf) -> Result<Self, PageHeaderError> {
         if buffer.remaining() < size_of::<PageHeader>() {
             return Err(PageHeaderError::InsufficentData(buffer.remaining()));
         }
@@ -93,8 +96,8 @@ mod tests {
     #[test]
     fn test_roundtrip() {
         let test = PageHeader::new();
-        let test_serial = test.serialize();
-        let test_rt = PageHeader::parse(test_serial).unwrap();
+        let mut test_serial = test.serialize();
+        let test_rt = PageHeader::parse(&mut test_serial).unwrap();
 
         let test_new = PageHeader::new();
         assert_eq!(test_rt, test_new);
@@ -137,7 +140,7 @@ mod tests {
 
         assert_eq!(test.get_item_count(), 1); //Should have an item
         assert_eq!(test.get_free_space(), 0); //Should be full
-        assert!(!test.can_store(1)); //Should not be able to store a tiny item
+        assert!(!test.can_fit(1)); //Should not be able to store a tiny item
         assert!(test.add_item(0).is_err()); //Adding more should fail
     }
 }

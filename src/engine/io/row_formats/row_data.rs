@@ -24,13 +24,33 @@ impl RowData {
         min: TransactionId,
         max: Option<TransactionId>,
         user_data: Vec<Option<BuiltinSqlTypes>>,
-    ) -> RowData {
-        RowData {
+    ) -> Result<RowData, RowDataError> {
+        if table.attributes.len() != user_data.len() {
+            return Err(RowDataError::TableRowSizeMismatch(
+                table.attributes.len(),
+                user_data.len(),
+            ));
+        }
+        for (data, column) in user_data.iter().zip(table.attributes.clone()) {
+            match data {
+                Some(d) => {
+                    if !d.type_matches(column.sql_type) {
+                        return Err(RowDataError::TableRowTypeMismatch(
+                            d.clone(),
+                            column.sql_type,
+                        ));
+                    }
+                }
+                None => {} //TODO Should handle whether is null even allowed, will get there
+            }
+        }
+
+        Ok(RowData {
             table,
             min,
             max,
             user_data,
-        }
+        })
     }
 
     pub fn serialize(&self) -> Bytes {
@@ -99,7 +119,7 @@ impl RowData {
             }
         }
 
-        Ok(RowData::new(table, min, max, user_data))
+        RowData::new(table, min, max, user_data)
     }
 
     //Gets the null mask, if it doesn't exist it will return a vector of all not nulls
@@ -141,6 +161,10 @@ impl RowData {
 
 #[derive(Debug, Error)]
 pub enum RowDataError {
+    #[error("Table definition length {0} does not match columns passed {1}")]
+    TableRowSizeMismatch(usize, usize),
+    #[error("Table definition type {0} does not match column passed {1}")]
+    TableRowTypeMismatch(BuiltinSqlTypes, DeserializeTypes),
     #[error("Not enough min data need {0} got {1}")]
     MissingMinData(usize, usize),
     #[error("Not enough max data need {0} got {1}")]
@@ -173,7 +197,8 @@ mod tests {
             TransactionId::new(1),
             None,
             vec![Some(BuiltinSqlTypes::Text("this is a test".to_string()))],
-        );
+        )
+        .unwrap();
 
         let test_serial = test.serialize();
         let test_parse = RowData::parse(table, test_serial).unwrap();
@@ -206,7 +231,7 @@ mod tests {
                 Some(BuiltinSqlTypes::Text("this is a test".to_string())),
                 Some(BuiltinSqlTypes::Text("this is not a test".to_string())),
             ],
-        );
+        ).unwrap();
 
         let test_serial = test.serialize();
         let test_parse = RowData::parse(table, test_serial).unwrap();
@@ -229,7 +254,7 @@ mod tests {
             TransactionId::new(1),
             None,
             vec![Some(BuiltinSqlTypes::Uuid(uuid::Uuid::new_v4()))],
-        );
+        ).unwrap();
 
         let test_serial = test.serialize();
         let test_parse = RowData::parse(table, test_serial).unwrap();
@@ -262,7 +287,7 @@ mod tests {
                 Some(BuiltinSqlTypes::Uuid(uuid::Uuid::new_v4())),
                 Some(BuiltinSqlTypes::Uuid(uuid::Uuid::new_v4())),
             ],
-        );
+        ).unwrap();
 
         let test_serial = test.serialize();
         let test_parse = RowData::parse(table, test_serial).unwrap();
@@ -292,7 +317,7 @@ mod tests {
             TransactionId::new(1),
             None,
             vec![Some(BuiltinSqlTypes::Uuid(uuid::Uuid::new_v4())), None],
-        );
+        ).unwrap();
 
         let test_serial = test.serialize();
         println!("{:?}", test_serial.len());
@@ -331,7 +356,7 @@ mod tests {
                 None,
                 Some(BuiltinSqlTypes::Text("blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah".to_string())),
             ],
-        );
+        ).unwrap();
 
         let test_serial = test.serialize();
         let test_parse = RowData::parse(table, test_serial).unwrap();

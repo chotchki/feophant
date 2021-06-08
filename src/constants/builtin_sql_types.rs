@@ -1,4 +1,5 @@
 use bytes::{Buf, BufMut, Bytes, BytesMut};
+use std::fmt;
 use std::mem;
 use thiserror::Error;
 
@@ -17,6 +18,21 @@ pub enum DeserializeTypes {
 
 impl BuiltinSqlTypes {
     pub const VALUES: [DeserializeTypes; 2] = [DeserializeTypes::Text, DeserializeTypes::Uuid];
+
+    //Used to map if we have the types linked up right
+    pub fn type_matches(&self, right: DeserializeTypes) -> bool {
+        match *self {
+            BuiltinSqlTypes::Uuid(_) => match right {
+                DeserializeTypes::Uuid => return true,
+                _ => return false,
+            },
+            BuiltinSqlTypes::Text(_) => match right {
+                DeserializeTypes::Text => return true,
+                _ => return false,
+            },
+        }
+    }
+
     pub fn serialize(&self) -> Bytes {
         match *self {
             BuiltinSqlTypes::Uuid(ref value) => {
@@ -98,6 +114,32 @@ impl BuiltinSqlTypes {
 
                 Ok(value)
             }
+        }
+    }
+}
+
+impl fmt::Display for BuiltinSqlTypes {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            BuiltinSqlTypes::Uuid(ref value) => {
+                write!(f, "{}", value)
+            },
+            BuiltinSqlTypes::Text(ref value) => {
+                write!(f, "{}", value)
+            },
+        }
+    }
+}
+
+impl fmt::Display for DeserializeTypes {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            DeserializeTypes::Uuid => {
+                write!(f, "Uuid")
+            },
+            DeserializeTypes::Text => {
+                write!(f, "Text")
+            },
         }
     }
 }
