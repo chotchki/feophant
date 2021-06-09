@@ -16,25 +16,11 @@ Lauch a postgres client application to test
 You can currently start the server, connect to it and have it throw tons of errors. I'm to the point now I need to start supporting saving data.
 
 # Next TODO
-Need to support the concept of a table that can be read and written to, in memory.
+Path to 0.4: Need to support the concept of a table that can be read and written to, in memory.
     sql statement: create table foo;
     sql statement: drop table foo;
 
-Memory based pages are complete now need a concept of taking a table definition (hardcoded pg_class first) and storing an entry in a page. This has morphed into figuring out the type system, Argh!
-
-What I need:
-* To support various data types for use on columns/rows.
-* A way to serialize and deserialize them to bytes (have that for text+uuid)
-* A way to say to a function with this list of types (which may be different), parse this data into something sane. (got this)
-* Need to hook this up with column definitions. (got this)
-* Need a way to save and load a row (got this)
-* Need to simply insert a row into a table via pages (got this), also have the ability to scan through a page's rows
-* Next need a way to make this generic over a set of pages, still with a single read/write lock
-
-Defining layers
-- Row Manager - CRUD interface to a table's rows. 
-- Page Manager - Not sure if this is needed? Maybe locking instead? ... skipping for now
-- I/O Manager - Raw bytes in page sizes using a CRUD interface
+Have a generic way to store rows in a table. Need to figure out basic transactions so I can implement delete/update.
 
 # # Longer Term TODO
 This is stuff that I should get to but aren't vital to getting to a minimal viable product.
