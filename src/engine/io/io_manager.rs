@@ -1,7 +1,12 @@
 //! Eventually this will handle reading / writing pages from disk but for now, hashmap + vector!
 //!
 //! Was stupid with the implementation, should have supported an append api only since vector only works that way
+use super::row_formats::{RowData, RowDataError};
+use async_stream::stream;
 use bytes::Bytes;
+use futures::pin_mut;
+use futures::stream::Stream;
+use futures::stream::StreamExt;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::vec::Vec;
@@ -13,24 +18,51 @@ use super::super::objects::Table;
 
 #[derive(Debug)]
 pub struct IOManager {
-    data: RwLock<HashMap<Uuid, Vec<Bytes>>>, //Yes this is the naive implementation
+    data: Arc<RwLock<HashMap<Uuid, Vec<Bytes>>>>, //Yes this is the naive implementation
 }
 
 impl IOManager {
     pub fn new() -> IOManager {
         IOManager {
-            data: RwLock::new(HashMap::new()),
+            data: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
-    pub async fn get_page(&self, table: Arc<Table>, offset: usize) -> Option<Bytes> {
-        let read_lock = self.data.read().await;
+    //Extracted the actual logic into its own method so I could implement stream
+    async fn get_page_int(
+        d: Arc<RwLock<HashMap<Uuid, Vec<Bytes>>>>,
+        table: Arc<Table>,
+        offset: usize,
+    ) -> Option<Bytes> {
+        let read_lock = d.read().await;
 
         let value = read_lock.get(&table.id)?;
 
         let page = value.get(offset)?;
         let copy = page.slice(0..page.len());
         Some(copy)
+    }
+
+    pub async fn get_page(&self, table: Arc<Table>, offset: usize) -> Option<Bytes> {
+        IOManager::get_page_int(self.data.clone(), table, offset).await
+    }
+
+    pub fn get_stream(&self, table: Arc<Table>) -> impl Stream<Item = Bytes> {
+        let data = self.data.clone();
+        stream! {
+            let mut page_num = 0;
+            loop {
+                match IOManager::get_page_int(data.clone(), table.clone(), page_num).await {
+                    Some(p) => {
+                        yield p;
+                    },
+                    None => {
+                        return ();
+                    }
+                }
+                page_num += 1;
+            }
+        }
     }
 
     pub async fn add_page(&self, table: Arc<Table>, page: Bytes) {

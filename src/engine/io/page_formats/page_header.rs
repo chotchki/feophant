@@ -116,8 +116,8 @@ mod tests {
     fn test_item_count() {
         let mut test = PageHeader::new();
 
-        test.add_item(5);
-        test.add_item(5);
+        test.add_item(5).unwrap();
+        test.add_item(5).unwrap();
 
         assert_eq!(test.get_item_count(), 2);
 

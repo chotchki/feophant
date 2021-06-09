@@ -11,6 +11,7 @@ pub struct PageData {
     table: Arc<Table>,
     page_header: PageHeader,
     item_ids: Vec<ItemIdData>,
+    //TODO debating if I should defer parsing until later
     rows: Vec<RowData>,
 }
 
@@ -45,34 +46,21 @@ impl PageData {
 
     pub fn serialize(&self) -> Bytes {
         let mut buffer = BytesMut::with_capacity((UInt12::max().to_u16() + 1).into());
-        let mut cur_offset = 0;
 
-        println!(
-            "header {0} {1}",
-            cur_offset,
-            self.page_header.serialize().len()
-        );
         buffer.put(self.page_header.serialize());
-        cur_offset += self.page_header.serialize().len();
 
         //Now write items data in order
         for item in self.item_ids.iter() {
-            println!("item {0} {1}", cur_offset, item.serialize().len());
             buffer.put(item.serialize());
-            cur_offset += item.serialize().len();
         }
 
         //Fill the free space
         let free_space = vec![0; self.page_header.get_free_space()];
-        println!("free space {0} {1}", cur_offset, free_space.len());
         buffer.extend_from_slice(&free_space);
-        cur_offset += free_space.len();
 
         //Write items in reverse order
         for value in self.rows.iter().rev() {
-            println!("row {0} {1}", cur_offset, value.serialize().len());
             buffer.put(value.serialize());
-            cur_offset += value.serialize().len();
         }
 
         buffer.freeze()
