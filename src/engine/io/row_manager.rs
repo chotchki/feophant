@@ -1,22 +1,16 @@
 //! The current goal of the row manager is to provide an interative interface over a table's pages.
 //!
-//! It will provide a raw scan over a table, insert and update.
+//! It will provide a raw scan over a table, insert and update. Update has been deferred until I figure out transactions.
 //!
 //! NO LOCKING or transaction control yet. I did implement it at the IO layer but its probably wrong.
 
 use super::super::super::constants::BuiltinSqlTypes;
-use super::super::objects::{Attribute, Table, TransactionId};
+use super::super::objects::{Table, TransactionId};
 use super::page_formats::{PageData, PageDataError};
 use super::row_formats::{RowData, RowDataError};
 use super::{IOManager, IOManagerError};
-use async_stream::stream;
-use bytes::BytesMut;
-use core::pin::Pin;
-use core::task::{Context, Poll};
-use futures::pin_mut;
+use async_stream::try_stream;
 use futures::stream::Stream;
-use futures::stream::StreamExt;
-use std::slice::Iter;
 use std::sync::Arc;
 use thiserror::Error;
 
@@ -66,6 +60,21 @@ impl RowManager {
             }
         }
     }
+
+    pub fn get_stream(
+        &self,
+        table: Arc<Table>,
+    ) -> impl Stream<Item = Result<RowData, RowManagerError>> {
+        let io_man = self.io_manager.clone();
+        try_stream! {
+            for await page_bytes in io_man.get_stream(table.clone()) {
+                let page = PageData::parse(table.clone(), page_bytes)?;
+                for await row in page.get_stream() {
+                    yield row;
+                }
+            }
+        }
+    }
 }
 
 #[derive(Error, Debug)]
@@ -82,10 +91,11 @@ pub enum RowManagerError {
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::super::super::super::constants::DeserializeTypes;
+    use super::super::super::objects::Attribute;
     use super::super::super::objects::Table;
     use super::*;
-    use bytes::{BufMut, BytesMut};
-    use uuid::Uuid;
+    use futures::pin_mut;
+    use futures::stream::StreamExt;
 
     //Async testing help can be found here: https://blog.x5ff.xyz/blog/async-tests-tokio-rust/
     macro_rules! aw {
@@ -117,7 +127,7 @@ mod tests {
         ))
     }
 
-    fn get_row(table: Arc<Table>) -> Vec<Option<BuiltinSqlTypes>> {
+    fn get_row() -> Vec<Option<BuiltinSqlTypes>> {
         vec![
                 Some(BuiltinSqlTypes::Text("this is a test".to_string())),
                 None,
@@ -134,7 +144,17 @@ mod tests {
         let tran_id = TransactionId::new(1);
 
         for _ in 0..500 {
-            assert!(aw!(rm.insert_row(tran_id, table.clone(), get_row(table.clone()))).is_ok());
+            assert!(aw!(rm.insert_row(tran_id, table.clone(), get_row())).is_ok());
+        }
+
+        //Now let's make sure they're really in the table
+        pin_mut!(rm);
+        let result_rows: Vec<RowData> =
+            aw!(rm.get_stream(table.clone()).map(Result::unwrap).collect());
+
+        let sample_row = get_row();
+        for row in result_rows {
+            assert_eq!(row.user_data, sample_row);
         }
     }
 }

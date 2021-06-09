@@ -16,7 +16,7 @@ use uuid::Uuid;
 
 use super::super::objects::Table;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct IOManager {
     data: Arc<RwLock<HashMap<Uuid, Vec<Bytes>>>>, //Yes this is the naive implementation
 }

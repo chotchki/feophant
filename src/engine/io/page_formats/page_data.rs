@@ -1,7 +1,11 @@
 use super::super::super::objects::Table;
 use super::super::row_formats::{RowData, RowDataError};
 use super::{ItemIdData, ItemIdDataError, PageHeader, PageHeaderError, UInt12};
+use async_stream::stream;
 use bytes::{BufMut, Bytes, BytesMut};
+use futures::pin_mut;
+use futures::stream::Stream;
+use futures::stream::StreamExt;
 use std::mem;
 use std::slice::Iter;
 use std::sync::Arc;
@@ -40,8 +44,13 @@ impl PageData {
         Ok(())
     }
 
-    pub fn row_iter(&self) -> Iter<'_, RowData> {
-        self.rows.iter()
+    pub fn get_stream(&self) -> impl Stream<Item = RowData> {
+        let rows_clone = self.rows.clone();
+        stream! {
+            for row in rows_clone.iter() {
+                yield row.clone();
+            }
+        }
     }
 
     pub fn serialize(&self) -> Bytes {
@@ -115,6 +124,13 @@ mod tests {
     use super::super::super::super::objects::{Attribute, Table, TransactionId};
     use super::*;
 
+    //Async testing help can be found here: https://blog.x5ff.xyz/blog/async-tests-tokio-rust/
+    macro_rules! aw {
+        ($e:expr) => {
+            tokio_test::block_on($e)
+        };
+    }
+
     fn get_table() -> Arc<Table> {
         Arc::new(Table::new(
             "test_table".to_string(),
@@ -159,10 +175,9 @@ mod tests {
         let serial = pg.serialize();
         let pg_parsed = PageData::parse(table.clone(), serial).unwrap();
 
-        //Get the data in the same format for comparison
-        let test_rows: Vec<&RowData> = rows.iter().collect();
-        let result_rows: Vec<&RowData> = pg_parsed.row_iter().collect();
-        assert_eq!(test_rows, result_rows);
+        pin_mut!(pg_parsed);
+        let result_rows: Vec<RowData> = aw!(pg_parsed.get_stream().collect());
+        assert_eq!(rows, result_rows);
     }
 
     #[test]
@@ -194,9 +209,8 @@ mod tests {
         let serial = pg.serialize();
         let pg_parsed = PageData::parse(table.clone(), serial).unwrap();
 
-        //Get the data in the same format for comparison
-        let test_rows: Vec<&RowData> = rows.iter().collect();
-        let result_rows: Vec<&RowData> = pg_parsed.row_iter().collect();
-        assert_eq!(test_rows, result_rows);
+        pin_mut!(pg_parsed);
+        let result_rows: Vec<RowData> = aw!(pg_parsed.get_stream().collect());
+        assert_eq!(rows, result_rows);
     }
 }

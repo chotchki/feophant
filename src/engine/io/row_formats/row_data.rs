@@ -14,7 +14,7 @@ pub struct RowData {
     table: Arc<Table>,
     min: TransactionId,
     max: Option<TransactionId>,
-    user_data: Vec<Option<BuiltinSqlTypes>>,
+    pub user_data: Vec<Option<BuiltinSqlTypes>>,
 }
 
 impl RowData {
