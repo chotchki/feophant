@@ -20,7 +20,9 @@ Path to 0.4: Need to support the concept of a table that can be read and written
     sql statement: create table foo;
     sql statement: drop table foo;
 
-Have a generic way to store rows in a table. Need to figure out basic transactions so I can implement delete/update.
+Have a generic way to store rows in a table. Need to figure out basic transactions so I can implement delete/update. With that I can implement the create and drop statements.
+
+Did some reading on an amazing book: (http://www.interdb.jp/pg/pgsql05.html), transactions should be implemented as a combination of a range of transactions plus a visability map
 
 # # Longer Term TODO
 This is stuff that I should get to but aren't vital to getting to a minimal viable product.
