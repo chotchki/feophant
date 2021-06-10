@@ -57,8 +57,8 @@ impl PageHeader {
 
     pub fn serialize(&self) -> Bytes {
         let mut buf = BytesMut::with_capacity(size_of::<PageHeader>());
-        buf.put_u16_le(self.pd_lower.to_u16());
-        buf.put_u16_le(self.pd_upper.to_u16());
+        buf.put(self.pd_lower.serialize());
+        buf.put(self.pd_upper.serialize());
         buf.freeze()
     }
 
@@ -66,10 +66,8 @@ impl PageHeader {
         if buffer.remaining() < size_of::<PageHeader>() {
             return Err(PageHeaderError::InsufficentData(buffer.remaining()));
         }
-        let pd_lower =
-            UInt12::new(buffer.get_u16_le()).ok_or_else(PageHeaderError::LowerOffsetTooLarge)?;
-        let pd_upper =
-            UInt12::new(buffer.get_u16_le()).ok_or_else(PageHeaderError::UpperOffsetTooLarge)?;
+        let pd_lower = UInt12::parse(buffer)?;
+        let pd_upper = UInt12::parse(buffer)?;
         Ok(PageHeader { pd_lower, pd_upper })
     }
 }

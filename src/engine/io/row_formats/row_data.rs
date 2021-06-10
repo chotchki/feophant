@@ -4,7 +4,8 @@
 use super::super::super::super::constants::{BuiltinSqlTypes, DeserializeTypes, SqlTypeError};
 use super::super::super::objects::Table;
 use super::super::super::transactions::TransactionId;
-use super::{InfoMask, NullMask};
+use super::super::page_formats::UInt12;
+use super::{InfoMask, ItemPointer, ItemPointerError, NullMask};
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::mem;
 use std::sync::Arc;
@@ -15,6 +16,7 @@ pub struct RowData {
     table: Arc<Table>,
     min: TransactionId,
     max: Option<TransactionId>,
+    pub item_pointer: Option<ItemPointer>,
     pub user_data: Vec<Option<BuiltinSqlTypes>>,
 }
 
@@ -23,6 +25,7 @@ impl RowData {
         table: Arc<Table>,
         min: TransactionId,
         max: Option<TransactionId>,
+        item_pointer: Option<ItemPointer>,
         user_data: Vec<Option<BuiltinSqlTypes>>,
     ) -> Result<RowData, RowDataError> {
         if table.attributes.len() != user_data.len() {
@@ -49,6 +52,7 @@ impl RowData {
             table,
             min,
             max,
+            item_pointer,
             user_data,
         })
     }
@@ -58,6 +62,12 @@ impl RowData {
         buffer.put_u64_le(self.min.get_u64());
         buffer.put_u64_le(self.max.unwrap_or(TransactionId::new(0)).get_u64());
 
+        //TODO Need to chew on if I should split the meta data and user data
+        buffer.put(
+            self.item_pointer
+                .unwrap_or(ItemPointer::new(0, UInt12::new(0).unwrap()))
+                .serialize(),
+        );
         let mut mask = InfoMask::empty();
         for i in self.user_data.iter() {
             match i {
@@ -105,6 +115,8 @@ impl RowData {
             _ => Some(TransactionId::new(max_temp)),
         };
 
+        let item_pointer = ItemPointer::parse(&mut row_buffer)?;
+
         let null_mask = RowData::get_null_mask(table.clone(), &mut row_buffer)?;
 
         let mut user_data = vec![];
@@ -119,7 +131,7 @@ impl RowData {
             }
         }
 
-        RowData::new(table, min, max, user_data)
+        RowData::new(table, min, max, Some(item_pointer), user_data)
     }
 
     //Gets the null mask, if it doesn't exist it will return a vector of all not nulls
@@ -168,6 +180,8 @@ pub enum RowDataError {
     MissingNullMaskData(usize, usize),
     #[error("Unable to parse type {0}")]
     ColumnParseError(#[from] SqlTypeError),
+    #[error("ItemPointerError")]
+    ItemPointerError(#[from] ItemPointerError),
 }
 
 #[cfg(test)]
@@ -189,6 +203,7 @@ mod tests {
         let test = RowData::new(
             table.clone(),
             TransactionId::new(1),
+            None,
             None,
             vec![Some(BuiltinSqlTypes::Text("this is a test".to_string()))],
         )
@@ -221,6 +236,7 @@ mod tests {
             table.clone(),
             TransactionId::new(1),
             None,
+            None,
             vec![
                 Some(BuiltinSqlTypes::Text("this is a test".to_string())),
                 Some(BuiltinSqlTypes::Text("this is not a test".to_string())),
@@ -247,6 +263,7 @@ mod tests {
         let test = RowData::new(
             table.clone(),
             TransactionId::new(1),
+            None,
             None,
             vec![Some(BuiltinSqlTypes::Uuid(uuid::Uuid::new_v4()))],
         )
@@ -278,6 +295,7 @@ mod tests {
         let test = RowData::new(
             table.clone(),
             TransactionId::new(1),
+            None,
             None,
             vec![
                 Some(BuiltinSqlTypes::Uuid(uuid::Uuid::new_v4())),
@@ -312,6 +330,7 @@ mod tests {
         let test = RowData::new(
             table.clone(),
             TransactionId::new(1),
+            None,
             None,
             vec![Some(BuiltinSqlTypes::Uuid(uuid::Uuid::new_v4())), None],
         )
@@ -348,6 +367,7 @@ mod tests {
 
         let test = RowData::new(table.clone(),
             TransactionId::new(1),
+            None,
             None,
             vec![
                 Some(BuiltinSqlTypes::Text("this is a test".to_string())),

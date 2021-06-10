@@ -31,7 +31,7 @@ impl RowManager {
         table: Arc<Table>,
         user_data: Vec<Option<BuiltinSqlTypes>>,
     ) -> Result<(), RowManagerError> {
-        let row = RowData::new(table.clone(), current_tran_id, None, user_data)?;
+        let row = RowData::new(table.clone(), current_tran_id, None, None, user_data)?;
         let row_len = row.serialize().len();
 
         let mut page_num = 0;
@@ -39,9 +39,9 @@ impl RowManager {
             let page_bytes = self.io_manager.get_page(table.clone(), page_num).await;
             match page_bytes {
                 Some(p) => {
-                    let mut page = PageData::parse(table.clone(), p)?;
+                    let mut page = PageData::parse(table.clone(), page_num, p)?;
                     if page.can_fit(row_len) {
-                        page.store(row)?;
+                        page.insert(row)?;
                         let new_page_bytes = page.serialize();
                         self.io_manager
                             .update_page(table, new_page_bytes, page_num)
@@ -53,8 +53,8 @@ impl RowManager {
                     }
                 }
                 None => {
-                    let mut new_page = PageData::new(table.clone());
-                    new_page.store(row)?; //TODO Will NOT handle overly large rows
+                    let mut new_page = PageData::new(table.clone(), page_num);
+                    new_page.insert(row)?; //TODO Will NOT handle overly large rows
                     self.io_manager.add_page(table, new_page.serialize()).await;
                     return Ok(());
                 }
@@ -68,11 +68,13 @@ impl RowManager {
     ) -> impl Stream<Item = Result<RowData, RowManagerError>> {
         let io_man = self.io_manager.clone();
         try_stream! {
+            let mut page_num = 0;
             for await page_bytes in io_man.get_stream(table.clone()) {
-                let page = PageData::parse(table.clone(), page_bytes)?;
+                let page = PageData::parse(table.clone(), page_num, page_bytes)?;
                 for await row in page.get_stream() {
                     yield row;
                 }
+                page_num += 1;
             }
         }
     }

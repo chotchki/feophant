@@ -1,11 +1,12 @@
 use super::super::super::objects::Table;
-use super::super::row_formats::{RowData, RowDataError};
-use super::{ItemIdData, ItemIdDataError, PageHeader, PageHeaderError, UInt12};
+use super::super::row_formats::{ItemPointer, RowData, RowDataError};
+use super::{ItemIdData, ItemIdDataError, PageHeader, PageHeaderError, UInt12, UInt12Error};
 use async_stream::stream;
 use bytes::{BufMut, Bytes, BytesMut};
 use futures::pin_mut;
 use futures::stream::Stream;
 use futures::stream::StreamExt;
+use std::convert::TryFrom;
 use std::mem;
 use std::slice::Iter;
 use std::sync::Arc;
@@ -13,6 +14,7 @@ use thiserror::Error;
 
 pub struct PageData {
     table: Arc<Table>,
+    page: usize,
     page_header: PageHeader,
     item_ids: Vec<ItemIdData>,
     //TODO debating if I should defer parsing until later
@@ -20,9 +22,10 @@ pub struct PageData {
 }
 
 impl PageData {
-    pub fn new(table: Arc<Table>) -> PageData {
+    pub fn new(table: Arc<Table>, page: usize) -> PageData {
         PageData {
             table,
+            page,
             page_header: PageHeader::new(),
             item_ids: vec![],
             rows: vec![],
@@ -35,7 +38,13 @@ impl PageData {
     }
 
     //TODO debating if this should be row_data or bytes
-    pub fn store(&mut self, row_data: RowData) -> Result<(), PageDataError> {
+    pub fn insert(&mut self, mut row_data: RowData) -> Result<(), PageDataError> {
+        //Insert rewrites the row's location, update will not
+        row_data.item_pointer = Some(ItemPointer::new(
+            self.page,
+            UInt12::try_from(self.rows.len())?,
+        ));
+
         let row_data_len = row_data.serialize().len();
 
         let item_data = self.page_header.add_item(row_data_len)?;
@@ -75,7 +84,11 @@ impl PageData {
         buffer.freeze()
     }
 
-    pub fn parse(table: Arc<Table>, mut buffer: Bytes) -> Result<PageData, PageDataError> {
+    pub fn parse(
+        table: Arc<Table>,
+        page: usize,
+        mut buffer: Bytes,
+    ) -> Result<PageData, PageDataError> {
         //Note since we need random access, everything MUST work off slices otherwise counts will be off
 
         let mut page_header_slice = buffer.slice(0..mem::size_of::<PageHeader>());
@@ -99,6 +112,7 @@ impl PageData {
 
         Ok(PageData {
             table,
+            page,
             page_header,
             item_ids,
             rows,
@@ -116,6 +130,8 @@ pub enum PageDataError {
     ItemIdDataParseError(#[from] ItemIdDataError),
     #[error("Row Data Parse Error")]
     RowDataParseError(#[from] RowDataError),
+    #[error("UInt12 Conversion Error")]
+    UInt12Error(#[from] UInt12Error),
 }
 
 #[cfg(test)]
@@ -162,6 +178,7 @@ mod tests {
         let rows = vec!(RowData::new(table.clone(),
             TransactionId::new(0xDEADBEEF),
             None,
+            None,
             vec![
                 Some(BuiltinSqlTypes::Text("this is a test".to_string())),
                 None,
@@ -169,12 +186,12 @@ mod tests {
             ],
         ).unwrap());
 
-        let mut pg = PageData::new(table.clone());
+        let mut pg = PageData::new(table.clone(), 0);
         for r in rows.clone() {
-            assert!(pg.store(r.clone()).is_ok());
+            assert!(pg.insert(r.clone()).is_ok());
         }
         let serial = pg.serialize();
-        let pg_parsed = PageData::parse(table.clone(), serial).unwrap();
+        let pg_parsed = PageData::parse(table.clone(), 0, serial).unwrap();
 
         pin_mut!(pg_parsed);
         let result_rows: Vec<RowData> = aw!(pg_parsed.get_stream().collect());
@@ -188,6 +205,7 @@ mod tests {
         let rows = vec!(RowData::new(table.clone(),
             TransactionId::new(0xDEADBEEF),
             None,
+            None,
             vec![
                 Some(BuiltinSqlTypes::Text("this is a test".to_string())),
                 None,
@@ -196,6 +214,7 @@ mod tests {
         ).unwrap(), RowData::new(table.clone(),
         TransactionId::new(0xDEADBEEF),
         None,
+        None,
         vec![
             Some(BuiltinSqlTypes::Text("this also a test".to_string())),
             None,
@@ -203,12 +222,12 @@ mod tests {
         ],
         ).unwrap());
 
-        let mut pg = PageData::new(table.clone());
+        let mut pg = PageData::new(table.clone(), 0);
         for r in rows.clone() {
-            assert!(pg.store(r.clone()).is_ok());
+            assert!(pg.insert(r.clone()).is_ok());
         }
         let serial = pg.serialize();
-        let pg_parsed = PageData::parse(table.clone(), serial).unwrap();
+        let pg_parsed = PageData::parse(table.clone(), 0, serial).unwrap();
 
         pin_mut!(pg_parsed);
         let result_rows: Vec<RowData> = aw!(pg_parsed.get_stream().collect());

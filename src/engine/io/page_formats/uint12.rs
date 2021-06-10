@@ -1,5 +1,7 @@
 //We are only going to support 4kb pages to match most common underlying I/O subsystems
+use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::convert::TryFrom;
+use std::mem;
 use std::ops::{Add, AddAssign, Sub, SubAssign};
 use thiserror::Error;
 
@@ -36,6 +38,25 @@ impl UInt12 {
     pub fn max() -> UInt12 {
         UInt12(PAGE_SIZE - 1)
     }
+
+    pub fn serialize(&self) -> Bytes {
+        let mut buf = BytesMut::with_capacity(mem::size_of::<u16>());
+        buf.put_u16_le(self.0);
+        buf.freeze()
+    }
+
+    pub fn parse(buffer: &mut impl Buf) -> Result<Self, UInt12Error> {
+        if buffer.remaining() < mem::size_of::<u16>() {
+            return Err(UInt12Error::InsufficentData(buffer.remaining()));
+        }
+
+        let raw_value = buffer.get_u16_le();
+
+        let value =
+            UInt12::new(raw_value).ok_or_else(|| UInt12Error::ValueTooLargeU16(raw_value))?;
+
+        Ok(value)
+    }
 }
 
 impl Add for UInt12 {
@@ -71,7 +92,7 @@ impl TryFrom<usize> for UInt12 {
     fn try_from(value: usize) -> Result<Self, Self::Error> {
         let max = PAGE_SIZE as usize;
         if value >= max {
-            return Err(UInt12Error::ValueTooLarge(value));
+            return Err(UInt12Error::ValueTooLargeUSize(value));
         }
 
         Ok(UInt12(value as u16))
@@ -80,8 +101,12 @@ impl TryFrom<usize> for UInt12 {
 
 #[derive(Debug, Error)]
 pub enum UInt12Error {
-    #[error("Value too large for UInt12 got {0}")]
-    ValueTooLarge(usize),
+    #[error("Not enough data to parse, got {0}")]
+    InsufficentData(usize),
+    #[error("usize too large for UInt12 got {0}")]
+    ValueTooLargeUSize(usize),
+    #[error("u16 too large for UInt12 got {0}")]
+    ValueTooLargeU16(u16),
 }
 
 #[cfg(test)]
