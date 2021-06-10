@@ -150,7 +150,7 @@ mod tests {
 
     #[test]
     fn test_fail_usize() {
-        let large: usize = 4000;
+        let large: usize = 40000;
         let test = UInt12::try_from(large);
 
         assert!(test.is_err());

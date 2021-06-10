@@ -7,8 +7,8 @@
 use super::super::super::constants::BuiltinSqlTypes;
 use super::super::objects::Table;
 use super::super::transactions::TransactionId;
-use super::page_formats::{PageData, PageDataError};
-use super::row_formats::{RowData, RowDataError};
+use super::page_formats::{PageData, PageDataError, UInt12};
+use super::row_formats::{ItemPointer, ItemPointerError, RowData, RowDataError};
 use super::{IOManager, IOManagerError};
 use async_stream::try_stream;
 use futures::stream::Stream;
@@ -31,7 +31,14 @@ impl RowManager {
         table: Arc<Table>,
         user_data: Vec<Option<BuiltinSqlTypes>>,
     ) -> Result<(), RowManagerError> {
-        let row = RowData::new(table.clone(), current_tran_id, None, None, user_data)?;
+        //Serialize with a dummy pointer so we can evaluate space needed
+        let row = RowData::new(
+            table.clone(),
+            current_tran_id,
+            None,
+            ItemPointer::new(0, UInt12::new(0).unwrap()),
+            user_data,
+        )?;
         let row_len = row.serialize().len();
 
         let mut page_num = 0;

@@ -1,6 +1,9 @@
 //! Encodes / decodes a row into a byte array based on the supplied specification
 //! Format from here: https://www.postgresql.org/docs/current/storage-page-layout.html
 //! As always I'm only implementing what I need and will extend once I need more
+//!
+//! TODO Need to chew on if I should split the meta data and user data between two types
+//!
 use super::super::super::super::constants::{BuiltinSqlTypes, DeserializeTypes, SqlTypeError};
 use super::super::super::objects::Table;
 use super::super::super::transactions::TransactionId;
@@ -16,7 +19,7 @@ pub struct RowData {
     table: Arc<Table>,
     min: TransactionId,
     max: Option<TransactionId>,
-    pub item_pointer: Option<ItemPointer>,
+    pub item_pointer: ItemPointer,
     pub user_data: Vec<Option<BuiltinSqlTypes>>,
 }
 
@@ -25,7 +28,7 @@ impl RowData {
         table: Arc<Table>,
         min: TransactionId,
         max: Option<TransactionId>,
-        item_pointer: Option<ItemPointer>,
+        item_pointer: ItemPointer,
         user_data: Vec<Option<BuiltinSqlTypes>>,
     ) -> Result<RowData, RowDataError> {
         if table.attributes.len() != user_data.len() {
@@ -62,12 +65,8 @@ impl RowData {
         buffer.put_u64_le(self.min.get_u64());
         buffer.put_u64_le(self.max.unwrap_or(TransactionId::new(0)).get_u64());
 
-        //TODO Need to chew on if I should split the meta data and user data
-        buffer.put(
-            self.item_pointer
-                .unwrap_or(ItemPointer::new(0, UInt12::new(0).unwrap()))
-                .serialize(),
-        );
+        buffer.put(self.item_pointer.serialize());
+
         let mut mask = InfoMask::empty();
         for i in self.user_data.iter() {
             match i {
@@ -131,7 +130,7 @@ impl RowData {
             }
         }
 
-        RowData::new(table, min, max, Some(item_pointer), user_data)
+        RowData::new(table, min, max, item_pointer, user_data)
     }
 
     //Gets the null mask, if it doesn't exist it will return a vector of all not nulls
@@ -189,6 +188,10 @@ mod tests {
     use super::super::super::super::objects::Attribute;
     use super::*;
 
+    fn getItemPointer() -> ItemPointer {
+        ItemPointer::new(0, UInt12::new(0).unwrap())
+    }
+
     #[test]
     fn test_row_data_single_text() {
         let table = Arc::new(Table::new(
@@ -204,7 +207,7 @@ mod tests {
             table.clone(),
             TransactionId::new(1),
             None,
-            None,
+            getItemPointer(),
             vec![Some(BuiltinSqlTypes::Text("this is a test".to_string()))],
         )
         .unwrap();
@@ -236,7 +239,7 @@ mod tests {
             table.clone(),
             TransactionId::new(1),
             None,
-            None,
+            getItemPointer(),
             vec![
                 Some(BuiltinSqlTypes::Text("this is a test".to_string())),
                 Some(BuiltinSqlTypes::Text("this is not a test".to_string())),
@@ -264,7 +267,7 @@ mod tests {
             table.clone(),
             TransactionId::new(1),
             None,
-            None,
+            getItemPointer(),
             vec![Some(BuiltinSqlTypes::Uuid(uuid::Uuid::new_v4()))],
         )
         .unwrap();
@@ -296,7 +299,7 @@ mod tests {
             table.clone(),
             TransactionId::new(1),
             None,
-            None,
+            getItemPointer(),
             vec![
                 Some(BuiltinSqlTypes::Uuid(uuid::Uuid::new_v4())),
                 Some(BuiltinSqlTypes::Uuid(uuid::Uuid::new_v4())),
@@ -331,7 +334,7 @@ mod tests {
             table.clone(),
             TransactionId::new(1),
             None,
-            None,
+            getItemPointer(),
             vec![Some(BuiltinSqlTypes::Uuid(uuid::Uuid::new_v4())), None],
         )
         .unwrap();
@@ -368,7 +371,7 @@ mod tests {
         let test = RowData::new(table.clone(),
             TransactionId::new(1),
             None,
-            None,
+            getItemPointer(),
             vec![
                 Some(BuiltinSqlTypes::Text("this is a test".to_string())),
                 None,

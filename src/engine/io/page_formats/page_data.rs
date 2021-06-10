@@ -40,10 +40,7 @@ impl PageData {
     //TODO debating if this should be row_data or bytes
     pub fn insert(&mut self, mut row_data: RowData) -> Result<(), PageDataError> {
         //Insert rewrites the row's location, update will not
-        row_data.item_pointer = Some(ItemPointer::new(
-            self.page,
-            UInt12::try_from(self.rows.len())?,
-        ));
+        row_data.item_pointer = ItemPointer::new(self.page, UInt12::try_from(self.rows.len())?);
 
         let row_data_len = row_data.serialize().len();
 
@@ -148,6 +145,10 @@ mod tests {
         };
     }
 
+    fn getItemPointer(row_num: usize) -> ItemPointer {
+        ItemPointer::new(0, UInt12::new(row_num as u16).unwrap())
+    }
+
     fn get_table() -> Arc<Table> {
         Arc::new(Table::new(
             "test_table".to_string(),
@@ -178,7 +179,7 @@ mod tests {
         let rows = vec!(RowData::new(table.clone(),
             TransactionId::new(0xDEADBEEF),
             None,
-            None,
+            getItemPointer(0),
             vec![
                 Some(BuiltinSqlTypes::Text("this is a test".to_string())),
                 None,
@@ -205,7 +206,7 @@ mod tests {
         let rows = vec!(RowData::new(table.clone(),
             TransactionId::new(0xDEADBEEF),
             None,
-            None,
+            getItemPointer(0),
             vec![
                 Some(BuiltinSqlTypes::Text("this is a test".to_string())),
                 None,
@@ -214,7 +215,7 @@ mod tests {
         ).unwrap(), RowData::new(table.clone(),
         TransactionId::new(0xDEADBEEF),
         None,
-        None,
+        getItemPointer(1),
         vec![
             Some(BuiltinSqlTypes::Text("this also a test".to_string())),
             None,
