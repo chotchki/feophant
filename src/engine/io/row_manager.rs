@@ -30,6 +30,96 @@ impl RowManager {
         current_tran_id: TransactionId,
         table: Arc<Table>,
         user_data: Vec<Option<BuiltinSqlTypes>>,
+    ) -> Result<ItemPointer, RowManagerError> {
+        //Serialize with a dummy pointer so we can evaluate space needed
+        let row = RowData::new(
+            table.clone(),
+            current_tran_id,
+            None,
+            ItemPointer::new(0, UInt12::new(0).unwrap()),
+            user_data,
+        )?;
+        let row_len = row.serialize().len();
+
+        let mut page_num = 0;
+        loop {
+            let page_bytes = self.io_manager.get_page(table.clone(), page_num).await;
+            match page_bytes {
+                Some(p) => {
+                    let mut page = PageData::parse(table.clone(), page_num, p)?;
+                    if page.can_fit(row_len) {
+                        let new_row_pointer = page.insert(row)?;
+                        let new_page_bytes = page.serialize();
+                        self.io_manager
+                            .update_page(table, new_page_bytes, page_num)
+                            .await?;
+                        return Ok(new_row_pointer);
+                    } else {
+                        page_num += 1;
+                        continue;
+                    }
+                }
+                None => {
+                    let mut new_page = PageData::new(table.clone(), page_num);
+                    let new_row_pointer = new_page.insert(row)?; //TODO Will NOT handle overly large rows
+                    self.io_manager.add_page(table, new_page.serialize()).await;
+                    return Ok(new_row_pointer);
+                }
+            }
+        }
+    }
+
+    //Note this is an insert new row, delete old row operation
+    pub async fn update_row(
+        &mut self,
+        current_tran_id: TransactionId,
+        table: Arc<Table>,
+        user_data: Vec<Option<BuiltinSqlTypes>>,
+    ) -> Result<(), RowManagerError> {
+        //Serialize with a dummy pointer so we can evaluate space needed
+        let row = RowData::new(
+            table.clone(),
+            current_tran_id,
+            None,
+            ItemPointer::new(0, UInt12::new(0).unwrap()),
+            user_data,
+        )?;
+        let row_len = row.serialize().len();
+
+        let mut page_num = 0;
+        loop {
+            let page_bytes = self.io_manager.get_page(table.clone(), page_num).await;
+            match page_bytes {
+                Some(p) => {
+                    let mut page = PageData::parse(table.clone(), page_num, p)?;
+                    if page.can_fit(row_len) {
+                        page.insert(row)?;
+                        let new_page_bytes = page.serialize();
+                        self.io_manager
+                            .update_page(table, new_page_bytes, page_num)
+                            .await?;
+                        return Ok(());
+                    } else {
+                        page_num += 1;
+                        continue;
+                    }
+                }
+                None => {
+                    let mut new_page = PageData::new(table.clone(), page_num);
+                    new_page.insert(row)?; //TODO Will NOT handle overly large rows
+                    self.io_manager.add_page(table, new_page.serialize()).await;
+                    return Ok(());
+                }
+            }
+        }
+    }
+
+    //Note this is a logical delete
+    pub async fn delete_row(
+        &mut self,
+        current_tran_id: TransactionId,
+        table: Arc<Table>,
+        user_data: Vec<Option<BuiltinSqlTypes>>,
     ) -> Result<(), RowManagerError> {
         //Serialize with a dummy pointer so we can evaluate space needed
         let row = RowData::new(

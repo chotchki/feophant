@@ -8,6 +8,7 @@ use futures::stream::Stream;
 use futures::stream::StreamExt;
 use std::convert::TryFrom;
 use std::mem;
+use std::num::TryFromIntError;
 use std::slice::Iter;
 use std::sync::Arc;
 use thiserror::Error;
@@ -38,15 +39,39 @@ impl PageData {
     }
 
     //TODO debating if this should be row_data or bytes
-    pub fn insert(&mut self, mut row_data: RowData) -> Result<(), PageDataError> {
+    pub fn insert(&mut self, mut row_data: RowData) -> Result<ItemPointer, PageDataError> {
         //Insert rewrites the row's location, update will not
-        row_data.item_pointer = ItemPointer::new(self.page, UInt12::try_from(self.rows.len())?);
+        let item_pointer = ItemPointer::new(self.page, UInt12::try_from(self.rows.len())?);
+        row_data.item_pointer = item_pointer;
 
         let row_data_len = row_data.serialize().len();
 
         let item_data = self.page_header.add_item(row_data_len)?;
         self.item_ids.push(item_data);
         self.rows.push(row_data);
+        Ok(item_pointer)
+    }
+
+    pub fn update(&mut self, row_data: RowData, row_count: UInt12) -> Result<(), PageDataError> {
+        let row_data_len = row_data.serialize().len();
+        let row_count = row_count.to_usize();
+        if row_count > self.item_ids.len() - 1 || row_count > self.rows.len() - 1 {
+            return Err(PageDataError::IndexOutofBounds(
+                row_count,
+                self.item_ids.len(),
+                self.rows.len(),
+            ));
+        }
+
+        let iid = &self.item_ids[row_count];
+        if iid.length.to_usize() != row_data_len {
+            return Err(PageDataError::UpdateChangedLength(
+                iid.length.to_usize(),
+                row_data_len,
+            ));
+        }
+
+        self.rows[row_count] = row_data;
         Ok(())
     }
 
@@ -129,6 +154,10 @@ pub enum PageDataError {
     RowDataParseError(#[from] RowDataError),
     #[error("UInt12 Conversion Error")]
     UInt12Error(#[from] UInt12Error),
+    #[error("Row {0} does not exist to update we have {1}:{2} rows")]
+    IndexOutofBounds(usize, usize, usize),
+    #[error("Updates cannot change row length! Old: {0} New: {1}")]
+    UpdateChangedLength(usize, usize),
 }
 
 #[cfg(test)]
@@ -233,5 +262,35 @@ mod tests {
         pin_mut!(pg_parsed);
         let result_rows: Vec<RowData> = aw!(pg_parsed.get_stream().collect());
         assert_eq!(rows, result_rows);
+    }
+
+    #[test]
+    fn test_page_data_update() {
+        let table = get_table();
+
+        let mut row = RowData::new(table.clone(),
+            TransactionId::new(0xDEADBEEF),
+            None,
+            getItemPointer(0),
+            vec![
+                Some(BuiltinSqlTypes::Text("this is a test".to_string())),
+                None,
+                Some(BuiltinSqlTypes::Text("blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah".to_string())),
+            ],
+        ).unwrap();
+
+        let mut pg = PageData::new(table.clone(), 0);
+        let rip = pg.insert(row.clone());
+        assert!(rip.is_ok());
+
+        let ip = rip.unwrap();
+
+        row.item_pointer = getItemPointer(1);
+
+        assert!(pg.update(row.clone(), ip.count).is_ok());
+
+        pin_mut!(pg);
+        let result_rows: Vec<RowData> = aw!(pg.get_stream().collect());
+        assert_eq!(row, result_rows[0]);
     }
 }

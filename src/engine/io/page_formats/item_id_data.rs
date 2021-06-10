@@ -9,7 +9,7 @@ use thiserror::Error;
 #[derive(Debug, PartialEq)]
 pub struct ItemIdData {
     offset: UInt12,
-    length: UInt12,
+    pub length: UInt12,
 }
 
 impl ItemIdData {

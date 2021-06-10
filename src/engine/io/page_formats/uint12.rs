@@ -1,6 +1,7 @@
 //We are only going to support 4kb pages to match most common underlying I/O subsystems
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::convert::TryFrom;
+use std::fmt;
 use std::mem;
 use std::ops::{Add, AddAssign, Sub, SubAssign};
 use thiserror::Error;
@@ -33,6 +34,10 @@ impl UInt12 {
 
     pub fn to_u16(&self) -> u16 {
         self.0
+    }
+
+    pub fn to_usize(&self) -> usize {
+        usize::try_from(self.0).unwrap()
     }
 
     pub fn max() -> UInt12 {
@@ -96,6 +101,12 @@ impl TryFrom<usize> for UInt12 {
         }
 
         Ok(UInt12(value as u16))
+    }
+}
+
+impl fmt::Display for UInt12 {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
 
