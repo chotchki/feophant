@@ -99,6 +99,7 @@ impl TransactionManager {
         self.update_trans(tran_id, TransactionStatus::Aborted).await
     }
 
+    //TODO work on figuring out how to save / load this
     pub fn serialize() {}
 
     pub fn parse() {}
