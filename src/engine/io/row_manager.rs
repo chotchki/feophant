@@ -5,7 +5,8 @@
 //! NO LOCKING or transaction control yet. I did implement it at the IO layer but its probably wrong.
 
 use super::super::super::constants::BuiltinSqlTypes;
-use super::super::objects::{Table, TransactionId};
+use super::super::objects::Table;
+use super::super::transactions::TransactionId;
 use super::page_formats::{PageData, PageDataError};
 use super::row_formats::{RowData, RowDataError};
 use super::{IOManager, IOManagerError};

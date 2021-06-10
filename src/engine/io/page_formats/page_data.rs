@@ -121,7 +121,8 @@ pub enum PageDataError {
 #[cfg(test)]
 mod tests {
     use super::super::super::super::super::constants::{BuiltinSqlTypes, DeserializeTypes};
-    use super::super::super::super::objects::{Attribute, Table, TransactionId};
+    use super::super::super::super::objects::{Attribute, Table};
+    use super::super::super::super::transactions::TransactionId;
     use super::*;
 
     //Async testing help can be found here: https://blog.x5ff.xyz/blog/async-tests-tokio-rust/

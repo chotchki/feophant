@@ -2,7 +2,8 @@
 //! Format from here: https://www.postgresql.org/docs/current/storage-page-layout.html
 //! As always I'm only implementing what I need and will extend once I need more
 use super::super::super::super::constants::{BuiltinSqlTypes, DeserializeTypes, SqlTypeError};
-use super::super::super::objects::{Table, TransactionId};
+use super::super::super::objects::Table;
+use super::super::super::transactions::TransactionId;
 use super::{InfoMask, NullMask};
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::mem;

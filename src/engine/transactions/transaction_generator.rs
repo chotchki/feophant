@@ -1,5 +1,7 @@
+//TODO Strong candidate for deletion since a single counter doesn't make sense
+
 //! Provides an incrementing sequence based counter that is always 64-bit
-use super::super::super::engine::objects::TransactionId;
+use super::TransactionId;
 
 use atomic_counter::{AtomicCounter, ConsistentCounter};
 use std::convert::TryInto;
@@ -44,5 +46,6 @@ mod tests {
     fn simple_next() {
         let tg = TransactionGenerator::new(41);
         assert_eq!(tg.next().unwrap(), TransactionId::new(42));
+        assert_eq!(tg.next().unwrap(), TransactionId::new(43));
     }
 }
