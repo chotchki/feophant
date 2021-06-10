@@ -1,5 +1,5 @@
 //! This is the interface to transaction visability (clog in postgres).
-use super::{TransactionGenerator, TransactionId, TransactionIdError, TransactionStatus};
+use super::{TransactionId, TransactionIdError, TransactionStatus};
 use std::sync::Arc;
 use thiserror::Error;
 use tokio::sync::RwLock;

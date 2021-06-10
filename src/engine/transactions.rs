@@ -1,6 +1,3 @@
-mod transaction_generator;
-pub use transaction_generator::TransactionGenerator;
-
 mod transaction_id;
 pub use transaction_id::TransactionId;
 pub use transaction_id::TransactionIdError;
