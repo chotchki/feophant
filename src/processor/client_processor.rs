@@ -3,7 +3,6 @@ use std::sync::Arc;
 use thiserror::Error;
 
 use super::super::engine::io::IOManager;
-use super::super::engine::TransactionGenerator;
 use super::ssl_and_gssapi_parser;
 use super::startup_parser;
 use crate::codec::{authentication_ok, error_response, ready_for_query, NetworkFrame};
@@ -11,18 +10,11 @@ use crate::constants::{PgErrorCodes, PgErrorLevels};
 
 pub struct ClientProcessor {
     page_manager: Arc<IOManager>,
-    transaction_generator: Arc<TransactionGenerator>,
 }
 
 impl ClientProcessor {
-    pub fn new(
-        page_manager: Arc<IOManager>,
-        transaction_generator: Arc<TransactionGenerator>,
-    ) -> ClientProcessor {
-        ClientProcessor {
-            page_manager,
-            transaction_generator,
-        }
+    pub fn new(page_manager: Arc<IOManager>) -> ClientProcessor {
+        ClientProcessor { page_manager }
     }
 
     pub fn process(&self, frame: NetworkFrame) -> Result<Vec<NetworkFrame>, ClientProcessorError> {

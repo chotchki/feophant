@@ -19,7 +19,6 @@ use codec::{NetworkFrame, PgCodec};
 mod constants;
 mod engine;
 use engine::io::IOManager;
-use engine::TransactionGenerator;
 mod processor;
 use processor::ClientProcessor;
 
@@ -38,8 +37,6 @@ async fn main() {
     //Start the I/O system first
     let page_manager = Arc::new(IOManager::new());
 
-    let transaction_generator = Arc::new(TransactionGenerator::new(0));
-
     //Bind to a fixed port
     let port: u32 = 50000;
     let listener = TcpListener::bind(format!("{}{}", "127.0.0.1:", port))
@@ -54,12 +51,11 @@ async fn main() {
         info!("Got a connection from {}", client_addr);
 
         let pm = page_manager.clone();
-        let tg = transaction_generator.clone();
         tokio::spawn(async move {
             let codec = PgCodec {};
             let (mut sink, mut input) = Framed::new(stream, codec).split();
 
-            let process = ClientProcessor::new(pm, tg);
+            let process = ClientProcessor::new(pm);
             while let Some(Ok(event)) = input.next().await {
                 let responses: Vec<NetworkFrame> = match process.process(event) {
                     Ok(responses) => responses,

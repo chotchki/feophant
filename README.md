@@ -16,13 +16,18 @@ Lauch a postgres client application to test
 You can currently start the server, connect to it and have it throw tons of errors. I'm to the point now I need to start supporting saving data.
 
 # Next TODO
-Path to 0.4: Need to support the concept of a table that can be read and written to, in memory.
+Path to 1.0: Need to support the concept of a table that can be read and written to, in memory.
     sql statement: create table foo;
     sql statement: drop table foo;
 
 Have a generic way to store rows in a table. Need to figure out basic transactions so I can implement delete/update. With that I can implement the create and drop statements.
 
-Did some reading on an amazing book: (http://www.interdb.jp/pg/pgsql05.html), transactions should be implemented as a combination of a range of transactions plus a visability map
+Did some reading on an amazing book: (http://www.interdb.jp/pg/pgsql05.html), transactions should be implemented as a combination of a range of transactions plus a visability map.
+
+Path to 0.4: So next step is implementing the clog and transaction statuses along with a way to query and update it.
+* Should this be a shared structure (probably) or a process you call into (probably not now that I write it)?
+* * KISS first
+* I'll start by doing this all in memory but next will need to implement saving / loading from disk.
 
 # # Longer Term TODO
 This is stuff that I should get to but aren't vital to getting to a minimal viable product.
@@ -36,6 +41,7 @@ Its kinda pointless to blindly reproduce what has already been done so I'm makin
 * Multi-threaded design based on Tokio instead of Postgres's multi-process design.
 * * Perk of this is not needing to manage SYSV shared memory. (Postgres largely fixed this but I think its still worth noting).
 * Want to avoid vaccuum for transaction wrap around. Will try 64-bit transaction IDs but might go to 128-bit.
+* * I can avoid the need to freeze Transaction IDs however the hint bits will need scanning to ensure that they are updated.
 * Replacing OIDs with UUIDv4s.
 
 ## Rust Notes
