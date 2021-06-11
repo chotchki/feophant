@@ -20,14 +20,9 @@ Path to 1.0: Need to support the concept of a table that can be read and written
     sql statement: create table foo;
     sql statement: drop table foo;
 
-Have a generic way to store rows in a table. Need to figure out basic transactions so I can implement delete/update. With that I can implement the create and drop statements.
+Path to 0.4: So I can insert/update/delete rows and generate/track single transactions. However they aren't integrated or persisted. I also don't filter or ignore deleted rows. I also parse each row completely on page load so scanning will be slow.
 
-Did some reading on an amazing book: (http://www.interdb.jp/pg/pgsql05.html), transactions should be implemented as a combination of a range of transactions plus a visability map.
-
-Path to 0.4: So next step is implementing the clog and transaction statuses along with a way to query and update it.
-* Should this be a shared structure (probably) or a process you call into (probably not now that I write it)?
-* * KISS first
-* I'll start by doing this all in memory but next will need to implement saving / loading from disk.
+I don't have a good idea of what to work on next so I'm thinking I should go back to the sql parsing and work my way towards engaging the engine.
 
 # # Longer Term TODO
 This is stuff that I should get to but aren't vital to getting to a minimal viable product.
