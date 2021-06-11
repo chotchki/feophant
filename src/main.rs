@@ -18,7 +18,8 @@ mod codec;
 use codec::{NetworkFrame, PgCodec};
 mod constants;
 mod engine;
-use engine::io::IOManager;
+use engine::io::{IOManager, RowManager};
+use engine::transactions::TransactionManager;
 mod processor;
 use processor::ClientProcessor;
 
@@ -34,8 +35,10 @@ async fn main() {
 
     info!("Welcome to the Rusty Elephant!");
 
-    //Start the I/O system first
-    let page_manager = Arc::new(IOManager::new());
+    //Start the services first
+    let io_manager = IOManager::new();
+    let row_manager = Arc::new(RowManager::new(io_manager));
+    let transaction_manager = Arc::new(TransactionManager::new());
 
     //Bind to a fixed port
     let port: u32 = 50000;
@@ -50,12 +53,13 @@ async fn main() {
 
         info!("Got a connection from {}", client_addr);
 
-        let pm = page_manager.clone();
+        let rm = row_manager.clone();
+        let tm = transaction_manager.clone();
         tokio::spawn(async move {
             let codec = PgCodec {};
             let (mut sink, mut input) = Framed::new(stream, codec).split();
 
-            let process = ClientProcessor::new(pm);
+            let process = ClientProcessor::new(rm, tm);
             while let Some(Ok(event)) = input.next().await {
                 let responses: Vec<NetworkFrame> = match process.process(event) {
                     Ok(responses) => responses,

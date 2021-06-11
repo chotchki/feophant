@@ -21,7 +21,7 @@ pub struct RowManager {
 }
 
 impl RowManager {
-    fn new(io_manager: IOManager) -> RowManager {
+    pub fn new(io_manager: IOManager) -> RowManager {
         RowManager { io_manager }
     }
 

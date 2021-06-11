@@ -2,19 +2,27 @@ use bytes::Bytes;
 use std::sync::Arc;
 use thiserror::Error;
 
-use super::super::engine::io::IOManager;
+use super::super::engine::io::RowManager;
+use super::super::engine::transactions::TransactionManager;
 use super::ssl_and_gssapi_parser;
 use super::startup_parser;
 use crate::codec::{authentication_ok, error_response, ready_for_query, NetworkFrame};
 use crate::constants::{PgErrorCodes, PgErrorLevels};
 
 pub struct ClientProcessor {
-    page_manager: Arc<IOManager>,
+    row_manager: Arc<RowManager>,
+    transaction_manager: Arc<TransactionManager>,
 }
 
 impl ClientProcessor {
-    pub fn new(page_manager: Arc<IOManager>) -> ClientProcessor {
-        ClientProcessor { page_manager }
+    pub fn new(
+        row_manager: Arc<RowManager>,
+        transaction_manager: Arc<TransactionManager>,
+    ) -> ClientProcessor {
+        ClientProcessor {
+            row_manager,
+            transaction_manager,
+        }
     }
 
     pub fn process(&self, frame: NetworkFrame) -> Result<Vec<NetworkFrame>, ClientProcessorError> {
