@@ -75,6 +75,10 @@ impl PageData {
         Ok(())
     }
 
+    pub fn get_row(&self, count: UInt12) -> Option<&RowData> {
+        self.rows.get(count.to_usize())
+    }
+
     pub fn get_stream(&self) -> impl Stream<Item = RowData> {
         let rows_clone = self.rows.clone();
         stream! {

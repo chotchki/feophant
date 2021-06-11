@@ -69,94 +69,100 @@ impl RowManager {
         }
     }
 
-    //Note this is an insert new row, delete old row operation
-    pub async fn update_row(
-        &mut self,
-        current_tran_id: TransactionId,
-        table: Arc<Table>,
-        user_data: Vec<Option<BuiltinSqlTypes>>,
-    ) -> Result<(), RowManagerError> {
-        //Serialize with a dummy pointer so we can evaluate space needed
-        let row = RowData::new(
-            table.clone(),
-            current_tran_id,
-            None,
-            ItemPointer::new(0, UInt12::new(0).unwrap()),
-            user_data,
-        )?;
-        let row_len = row.serialize().len();
-
-        let mut page_num = 0;
-        loop {
-            let page_bytes = self.io_manager.get_page(table.clone(), page_num).await;
-            match page_bytes {
-                Some(p) => {
-                    let mut page = PageData::parse(table.clone(), page_num, p)?;
-                    if page.can_fit(row_len) {
-                        page.insert(row)?;
-                        let new_page_bytes = page.serialize();
-                        self.io_manager
-                            .update_page(table, new_page_bytes, page_num)
-                            .await?;
-                        return Ok(());
-                    } else {
-                        page_num += 1;
-                        continue;
-                    }
-                }
-                None => {
-                    let mut new_page = PageData::new(table.clone(), page_num);
-                    new_page.insert(row)?; //TODO Will NOT handle overly large rows
-                    self.io_manager.add_page(table, new_page.serialize()).await;
-                    return Ok(());
-                }
-            }
-        }
-    }
-
     //Note this is a logical delete
     pub async fn delete_row(
         &mut self,
         current_tran_id: TransactionId,
         table: Arc<Table>,
-        user_data: Vec<Option<BuiltinSqlTypes>>,
+        row_pointer: ItemPointer,
     ) -> Result<(), RowManagerError> {
-        //Serialize with a dummy pointer so we can evaluate space needed
-        let row = RowData::new(
+        let (mut page, mut row) = self.get(table.clone(), row_pointer).await?;
+
+        if row.max.is_some() {
+            return Err(RowManagerError::AlreadyDeleted(
+                row_pointer.count,
+                row.max.unwrap(),
+            ));
+        }
+
+        row.max = Some(current_tran_id);
+
+        page.update(row, row_pointer.count)?;
+
+        self.io_manager
+            .update_page(table, page.serialize(), row_pointer.page)
+            .await?;
+        Ok(())
+    }
+
+    //Note this is an insert new row, delete old row operation
+    pub async fn update_row(
+        &mut self,
+        current_tran_id: TransactionId,
+        table: Arc<Table>,
+        row_pointer: ItemPointer,
+        new_user_data: Vec<Option<BuiltinSqlTypes>>,
+    ) -> Result<(), RowManagerError> {
+        //First get the current row so we have it for the update/delete
+        let (mut old_page, mut old_row) = self.get(table.clone(), row_pointer).await?;
+
+        if old_row.max.is_some() {
+            return Err(RowManagerError::AlreadyDeleted(
+                row_pointer.count,
+                old_row.max.unwrap(),
+            ));
+        }
+
+        //Serialize with a dummy pointer so we can evaluate space needed for the new row
+        let new_row = RowData::new(
             table.clone(),
             current_tran_id,
             None,
             ItemPointer::new(0, UInt12::new(0).unwrap()),
-            user_data,
+            new_user_data.clone(),
         )?;
-        let row_len = row.serialize().len();
+        let new_row_len = new_row.serialize().len();
 
-        let mut page_num = 0;
-        loop {
-            let page_bytes = self.io_manager.get_page(table.clone(), page_num).await;
-            match page_bytes {
-                Some(p) => {
-                    let mut page = PageData::parse(table.clone(), page_num, p)?;
-                    if page.can_fit(row_len) {
-                        page.insert(row)?;
-                        let new_page_bytes = page.serialize();
-                        self.io_manager
-                            .update_page(table, new_page_bytes, page_num)
-                            .await?;
-                        return Ok(());
-                    } else {
-                        page_num += 1;
-                        continue;
-                    }
-                }
-                None => {
-                    let mut new_page = PageData::new(table.clone(), page_num);
-                    new_page.insert(row)?; //TODO Will NOT handle overly large rows
-                    self.io_manager.add_page(table, new_page.serialize()).await;
-                    return Ok(());
-                }
-            }
+        //Prefer using the old page if possible
+        let new_row_pointer;
+        if old_page.can_fit(new_row_len) {
+            new_row_pointer = old_page.insert(new_row)?;
+        } else {
+            new_row_pointer = self
+                .insert_row(current_tran_id, table.clone(), new_user_data)
+                .await?;
         }
+
+        old_row.max = Some(current_tran_id);
+        old_row.item_pointer = new_row_pointer;
+
+        old_page.update(old_row, row_pointer.count)?;
+
+        self.io_manager
+            .update_page(table, old_page.serialize(), row_pointer.page)
+            .await?;
+
+        return Ok(());
+    }
+
+    pub async fn get(
+        &self,
+        table: Arc<Table>,
+        row_pointer: ItemPointer,
+    ) -> Result<(PageData, RowData), RowManagerError> {
+        let page_bytes = self
+            .io_manager
+            .get_page(table.clone(), row_pointer.page)
+            .await
+            .ok_or_else(|| RowManagerError::NonExistentPage(row_pointer.page))?;
+        let page = PageData::parse(table.clone(), row_pointer.page, page_bytes)?;
+
+        let row = page
+            .get_row(row_pointer.count)
+            .ok_or_else(|| RowManagerError::NonExistentRow(row_pointer.count, row_pointer.page))?
+            .clone();
+
+        Ok((page, row))
     }
 
     pub fn get_stream(
@@ -185,6 +191,12 @@ pub enum RowManagerError {
     IOManagerError(#[from] IOManagerError),
     #[error("Row Data Error")]
     RowDataError(#[from] RowDataError),
+    #[error("Page {0} does not exist")]
+    NonExistentPage(usize),
+    #[error("Row {0} in Page {1} does not exist")]
+    NonExistentRow(UInt12, usize),
+    #[error("Row {0} already deleted in {1}")]
+    AlreadyDeleted(UInt12, TransactionId),
 }
 
 #[cfg(test)]
@@ -227,9 +239,9 @@ mod tests {
         ))
     }
 
-    fn get_row() -> Vec<Option<BuiltinSqlTypes>> {
+    fn get_row(input: String) -> Vec<Option<BuiltinSqlTypes>> {
         vec![
-                Some(BuiltinSqlTypes::Text("this is a test".to_string())),
+                Some(BuiltinSqlTypes::Text(input)),
                 None,
                 Some(BuiltinSqlTypes::Text("blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah".to_string())),
             ]
@@ -244,7 +256,9 @@ mod tests {
         let tran_id = TransactionId::new(1);
 
         for _ in 0..500 {
-            assert!(aw!(rm.insert_row(tran_id, table.clone(), get_row())).is_ok());
+            assert!(
+                aw!(rm.insert_row(tran_id, table.clone(), get_row("test".to_string()))).is_ok()
+            );
         }
 
         //Now let's make sure they're really in the table
@@ -252,7 +266,32 @@ mod tests {
         let result_rows: Vec<RowData> =
             aw!(rm.get_stream(table.clone()).map(Result::unwrap).collect());
 
-        let sample_row = get_row();
+        let sample_row = get_row("test".to_string());
+        for row in result_rows {
+            assert_eq!(row.user_data, sample_row);
+        }
+    }
+
+    #[test]
+    fn test_row_manager_roundtrip() {
+        let table = get_table();
+        let pm = IOManager::new();
+        let mut rm = RowManager::new(pm);
+
+        let tran_id = TransactionId::new(1);
+
+        for _ in 0..500 {
+            assert!(
+                aw!(rm.insert_row(tran_id, table.clone(), get_row("test".to_string()))).is_ok()
+            );
+        }
+
+        //Now let's make sure they're really in the table
+        pin_mut!(rm);
+        let result_rows: Vec<RowData> =
+            aw!(rm.get_stream(table.clone()).map(Result::unwrap).collect());
+
+        let sample_row = get_row("test".to_string());
         for row in result_rows {
             assert_eq!(row.user_data, sample_row);
         }

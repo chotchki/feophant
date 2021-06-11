@@ -18,7 +18,7 @@ use thiserror::Error;
 pub struct RowData {
     table: Arc<Table>,
     min: TransactionId,
-    max: Option<TransactionId>,
+    pub max: Option<TransactionId>,
     pub item_pointer: ItemPointer,
     pub user_data: Vec<Option<BuiltinSqlTypes>>,
 }
