@@ -38,7 +38,7 @@ async fn main() {
     //Start the services first
     let io_manager = IOManager::new();
     let row_manager = Arc::new(RowManager::new(io_manager));
-    let transaction_manager = Arc::new(TransactionManager::new());
+    let transaction_manager = TransactionManager::new();
 
     //Bind to a fixed port
     let port: u32 = 50000;
@@ -59,9 +59,9 @@ async fn main() {
             let codec = PgCodec {};
             let (mut sink, mut input) = Framed::new(stream, codec).split();
 
-            let process = ClientProcessor::new(rm, tm);
+            let mut process = ClientProcessor::new(rm, tm);
             while let Some(Ok(event)) = input.next().await {
-                let responses: Vec<NetworkFrame> = match process.process(event) {
+                let responses: Vec<NetworkFrame> = match process.process(event).await {
                     Ok(responses) => responses,
                     Err(e) => {
                         warn!("Had a processing error {}", e);

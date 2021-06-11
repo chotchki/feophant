@@ -11,13 +11,13 @@ use crate::constants::{PgErrorCodes, PgErrorLevels};
 
 pub struct ClientProcessor {
     row_manager: Arc<RowManager>,
-    transaction_manager: Arc<TransactionManager>,
+    transaction_manager: TransactionManager,
 }
 
 impl ClientProcessor {
     pub fn new(
         row_manager: Arc<RowManager>,
-        transaction_manager: Arc<TransactionManager>,
+        transaction_manager: TransactionManager,
     ) -> ClientProcessor {
         ClientProcessor {
             row_manager,
@@ -25,7 +25,10 @@ impl ClientProcessor {
         }
     }
 
-    pub fn process(&self, frame: NetworkFrame) -> Result<Vec<NetworkFrame>, ClientProcessorError> {
+    pub async fn process(
+        &mut self,
+        frame: NetworkFrame,
+    ) -> Result<Vec<NetworkFrame>, ClientProcessorError> {
         let payload_buff: &[u8] = &frame.payload;
 
         //Startup stuff
@@ -55,6 +58,7 @@ impl ClientProcessor {
             //first query is "create table foo(bar u32);"
             //Parse to the following commands
             //Get XID
+            let txid = self.transaction_manager.start_trans().await;
             //Call to TransGen
             //Does table already exist? -> Error
             //Scan pg_class for table name
