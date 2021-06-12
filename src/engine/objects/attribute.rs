@@ -12,6 +12,14 @@ pub struct Attribute {
 }
 
 impl Attribute {
+    pub fn new(pg_class_id: Uuid, name: String, sql_type: DeserializeTypes) -> Attribute {
+        Attribute {
+            id: Uuid::new_v4(),
+            pg_class_id,
+            name,
+            sql_type,
+        }
+    }
     pub fn new_existing(
         id: Uuid,
         pg_class_id: Uuid,
@@ -20,15 +28,6 @@ impl Attribute {
     ) -> Attribute {
         Attribute {
             id,
-            pg_class_id,
-            name,
-            sql_type,
-        }
-    }
-
-    pub fn new(pg_class_id: Uuid, name: String, sql_type: DeserializeTypes) -> Attribute {
-        Attribute {
-            id: Uuid::new_v4(),
             pg_class_id,
             name,
             sql_type,

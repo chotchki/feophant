@@ -1,6 +1,13 @@
 use bytes::{Buf, BufMut, Bytes, BytesMut};
+use nom::branch::alt;
+use nom::bytes::complete::{tag_no_case, take_while1};
+use nom::character::complete::{alphanumeric1, char, multispace0, multispace1};
+use nom::combinator::map_res;
+use nom::error::{ErrorKind, ParseError};
+use nom::IResult;
 use std::fmt;
 use std::mem;
+use std::str::FromStr;
 use thiserror::Error;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -117,6 +124,17 @@ impl BuiltinSqlTypes {
     }
 }
 
+impl FromStr for DeserializeTypes {
+    type Err = SqlTypeError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "text" => Ok(DeserializeTypes::Text),
+            "uuid" => Ok(DeserializeTypes::Uuid),
+            _ => Err(SqlTypeError::InvalidType(s.to_string())),
+        }
+    }
+}
+
 impl fmt::Display for BuiltinSqlTypes {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -155,6 +173,8 @@ pub enum SqlTypeError {
     InvalidStringLength(usize, usize),
     #[error("Invalid utf8")]
     InvalidUtf8(#[from] std::string::FromUtf8Error),
+    #[error("Invalid type {0}")]
+    InvalidType(String),
 }
 
 #[cfg(test)]
