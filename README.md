@@ -12,20 +12,21 @@ Lauch a postgres client application to test
 `./pgbench -h 127.0.0.1 -p 50000`
 
 
-# What works
-You can currently start the server, connect to it and have it throw tons of errors. I'm to the point now I need to start supporting saving data.
+# What works user facing
+You can currently start the server, connect to it and have it throw tons of errors. To support more there is a ton of infrastructure required to wire up next steps.
 
-# Next TODO
-Path to 1.0: Need to support the concept of a table that can be read and written to, in memory.
-    sql statement: create table foo;
-    sql statement: drop table foo;
-
-Path to 0.4: So I can insert/update/delete rows and generate/track single transactions. However they aren't integrated or persisted. I also don't filter or ignore deleted rows. I also parse each row completely on page load so scanning will be slow.
+# Current TODO List
+**Path to 0.4:** 
+So I can insert/update/delete rows and generate/track single transactions. However they aren't integrated or persisted. I also don't filter or ignore deleted rows. I also parse each row completely on page load so scanning will be slow.
 
 I don't have a good idea of what to work on next so I'm thinking I should go back to the sql parsing and work my way towards engaging the engine.
 
 SQL parser for inserts/create table has been made. Now I need to figure out the pipeline
 
+**Path to 1.0:** *subject to change* 
+Need to support the concept of a table that can be read and written to, in memory.
+    sql statement: create table foo;
+    sql statement: drop table foo;
 
 # # Longer Term TODO
 This is stuff that I should get to but aren't vital to getting to a minimal viable product.
