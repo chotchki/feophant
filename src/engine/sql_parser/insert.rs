@@ -7,7 +7,7 @@ use super::common::{
 };
 use nom::bytes::complete::tag_no_case;
 use nom::character::complete::alphanumeric1;
-use nom::combinator::{map_res, opt};
+use nom::combinator::opt;
 use nom::multi::separated_list0;
 use nom::IResult;
 

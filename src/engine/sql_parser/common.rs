@@ -1,8 +1,6 @@
 use nom::branch::alt;
-use nom::bytes::complete::{tag, take, take_until, take_while};
+use nom::bytes::complete::{tag, take_until};
 use nom::character::complete::{alphanumeric1, digit1, multispace0, multispace1};
-use nom::character::is_digit;
-use nom::combinator::map_res;
 use nom::IResult;
 
 pub(super) fn parse_sql_identifier(input: &str) -> IResult<&str, &str> {

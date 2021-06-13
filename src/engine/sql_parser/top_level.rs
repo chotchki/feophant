@@ -1,6 +1,6 @@
 //! Top Level of the sql parsing engine
 use super::create::{match_create, parse_create_table, RawCreateTableCommand};
-use super::insert::RawInsertCommand;
+use super::insert::{parse_insert, RawInsertCommand};
 use nom::combinator::complete;
 use nom::IResult;
 use thiserror::Error;
@@ -21,10 +21,15 @@ fn nom_parse(input: &str) -> IResult<&str, SqlCommand> {
     if match_create(input).is_ok() {
         let (input, _) = match_create(input)?;
 
-        let result = parse_create_table(input);
-        if result.is_ok() {
-            return Ok((input, SqlCommand::CreateTable(result.unwrap().1)));
+        match parse_create_table(input) {
+            Ok((i, cmd)) => return Ok((i, SqlCommand::CreateTable(cmd))),
+            Err(_) => {}
         }
+    }
+
+    match parse_insert(input) {
+        Ok((i, cmd)) => return Ok((i, SqlCommand::Insert(cmd))),
+        Err(_) => {}
     }
 
     //Fail since we have no idea what we got

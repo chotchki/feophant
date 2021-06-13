@@ -3,6 +3,7 @@ use std::sync::Arc;
 use thiserror::Error;
 
 use super::super::engine::io::RowManager;
+use super::super::engine::sql_parser::{parse, SqlParseError};
 use super::super::engine::transactions::TransactionManager;
 use super::ssl_and_gssapi_parser;
 use super::startup_parser;
@@ -58,10 +59,17 @@ impl ClientProcessor {
             //Convert to utf8
             let query_str = String::from_utf8(payload_buff.to_vec())?;
 
+            //Parse it
+            let cmd = parse(&query_str)?;
+
+            let txid = self.transaction_manager.start_trans().await;
+
+            //Re-write it
+
+            //---- Old ideas
             //first query is "create table foo(bar u32);"
             //Parse to the following commands
             //Get XID
-            let txid = self.transaction_manager.start_trans().await;
             //Call to TransGen
             //Does table already exist? -> Error
             //Scan pg_class for table name
@@ -100,4 +108,6 @@ pub enum ClientProcessorError {
     BadStartup(),
     #[error(transparent)]
     QueryNotUtf8(#[from] std::string::FromUtf8Error),
+    #[error(transparent)]
+    ParseError(#[from] SqlParseError),
 }
