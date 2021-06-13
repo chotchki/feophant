@@ -1,10 +1,4 @@
 use bytes::{Buf, BufMut, Bytes, BytesMut};
-use nom::branch::alt;
-use nom::bytes::complete::{tag_no_case, take_while1};
-use nom::character::complete::{alphanumeric1, char, multispace0, multispace1};
-use nom::combinator::map_res;
-use nom::error::{ErrorKind, ParseError};
-use nom::IResult;
 use std::fmt;
 use std::mem;
 use std::str::FromStr;
