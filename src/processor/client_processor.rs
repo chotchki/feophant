@@ -64,7 +64,7 @@ impl ClientProcessor {
 
             let txid = self.transaction_manager.start_trans().await;
 
-            //Re-write it
+            //Re-write it if needed
 
             //---- Old ideas
             //first query is "create table foo(bar u32);"
