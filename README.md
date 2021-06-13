@@ -24,7 +24,8 @@ Path to 0.4: So I can insert/update/delete rows and generate/track single transa
 
 I don't have a good idea of what to work on next so I'm thinking I should go back to the sql parsing and work my way towards engaging the engine.
 
-I need to figure out inserts before I do create table since under the hood they are the same thing.
+SQL parser for inserts/create table has been made. Now I need to figure out the pipeline
+
 
 # # Longer Term TODO
 This is stuff that I should get to but aren't vital to getting to a minimal viable product.
