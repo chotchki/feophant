@@ -55,6 +55,9 @@ impl ClientProcessor {
         if frame.message_type == b'Q' {
             debug!("Got query {:?}", payload_buff);
 
+            //Convert to utf8
+            let query_str = String::from_utf8(payload_buff.to_vec())?;
+
             //first query is "create table foo(bar u32);"
             //Parse to the following commands
             //Get XID
@@ -95,6 +98,6 @@ impl ClientProcessor {
 pub enum ClientProcessorError {
     #[error("Malformed Startup Packet")]
     BadStartup(),
-    //#[error("Unknown Message")]
-    //Unknown(),
+    #[error(transparent)]
+    QueryNotUtf8(#[from] std::string::FromUtf8Error),
 }

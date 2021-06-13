@@ -185,11 +185,11 @@ impl RowManager {
 
 #[derive(Error, Debug)]
 pub enum RowManagerError {
-    #[error("Page Data Parse Error")]
+    #[error(transparent)]
     PageDataParseError(#[from] PageDataError),
-    #[error("IO Manager Error")]
+    #[error(transparent)]
     IOManagerError(#[from] IOManagerError),
-    #[error("Row Data Error")]
+    #[error(transparent)]
     RowDataError(#[from] RowDataError),
     #[error("Page {0} does not exist")]
     NonExistentPage(usize),

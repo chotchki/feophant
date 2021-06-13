@@ -48,6 +48,6 @@ impl ItemPointer {
 pub enum ItemPointerError {
     #[error("Not enough space to parse usize need {0} got {1}")]
     BufferTooShort(usize, usize),
-    #[error("U12ParseError")]
+    #[error(transparent)]
     U12ParseError(#[from] UInt12Error),
 }

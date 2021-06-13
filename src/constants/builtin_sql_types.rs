@@ -171,7 +171,7 @@ pub enum SqlTypeError {
     BufferTooShort(),
     #[error("Length encoded {0}, length found {1}")]
     InvalidStringLength(usize, usize),
-    #[error("Invalid utf8")]
+    #[error(transparent)]
     InvalidUtf8(#[from] std::string::FromUtf8Error),
     #[error("Invalid type {0}")]
     InvalidType(String),

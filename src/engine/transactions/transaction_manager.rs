@@ -107,7 +107,7 @@ impl TransactionManager {
 
 #[derive(Error, Debug)]
 pub enum TransactionManagerError {
-    #[error("Transaction Id Error")]
+    #[error(transparent)]
     TransactionIdError(#[from] TransactionIdError),
     #[error("Transaction Id {0} too low compared to {1}")]
     TooOld(TransactionId, TransactionId),

@@ -179,7 +179,7 @@ pub enum RowDataError {
     MissingNullMaskData(usize, usize),
     #[error("Unable to parse type {0}")]
     ColumnParseError(#[from] SqlTypeError),
-    #[error("ItemPointerError")]
+    #[error(transparent)]
     ItemPointerError(#[from] ItemPointerError),
 }
 

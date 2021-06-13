@@ -150,13 +150,13 @@ impl PageData {
 
 #[derive(Debug, Error)]
 pub enum PageDataError {
-    #[error("Page Header Parse Error")]
+    #[error(transparent)]
     PageHeaderParseError(#[from] PageHeaderError),
-    #[error("Item Id Data Parse Error")]
+    #[error(transparent)]
     ItemIdDataParseError(#[from] ItemIdDataError),
-    #[error("Row Data Parse Error")]
+    #[error(transparent)]
     RowDataParseError(#[from] RowDataError),
-    #[error("UInt12 Conversion Error")]
+    #[error(transparent)]
     UInt12Error(#[from] UInt12Error),
     #[error("Row {0} does not exist to update we have {1}:{2} rows")]
     IndexOutofBounds(usize, usize, usize),
