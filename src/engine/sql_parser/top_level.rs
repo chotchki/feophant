@@ -5,30 +5,30 @@ use nom::combinator::complete;
 use nom::IResult;
 use thiserror::Error;
 
-pub enum SqlCommand {
+pub enum RawSqlCommand {
     CreateTable(RawCreateTableCommand),
     Insert(RawInsertCommand),
 }
 
-pub fn parse(input: &str) -> Result<SqlCommand, SqlParseError> {
+pub fn parse(input: &str) -> Result<RawSqlCommand, SqlParseError> {
     match complete(nom_parse)(input) {
         Ok((_, cmd)) => Ok(cmd),
         Err(_) => Err(SqlParseError::ParseError()),
     }
 }
 
-fn nom_parse(input: &str) -> IResult<&str, SqlCommand> {
+fn nom_parse(input: &str) -> IResult<&str, RawSqlCommand> {
     if match_create(input).is_ok() {
         let (input, _) = match_create(input)?;
 
         match parse_create_table(input) {
-            Ok((i, cmd)) => return Ok((i, SqlCommand::CreateTable(cmd))),
+            Ok((i, cmd)) => return Ok((i, RawSqlCommand::CreateTable(cmd))),
             Err(_) => {}
         }
     }
 
     match parse_insert(input) {
-        Ok((i, cmd)) => return Ok((i, SqlCommand::Insert(cmd))),
+        Ok((i, cmd)) => return Ok((i, RawSqlCommand::Insert(cmd))),
         Err(_) => {}
     }
 

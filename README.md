@@ -21,7 +21,16 @@ So I can insert/update/delete rows and generate/track single transactions. Howev
 
 I don't have a good idea of what to work on next so I'm thinking I should go back to the sql parsing and work my way towards engaging the engine.
 
-SQL parser for inserts/create table has been made. Now I need to figure out the pipeline
+A SQL parser for inserts/create table has been made. Now I need to figure out the pipeline for dealing with it. Fundamentally even DDLs are just insert/update/deletes. I think I should build the pipeline around that until it doesn't work.
+
+Simple Query (this will support selects too):
+query string -> RawSqlCommand -> RewriteTo(Vec<IUD>) -> Begin Transaction -> Execute Vec<IUD> -> End Transaction
+
+I am unsure how much rewriting I should do.
+
+I may have to implement unique indexes soon.
+
+Just took a trip down the rabbit hole of the postgres parser/analyzer/rule engine, wow that's a lot to understand. I'm probably going to attempt to understand the simplest case possible first.
 
 **Path to 1.0:** *subject to change* 
 Need to support the concept of a table that can be read and written to, in memory.
