@@ -11,36 +11,38 @@ Launch the server
 Lauch a postgres client application to test
 `./pgbench -h 127.0.0.1 -p 50000`
 
-
 # What works user facing
 You can currently start the server, connect to it and have it throw tons of errors. To support more there is a ton of infrastructure required to wire up next steps.
 
 # Current TODO List - Subject to constant change!
 **Path to 0.4:** 
-So I can insert/update/delete rows and generate/track single transactions. However they aren't integrated or persisted. I also don't filter or ignore deleted rows. I also parse each row completely on page load so scanning will be slow.
+Implement insert to a system table such as pg_class.
 
-I don't have a good idea of what to work on next so I'm thinking I should go back to the sql parsing and work my way towards engaging the engine.
-
-A SQL parser for inserts/create table has been made. Now I need to figure out the pipeline for dealing with it. Fundamentally even DDLs are just insert/update/deletes. I think I should build the pipeline around that until it doesn't work.
-
-Simple Query (this will support selects too):
-query string -> RawSqlCommand -> RewriteTo(Vec<IUD>) -> Begin Transaction -> Execute Vec<IUD> -> End Transaction
-
-I am unsure how much rewriting I should do.
-
-I may have to implement unique indexes soon.
-
-Just took a trip down the rabbit hole of the postgres parser/analyzer/rule engine, wow that's a lot to understand. I'm probably going to attempt to understand the simplest case possible first.
-
-Based on more reading, selects are going to require a true tree structure to be generated. Need to figure out how much I want to do now vs later.
+Use a similar query -> plan -> execute structure to postgres. May need to adapt the parser to support better.
 
 **Path to 0.5**
-Did some reading on how the buffer manager works and my implementation seems to be firmly in the right direction. For the 0.5 release I plan to implement on disk writes.
+Implement nullable columns, the underlying data structures already support it. Would move this up except that I don't have an easy way to test it.
 
-**Path to 1.0:** *subject to change* 
-Need to support the concept of a table that can be read and written to, in memory.
-    sql statement: create table foo;
-    sql statement: drop table foo;
+**Path to 0.6**
+Implement unique indexes. Inserts should fail on violations.
+
+**Path to 0.7**
+Implement single non joined select. No wildcards, aliases or other items.
+
+**Path to 0.8**
+At this point I have enough infrastructure to start caring about transactions. Implement filtering of tuples based on visibility rules.
+
+**Path to 0.9**
+Implement delete for tuples
+
+**Path to 0.10:**
+pgbench setup can run successfully, in memory
+
+**Path to 0.11**
+Did some reading on how the buffer manager works and my implementation seems to be firmly in the right direction. Take that knowledge and implement persistence
+
+**1.0 Release Criteria**
+pgbench can run successfully
 
 # # Longer Term TODO
 This is stuff that I should get to but aren't vital to getting to a minimal viable product.
