@@ -15,7 +15,7 @@ Lauch a postgres client application to test
 # What works user facing
 You can currently start the server, connect to it and have it throw tons of errors. To support more there is a ton of infrastructure required to wire up next steps.
 
-# Current TODO List
+# Current TODO List - Subject to constant change!
 **Path to 0.4:** 
 So I can insert/update/delete rows and generate/track single transactions. However they aren't integrated or persisted. I also don't filter or ignore deleted rows. I also parse each row completely on page load so scanning will be slow.
 
@@ -31,6 +31,11 @@ I am unsure how much rewriting I should do.
 I may have to implement unique indexes soon.
 
 Just took a trip down the rabbit hole of the postgres parser/analyzer/rule engine, wow that's a lot to understand. I'm probably going to attempt to understand the simplest case possible first.
+
+Based on more reading, selects are going to require a true tree structure to be generated. Need to figure out how much I want to do now vs later.
+
+**Path to 0.5**
+Did some reading on how the buffer manager works and my implementation seems to be firmly in the right direction. For the 0.5 release I plan to implement on disk writes.
 
 **Path to 1.0:** *subject to change* 
 Need to support the concept of a table that can be read and written to, in memory.
