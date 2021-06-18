@@ -1,11 +1,10 @@
 use nom::branch::alt;
-use nom::bytes::complete::{tag, take_until};
-use nom::character::complete::{alphanumeric1, digit1, multispace0, multispace1};
+use nom::bytes::complete::{is_a, tag, take_until};
+use nom::character::complete::{digit1, multispace0, multispace1};
 use nom::IResult;
 
 pub(super) fn parse_sql_identifier(input: &str) -> IResult<&str, &str> {
-    alphanumeric1(input)
-    //map_res(alphanumeric1, |s: &str| String::from_utf8(s.to_vec()))(input)
+    is_a("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.")(input)
 }
 
 // This parser is designed to capture valid postgres expressions and values
@@ -39,7 +38,6 @@ fn parse_sql_integer(input: &str) -> IResult<&str, &str> {
 //Will consume all input so be careful!
 pub(super) fn convert_to_string(input: &str) -> IResult<&str, String> {
     Ok(("", input.to_string()))
-    //map_res(take(input.len()), |s: &str| String::from_utf8(s.to_vec()))(input)
 }
 
 pub(super) fn maybe_take_whitespace(input: &str) -> IResult<&str, &str> {
