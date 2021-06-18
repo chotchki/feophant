@@ -1,34 +1,30 @@
 //! Top Level of the sql parsing engine
-use super::create::{match_create, parse_create_table, RawCreateTableCommand};
-use super::insert::{parse_insert, RawInsertCommand};
+use super::super::objects::{ParseTree, RawCreateTableCommand, RawInsertCommand};
+use super::create::{match_create, parse_create_table};
+use super::insert::parse_insert;
 use nom::combinator::complete;
 use nom::IResult;
 use thiserror::Error;
 
-pub enum RawSqlCommand {
-    CreateTable(RawCreateTableCommand),
-    Insert(RawInsertCommand),
-}
-
-pub fn parse(input: &str) -> Result<RawSqlCommand, SqlParseError> {
+pub fn parse(input: &str) -> Result<ParseTree, SqlParseError> {
     match complete(nom_parse)(input) {
         Ok((_, cmd)) => Ok(cmd),
         Err(_) => Err(SqlParseError::ParseError()),
     }
 }
 
-fn nom_parse(input: &str) -> IResult<&str, RawSqlCommand> {
+fn nom_parse(input: &str) -> IResult<&str, ParseTree> {
     if match_create(input).is_ok() {
         let (input, _) = match_create(input)?;
 
         match parse_create_table(input) {
-            Ok((i, cmd)) => return Ok((i, RawSqlCommand::CreateTable(cmd))),
+            Ok((i, cmd)) => return Ok((i, ParseTree::CreateTable(cmd))),
             Err(_) => {}
         }
     }
 
     match parse_insert(input) {
-        Ok((i, cmd)) => return Ok((i, RawSqlCommand::Insert(cmd))),
+        Ok((i, cmd)) => return Ok((i, ParseTree::Insert(cmd))),
         Err(_) => {}
     }
 

@@ -1,6 +1,7 @@
 //! Format here: https://www.postgresql.org/docs/current/sql-insert.html
 //! This is only implementing a basic insert, fancy will come later
 
+use super::super::objects::RawInsertCommand;
 use super::common::{
     match_close_paren, match_comma, match_open_paren, maybe_take_whitespace, parse_expression,
     parse_sql_identifier, take_whitespace,
@@ -10,14 +11,6 @@ use nom::character::complete::alphanumeric1;
 use nom::combinator::opt;
 use nom::multi::separated_list0;
 use nom::IResult;
-
-//Note, no validation will be done yet, a separate access/rewrite step should be done
-#[derive(Clone, Debug, PartialEq)]
-pub struct RawInsertCommand {
-    pub table_name: String,
-    pub provided_columns: Option<Vec<String>>,
-    pub provided_values: Vec<String>,
-}
 
 pub(super) fn parse_insert(input: &str) -> IResult<&str, RawInsertCommand> {
     let (input, _) = match_insert_into(input)?;

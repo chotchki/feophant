@@ -1,6 +1,7 @@
 //! Format here: https://www.postgresql.org/docs/current/sql-createtable.html
 //! This is only implementing a basic create table, fancy will come later
 
+use super::super::super::objects::RawCreateTableCommand;
 use super::super::common::{
     match_close_paren, match_comma, match_open_paren, maybe_take_whitespace, parse_sql_identifier,
     take_whitespace,
@@ -8,13 +9,6 @@ use super::super::common::{
 use nom::bytes::complete::tag_no_case;
 use nom::multi::separated_list1;
 use nom::IResult;
-
-//Note, no validation will be done yet, a separate access/rewrite step should be done
-#[derive(Clone)]
-pub struct RawCreateTableCommand {
-    pub table_name: String,
-    pub provided_columns: Vec<(String, String)>,
-}
 
 pub fn parse_create_table(input: &str) -> IResult<&str, RawCreateTableCommand> {
     let (input, _) = match_table(input)?;
