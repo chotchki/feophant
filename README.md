@@ -18,7 +18,18 @@ You can currently start the server, connect to it and have it throw tons of erro
 **Path to 0.4:** 
 Implement insert to a system table such as pg_class.
 
-Use a similar query -> plan -> execute structure to postgres. May need to adapt the parser to support better.
+* Renamed files and folders in the engine to correspond to how the postgres stages work.
+* I still like the speciality raw types I made in ParseTree but as I understand more I might get rid of it.
+
+Sample explain plan for insert, explain doesn't work for create table.
+```
+postgres=# explain insert into foo values ('temp');
+                    QUERY PLAN                    
+--------------------------------------------------
+ Insert on foo  (cost=0.00..0.01 rows=1 width=32)
+   ->  Result  (cost=0.00..0.01 rows=1 width=32)
+(2 rows)
+```
 
 **Path to 0.5**
 Implement nullable columns, the underlying data structures already support it. Would move this up except that I don't have an easy way to test it.
@@ -53,11 +64,13 @@ This is stuff that I should get to but aren't vital to getting to a minimal viab
 # Postgres Divergance
 Its kinda pointless to blindly reproduce what has already been done so I'm making the following changes to the db server design vs Postgres.
 
-* Multi-threaded design based on Tokio instead of Postgres's multi-process design.
+* Rust's memory safety and strong type system.
+* Multi-threaded async design based on Tokio instead of Postgres's multi-process design.
 * * Perk of this is not needing to manage SYSV shared memory. (Postgres largely fixed this but I think its still worth noting).
 * Want to avoid vaccuum for transaction wrap around. Will try 64-bit transaction IDs but might go to 128-bit.
 * * I can avoid the need to freeze Transaction IDs however the hint bits will need scanning to ensure that they are updated.
 * Replacing OIDs with UUIDv4s.
+
 
 ## Rust Notes
 How to setup modules sanely: https://dev.to/stevepryde/intro-to-rust-modules-3g8k
