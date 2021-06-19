@@ -31,6 +31,8 @@ postgres=# explain insert into foo values ('temp');
 (2 rows)
 ```
 
+Pipeline: -(string)> sql_parser -(ParseTree)> analyzer -(QueryTree)> rewriter -(QueryTree)> planner -(PlanTree)> executer -> do stuff
+
 **Path to 0.5**
 Implement nullable columns, the underlying data structures already support it. Would move this up except that I don't have an easy way to test it.
 

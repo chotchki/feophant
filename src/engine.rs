@@ -1,3 +1,4 @@
+pub mod analyzer;
 mod executor;
 pub mod io;
 pub mod objects;
