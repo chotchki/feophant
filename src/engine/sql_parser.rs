@@ -4,7 +4,7 @@ mod common;
 mod create;
 mod insert;
 
-use super::objects::{ParseTree, RawCreateTableCommand, RawInsertCommand};
+use super::objects::ParseTree;
 use create::{match_create, parse_create_table};
 use insert::parse_insert;
 use nom::combinator::complete;
