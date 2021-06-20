@@ -1,12 +1,9 @@
 //! Eventually this will handle reading / writing pages from disk but for now, hashmap + vector!
 //!
 //! Was stupid with the implementation, should have supported an append api only since vector only works that way
-use super::row_formats::{RowData, RowDataError};
 use async_stream::stream;
 use bytes::Bytes;
-use futures::pin_mut;
 use futures::stream::Stream;
-use futures::stream::StreamExt;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::vec::Vec;
