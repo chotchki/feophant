@@ -3,8 +3,11 @@ use std::sync::Arc;
 use thiserror::Error;
 
 use super::super::engine::io::RowManager;
-use super::super::engine::sql_parser::{parse, SqlParseError};
 use super::super::engine::transactions::TransactionManager;
+use super::super::engine::{
+    Analyzer, AnalyzerError, Executor, ExecutorError, Planner, PlannerError, Rewriter,
+    RewriterError, SqlParser, SqlParserError,
+};
 use super::ssl_and_gssapi_parser;
 use super::startup_parser;
 use crate::codec::{authentication_ok, error_response, ready_for_query, NetworkFrame};
@@ -59,8 +62,19 @@ impl ClientProcessor {
             //Convert to utf8
             let query_str = String::from_utf8(payload_buff.to_vec())?;
 
-            //Parse it
-            let cmd = parse(&query_str)?;
+            //Parse it - I need to figure out if I should do statement splitting here
+            let parse_tree = SqlParser::parse(&query_str)?;
+
+            //Analyze it
+            let query_tree = Analyzer::analyze(parse_tree)?;
+
+            //Rewrite it
+            let rewrite_tree = Rewriter::rewrite(query_tree)?;
+
+            //Plan it
+            let planned_stmt = Planner::plan(rewrite_tree)?;
+
+            Executor::execute(planned_stmt)?;
 
             let txid = self.transaction_manager.start_trans().await;
 
@@ -104,10 +118,18 @@ impl ClientProcessor {
 
 #[derive(Error, Debug)]
 pub enum ClientProcessorError {
+    #[error(transparent)]
+    AnalyzerError(#[from] AnalyzerError),
     #[error("Malformed Startup Packet")]
     BadStartup(),
     #[error(transparent)]
+    ExecutorError(#[from] ExecutorError),
+    #[error(transparent)]
     QueryNotUtf8(#[from] std::string::FromUtf8Error),
     #[error(transparent)]
-    ParseError(#[from] SqlParseError),
+    RewriterError(#[from] RewriterError),
+    #[error(transparent)]
+    ParseError(#[from] SqlParserError),
+    #[error(transparent)]
+    PlannerError(#[from] PlannerError),
 }

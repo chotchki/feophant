@@ -5,7 +5,7 @@ use thiserror::Error;
 pub struct Planner {}
 
 impl Planner {
-    pub fn rewrite(query_tree: QueryTree) -> Result<PlannedStatement, PlannerError> {
+    pub fn plan(query_tree: QueryTree) -> Result<PlannedStatement, PlannerError> {
         Err(PlannerError::Unknown())
     }
 }

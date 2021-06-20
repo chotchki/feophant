@@ -1,7 +1,7 @@
 //! Is the result of the parse tree post validation
 //! See here: https://www.postgresql.org/docs/current/querytree.html
 use super::super::super::constants::BuiltinSqlTypes;
-use std::rc::Rc;
+use std::sync::Arc;
 use uuid::Uuid;
 
 //This may end up being a hybrid struct/enum thing
@@ -9,14 +9,14 @@ pub struct QueryTree {
     //the command type
     command_type: CommandType,
     //the range tables
-    range_tables: Vec<Rc<RangeRelation>>,
+    range_tables: Vec<Arc<RangeRelation>>,
     //the result relation - may not be needed
     //the target list
     targets: Vec<TargetEntry>,
     //the qualification - Don't really understand this yet
     qualification: Vec<WhereEntry>,
     //the join tree
-    joins: Vec<(JoinType, Rc<RangeRelation>, Rc<RangeRelation>)>,
+    joins: Vec<(JoinType, Arc<RangeRelation>, Arc<RangeRelation>)>,
     //the others
     sorts: Vec<(SortType, TargetEntry)>,
 }

@@ -11,7 +11,9 @@ pub struct Executor {}
 
 impl Executor {
     //Return type is unknown at the moment
-    pub fn execute(plan_tree: PlannedStatement) {}
+    pub fn execute(plan_tree: PlannedStatement) -> Result<(), ExecutorError> {
+        Err(ExecutorError::Unknown())
+    }
 }
 
 #[derive(Debug, Error)]
