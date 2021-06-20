@@ -4,7 +4,7 @@ use super::super::super::constants::BuiltinSqlTypes;
 use std::sync::Arc;
 use uuid::Uuid;
 
-//This may end up being a hybrid struct/enum thing
+#[derive(Clone, Debug)]
 pub struct QueryTree {
     //the command type
     command_type: CommandType,
@@ -21,6 +21,7 @@ pub struct QueryTree {
     sorts: Vec<(SortType, TargetEntry)>,
 }
 
+#[derive(Clone, Copy, Debug)]
 enum CommandType {
     Select,
     Insert,
@@ -29,12 +30,14 @@ enum CommandType {
     Utility,
 }
 
+#[derive(Clone, Debug)]
 enum RangeRelation {
     Table(RangeRelationTable),
     View(RangeRelationTable),
     SubQuery(Option<QueryTree>),
 }
 
+#[derive(Clone, Debug)]
 struct RangeRelationTable {
     name: String,
     id: Uuid,
@@ -45,13 +48,16 @@ struct RangeRelationTable {
 //constant value, a variable pointing to a column of one of the
 //relations in the range table, a parameter, or an expression tree
 //made of function calls, constants, variables, operators, etc.
+#[derive(Clone, Debug)]
 enum TargetEntry {
     Relation(RangeRelation),
     Parameter(BuiltinSqlTypes),
 }
 
+#[derive(Clone, Debug)]
 enum WhereEntry {}
 
+#[derive(Clone, Copy, Debug)]
 enum JoinType {
     Inner,
     OuterLeft,
@@ -59,6 +65,7 @@ enum JoinType {
     OuterFull,
 }
 
+#[derive(Clone, Copy, Debug)]
 enum SortType {
     Ascending,
     Descending,
