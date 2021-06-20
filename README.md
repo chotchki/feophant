@@ -58,6 +58,12 @@ Did some reading on how the buffer manager works and my implementation seems to 
 
 **1.0 Release Criteria**
 pgbench can run successfully
+Pick a new distinct name, rename everything
+Pick a license
+Setup fuzz testing
+Persist to disk with moderate crash safety
+Be prepared to actually use it
+
 
 # # Longer Term TODO
 This is stuff that I should get to but aren't vital to getting to a minimal viable product.
