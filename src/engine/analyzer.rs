@@ -1,7 +1,7 @@
 use super::objects::{ParseTree, QueryTree};
 use thiserror::Error;
 
-struct Analyzer {}
+pub struct Analyzer {}
 
 impl Analyzer {
     pub fn analyze(parse_tree: ParseTree) -> Result<QueryTree, AnalyzerError> {

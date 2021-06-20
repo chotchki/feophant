@@ -5,6 +5,6 @@ pub struct PlannedStatement {
 
 pub struct PlannedCommon {}
 
-enum Plan {
+pub enum Plan {
     ModifyTable(),
 }
