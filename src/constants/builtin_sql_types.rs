@@ -6,6 +6,7 @@ use thiserror::Error;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum BuiltinSqlTypes {
+    Integer(u32),
     Text(String),
     Uuid(uuid::Uuid),
 }
@@ -13,6 +14,7 @@ pub enum BuiltinSqlTypes {
 //This is effectively a selector for BuiltinSqlTypes since I can't figure out a better method :(
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum DeserializeTypes {
+    Integer,
     Text,
     Uuid,
 }
@@ -23,6 +25,10 @@ impl BuiltinSqlTypes {
     //Used to map if we have the types linked up right
     pub fn type_matches(&self, right: DeserializeTypes) -> bool {
         match *self {
+            BuiltinSqlTypes::Integer(_) => match right {
+                DeserializeTypes::Integer => return true,
+                _ => return false,
+            },
             BuiltinSqlTypes::Uuid(_) => match right {
                 DeserializeTypes::Uuid => return true,
                 _ => return false,
@@ -36,6 +42,11 @@ impl BuiltinSqlTypes {
 
     pub fn serialize(&self) -> Bytes {
         match *self {
+            BuiltinSqlTypes::Integer(ref value) => {
+                let mut buff = BytesMut::with_capacity(mem::size_of::<u32>());
+                buff.put_u32_le(*value);
+                buff.freeze()
+            }
             BuiltinSqlTypes::Uuid(ref value) => {
                 let mut buff = BytesMut::with_capacity(mem::size_of::<u128>());
                 buff.put_u128_le(value.as_u128());
@@ -68,6 +79,15 @@ impl BuiltinSqlTypes {
         mut buffer: impl Buf,
     ) -> Result<Self, SqlTypeError> {
         match target_type {
+            DeserializeTypes::Integer => {
+                if buffer.remaining() < mem::size_of::<u32>() {
+                    return Err(SqlTypeError::LengthTooShort(buffer.remaining()));
+                }
+                let dest = buffer.get_u32_le();
+                let value = BuiltinSqlTypes::Integer(dest);
+
+                Ok(value)
+            }
             DeserializeTypes::Uuid => {
                 if buffer.remaining() < mem::size_of::<u128>() {
                     return Err(SqlTypeError::LengthTooShort(buffer.remaining()));
