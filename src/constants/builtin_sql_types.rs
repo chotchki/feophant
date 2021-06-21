@@ -152,6 +152,9 @@ impl FromStr for DeserializeTypes {
 impl fmt::Display for BuiltinSqlTypes {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            BuiltinSqlTypes::Integer(ref value) => {
+                write!(f, "{}", value)
+            }
             BuiltinSqlTypes::Uuid(ref value) => {
                 write!(f, "{}", value)
             }
@@ -165,6 +168,9 @@ impl fmt::Display for BuiltinSqlTypes {
 impl fmt::Display for DeserializeTypes {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            DeserializeTypes::Integer => {
+                write!(f, "Integer")
+            }
             DeserializeTypes::Uuid => {
                 write!(f, "Uuid")
             }
