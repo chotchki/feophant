@@ -7,22 +7,22 @@ use uuid::Uuid;
 #[derive(Clone, Debug)]
 pub struct QueryTree {
     //the command type
-    command_type: CommandType,
-    //the range tables
-    range_tables: Vec<Arc<RangeRelation>>,
+    pub command_type: CommandType,
+    //the range tables - Code smell don't like the use of options
+    pub range_tables: Vec<Arc<RangeRelation>>,
     //the result relation - may not be needed
     //the target list
-    targets: Vec<TargetEntry>,
+    pub targets: Vec<TargetEntry>,
     //the qualification - Don't really understand this yet
-    qualification: Vec<WhereEntry>,
+    pub qualification: Vec<WhereEntry>,
     //the join tree
-    joins: Vec<(JoinType, Arc<RangeRelation>, Arc<RangeRelation>)>,
+    pub joins: Vec<(JoinType, Arc<RangeRelation>, Arc<RangeRelation>)>,
     //the others
-    sorts: Vec<(SortType, TargetEntry)>,
+    pub sorts: Vec<(SortType, TargetEntry)>,
 }
 
 #[derive(Clone, Copy, Debug)]
-enum CommandType {
+pub enum CommandType {
     Select,
     Insert,
     Update,
@@ -31,14 +31,14 @@ enum CommandType {
 }
 
 #[derive(Clone, Debug)]
-enum RangeRelation {
+pub enum RangeRelation {
     Table(RangeRelationTable),
     View(RangeRelationTable),
     SubQuery(Option<QueryTree>),
 }
 
 #[derive(Clone, Debug)]
-struct RangeRelationTable {
+pub struct RangeRelationTable {
     name: String,
     id: Uuid,
     alias: Option<String>,
@@ -49,16 +49,15 @@ struct RangeRelationTable {
 //relations in the range table, a parameter, or an expression tree
 //made of function calls, constants, variables, operators, etc.
 #[derive(Clone, Debug)]
-enum TargetEntry {
-    Relation(RangeRelation),
+pub enum TargetEntry {
     Parameter(BuiltinSqlTypes),
 }
 
 #[derive(Clone, Debug)]
-enum WhereEntry {}
+pub enum WhereEntry {}
 
 #[derive(Clone, Copy, Debug)]
-enum JoinType {
+pub enum JoinType {
     Inner,
     OuterLeft,
     OuterRight,
@@ -66,7 +65,7 @@ enum JoinType {
 }
 
 #[derive(Clone, Copy, Debug)]
-enum SortType {
+pub enum SortType {
     Ascending,
     Descending,
 }

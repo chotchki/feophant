@@ -3,7 +3,7 @@ use std::sync::Arc;
 use thiserror::Error;
 
 use super::super::engine::io::RowManager;
-use super::super::engine::transactions::TransactionManager;
+use super::super::engine::transactions::{TransactionManager, TransactionManagerError};
 use super::super::engine::{Engine, EngineError};
 use super::ssl_and_gssapi_parser;
 use super::startup_parser;
@@ -11,17 +11,17 @@ use crate::codec::{authentication_ok, error_response, ready_for_query, NetworkFr
 use crate::constants::{PgErrorCodes, PgErrorLevels};
 
 pub struct ClientProcessor {
-    row_manager: Arc<RowManager>,
+    engine: Engine,
     transaction_manager: TransactionManager,
 }
 
 impl ClientProcessor {
     pub fn new(
-        row_manager: Arc<RowManager>,
+        row_manager: RowManager,
         transaction_manager: TransactionManager,
     ) -> ClientProcessor {
         ClientProcessor {
-            row_manager,
+            engine: Engine::new(row_manager),
             transaction_manager,
         }
     }
@@ -59,9 +59,8 @@ impl ClientProcessor {
             //Convert to utf8
             let query_str = String::from_utf8(payload_buff.to_vec())?;
 
-            let query_res = Engine::process_query(query_str)?;
-
-            let txid = self.transaction_manager.start_trans().await;
+            let txid = self.transaction_manager.start_trans().await?;
+            let query_res = self.engine.process_query(txid, query_str).await?;
 
             //Re-write it if needed
 
@@ -109,4 +108,6 @@ pub enum ClientProcessorError {
     EngineError(#[from] EngineError),
     #[error(transparent)]
     QueryNotUtf8(#[from] std::string::FromUtf8Error),
+    #[error(transparent)]
+    TransactionManagerError(#[from] TransactionManagerError),
 }

@@ -1,14 +1,14 @@
 //! This command will look up ONLY hardcoded table definitions first,
 //! should be able to fallback to reading new ones off disk
-use thiserror::Error;
-
 use super::super::super::constants::TableDefinitions;
 use super::super::objects::Table;
+use std::sync::Arc;
+use thiserror::Error;
 
 pub struct DefinitionLookup {}
 
 impl DefinitionLookup {
-    pub fn get_definition(name: String) -> Result<Table, DefinitionLookupError> {
+    pub fn get_definition(name: String) -> Result<Arc<Table>, DefinitionLookupError> {
         let system_tables = TableDefinitions::VALUES;
         for i in &system_tables {
             if i.value().name == name {

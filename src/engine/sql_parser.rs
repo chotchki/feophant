@@ -9,14 +9,15 @@ use create::{match_create, parse_create_table};
 use insert::parse_insert;
 use nom::combinator::complete;
 use nom::IResult;
+use std::sync::Arc;
 use thiserror::Error;
 
 pub struct SqlParser {}
 
 impl SqlParser {
-    pub fn parse(input: &str) -> Result<ParseTree, SqlParserError> {
+    pub fn parse(input: &str) -> Result<Arc<ParseTree>, SqlParserError> {
         match complete(SqlParser::nom_parse)(input) {
-            Ok((_, cmd)) => Ok(cmd),
+            Ok((_, cmd)) => Ok(Arc::new(cmd)),
             Err(_) => Err(SqlParserError::ParseError()),
         }
     }

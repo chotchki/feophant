@@ -11,6 +11,7 @@ use futures::stream::StreamExt;
 use simplelog::{ColorChoice, CombinedLogger, Config, LevelFilter, TermLogger, TerminalMode};
 use std::sync::Arc;
 use tokio::net::TcpListener;
+use tokio::sync::RwLock;
 use tokio_util::codec::Framed;
 
 //Application Imports
@@ -36,8 +37,8 @@ async fn main() {
     info!("Welcome to the Rusty Elephant!");
 
     //Start the services first
-    let io_manager = IOManager::new();
-    let row_manager = Arc::new(RowManager::new(io_manager));
+    let io_manager = Arc::new(RwLock::new(IOManager::new()));
+    let row_manager = RowManager::new(io_manager);
     let transaction_manager = TransactionManager::new();
 
     //Bind to a fixed port

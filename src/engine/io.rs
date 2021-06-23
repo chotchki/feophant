@@ -8,3 +8,4 @@ mod row_formats;
 
 mod row_manager;
 pub use row_manager::RowManager;
+pub use row_manager::RowManagerError;

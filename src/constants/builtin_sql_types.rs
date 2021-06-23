@@ -20,7 +20,11 @@ pub enum DeserializeTypes {
 }
 
 impl BuiltinSqlTypes {
-    pub const VALUES: [DeserializeTypes; 2] = [DeserializeTypes::Text, DeserializeTypes::Uuid];
+    pub const VALUES: [DeserializeTypes; 3] = [
+        DeserializeTypes::Integer,
+        DeserializeTypes::Text,
+        DeserializeTypes::Uuid,
+    ];
 
     //Used to map if we have the types linked up right
     pub fn type_matches(&self, right: DeserializeTypes) -> bool {
@@ -142,6 +146,7 @@ impl FromStr for DeserializeTypes {
     type Err = SqlTypeError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
+            "integer" => Ok(DeserializeTypes::Integer),
             "text" => Ok(DeserializeTypes::Text),
             "uuid" => Ok(DeserializeTypes::Uuid),
             _ => Err(SqlTypeError::InvalidType(s.to_string())),
@@ -207,7 +212,7 @@ mod tests {
         let result = BuiltinSqlTypes::deserialize(DeserializeTypes::Text, serialized).unwrap();
         match result {
             BuiltinSqlTypes::Text(t) => t,
-            BuiltinSqlTypes::Uuid(_) => {
+            _ => {
                 panic!("Well this test failed!");
             }
         }
@@ -227,5 +232,23 @@ mod tests {
         let output = roundtrip(test.to_string());
 
         assert_eq!(output, test);
+    }
+
+    #[test]
+    //Used to map if we have the types linked up right
+    pub fn test_type_matches() {
+        assert!(BuiltinSqlTypes::Integer(0).type_matches(DeserializeTypes::Integer));
+        assert!(!BuiltinSqlTypes::Integer(0).type_matches(DeserializeTypes::Uuid));
+        assert!(!BuiltinSqlTypes::Integer(0).type_matches(DeserializeTypes::Text));
+
+        assert!(BuiltinSqlTypes::Uuid(uuid::Uuid::new_v4()).type_matches(DeserializeTypes::Uuid));
+        assert!(
+            !BuiltinSqlTypes::Uuid(uuid::Uuid::new_v4()).type_matches(DeserializeTypes::Integer)
+        );
+        assert!(!BuiltinSqlTypes::Uuid(uuid::Uuid::new_v4()).type_matches(DeserializeTypes::Text));
+
+        assert!(BuiltinSqlTypes::Text("foo".to_string()).type_matches(DeserializeTypes::Text));
+        assert!(!BuiltinSqlTypes::Text("foo".to_string()).type_matches(DeserializeTypes::Integer));
+        assert!(!BuiltinSqlTypes::Text("foo".to_string()).type_matches(DeserializeTypes::Uuid));
     }
 }
