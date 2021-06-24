@@ -118,6 +118,7 @@ mod tests {
 
         let tran = aw!(transaction_manager.start_trans()).unwrap();
         assert_eq!(aw!(engine.process_query(tran, create_test)).unwrap(), ());
+        aw!(transaction_manager.commit_trans(tran)).unwrap();
 
         //assert_eq!(aw!(engine.process_query(tran, insert_test)).unwrap(), ());
         //assert!(aw!(engine.process_query(tran, select_test)).is_ok());

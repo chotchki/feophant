@@ -7,9 +7,7 @@ use super::objects::{CommandType, ParseTree, QueryTree, RawCreateTableCommand};
 use std::sync::Arc;
 use thiserror::Error;
 
-pub struct Analyzer {
-    
-}
+pub struct Analyzer {}
 
 impl Analyzer {
     pub fn analyze(parse_tree: Arc<ParseTree>) -> Result<QueryTree, AnalyzerError> {
