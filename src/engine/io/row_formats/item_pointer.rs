@@ -4,6 +4,7 @@
 //! We will be treating this a little different since our size will be based on usize
 use super::super::page_formats::{UInt12, UInt12Error};
 use bytes::{Buf, BufMut, Bytes, BytesMut};
+use std::fmt;
 use std::mem;
 use thiserror::Error;
 
@@ -41,6 +42,14 @@ impl ItemPointer {
 
         let count = UInt12::parse(buffer)?;
         Ok(ItemPointer::new(page, count))
+    }
+}
+
+impl fmt::Display for ItemPointer {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "\tItemPointer\n");
+        write!(f, "\tPage: {}\n", self.page);
+        write!(f, "\tCount: {}\n", self.count)
     }
 }
 

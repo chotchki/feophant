@@ -7,9 +7,9 @@
 use super::super::super::super::constants::{BuiltinSqlTypes, DeserializeTypes, SqlTypeError};
 use super::super::super::objects::Table;
 use super::super::super::transactions::TransactionId;
-use super::super::page_formats::UInt12;
 use super::{InfoMask, ItemPointer, ItemPointerError, NullMask};
 use bytes::{Buf, BufMut, Bytes, BytesMut};
+use std::fmt;
 use std::mem;
 use std::sync::Arc;
 use thiserror::Error;
@@ -17,7 +17,7 @@ use thiserror::Error;
 #[derive(Clone, Debug, PartialEq)]
 pub struct RowData {
     table: Arc<Table>,
-    min: TransactionId,
+    pub min: TransactionId,
     pub max: Option<TransactionId>,
     pub item_pointer: ItemPointer,
     pub user_data: Vec<Option<BuiltinSqlTypes>>,
@@ -163,6 +163,26 @@ impl RowData {
     }
 }
 
+impl fmt::Display for RowData {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "RowData\n")?;
+        write!(f, "\tTable: {}\n", self.table.name)?;
+        write!(f, "\tMin Tran: {}\n", self.min)?;
+        match self.max {
+            Some(m) => write!(f, "\tMax Tran: {}\n", m),
+            None => write!(f, "\tMax Tran: Unset\n"),
+        }?;
+        write!(f, "\t{}\n", self.item_pointer)?;
+        for column in &self.user_data {
+            match column {
+                Some(c) => write!(f, "\t{}\n", c),
+                None => write!(f, "\tNull\n"),
+            }?;
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum RowDataError {
     #[error("Table definition length {0} does not match columns passed {1}")]
@@ -186,6 +206,7 @@ pub enum RowDataError {
 #[cfg(test)]
 mod tests {
     use super::super::super::super::objects::Attribute;
+    use super::super::super::page_formats::UInt12;
     use super::*;
 
     fn getItemPointer() -> ItemPointer {

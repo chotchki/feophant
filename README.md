@@ -33,7 +33,11 @@ postgres=# explain insert into foo values ('temp');
 
 Pipeline: -(string)> sql_parser -(ParseTree)> analyzer -(QueryTree)> rewriter -(QueryTree)> planner -(PlannedStatement)> executer -> do stuff
 
-Pipeline has been plumbed into client_processor. Now to make create table work since inserts need a non system table.
+Pipeline has been plumbed into client_processor. Now to make create table work since inserts need a non system table. (done)
+
+Now let's do inserts!
+
+
 
 **Path to 0.5**
 Implement nullable columns, the underlying data structures already support it. Would move this up except that I don't have an easy way to test it.

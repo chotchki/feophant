@@ -158,13 +158,13 @@ impl fmt::Display for BuiltinSqlTypes {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             BuiltinSqlTypes::Integer(ref value) => {
-                write!(f, "{}", value)
+                write!(f, "Integer {}", value)
             }
             BuiltinSqlTypes::Uuid(ref value) => {
-                write!(f, "{}", value)
+                write!(f, "Uuid {}", value)
             }
             BuiltinSqlTypes::Text(ref value) => {
-                write!(f, "{}", value)
+                write!(f, "Text {}", value)
             }
         }
     }

@@ -38,8 +38,8 @@ async fn main() {
 
     //Start the services first
     let io_manager = Arc::new(RwLock::new(IOManager::new()));
-    let row_manager = RowManager::new(io_manager);
     let transaction_manager = TransactionManager::new();
+    let row_manager = RowManager::new(io_manager, transaction_manager.clone());
 
     //Bind to a fixed port
     let port: u32 = 50000;

@@ -36,7 +36,7 @@ impl TransactionManager {
             return Err(TransactionManagerError::TooOld(tran_id, self.tran_min));
         }
 
-        let mut known_trans = self.known_trans.read().await;
+        let known_trans = self.known_trans.read().await;
 
         if tran_id > self.tran_min.checked_add(known_trans.len())? {
             return Err(TransactionManagerError::InTheFuture(

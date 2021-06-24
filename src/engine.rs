@@ -93,6 +93,7 @@ pub enum EngineError {
 #[cfg(test)]
 mod tests {
     use super::io::IOManager;
+    use super::transactions::TransactionManager;
     use super::*;
     use tokio::sync::RwLock;
 
@@ -104,15 +105,21 @@ mod tests {
 
     #[test]
     fn create_insert_select() {
-        let tran = TransactionId::new(2);
         let create_test = "create table foo (bar text)".to_string();
-        let insert_test = "insert into foo value('test text')".to_string();
+        let insert_test = "insert into foo values('test text')".to_string();
         let select_test = "select bar from foo".to_string();
 
-        let row_manager = RowManager::new(Arc::new(RwLock::new(IOManager::new())));
+        let mut transaction_manager = TransactionManager::new();
+        let row_manager = RowManager::new(
+            Arc::new(RwLock::new(IOManager::new())),
+            transaction_manager.clone(),
+        );
         let mut engine = Engine::new(row_manager);
+
+        let tran = aw!(transaction_manager.start_trans()).unwrap();
         assert_eq!(aw!(engine.process_query(tran, create_test)).unwrap(), ());
-        //assert!(aw!(engine.process_query(tran, insert_test)).is_ok());
+
+        //assert_eq!(aw!(engine.process_query(tran, insert_test)).unwrap(), ());
         //assert!(aw!(engine.process_query(tran, select_test)).is_ok());
     }
 }
