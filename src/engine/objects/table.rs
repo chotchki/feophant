@@ -1,8 +1,8 @@
 //! Postgres doc: https://www.postgresql.org/docs/current/catalog-pg-class.html
 
-use uuid::Uuid;
-
 use super::Attribute;
+use thiserror::Error;
+use uuid::Uuid;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Table {
@@ -23,4 +23,20 @@ impl Table {
     pub fn new(name: String, attributes: Vec<Attribute>) -> Table {
         Table::new_existing(Uuid::new_v4(), name, attributes)
     }
+
+    pub fn get_column_index(&self, name: String) -> Result<usize, TableError> {
+        for i in 0..self.attributes.len() {
+            if self.attributes[i].name == name {
+                return Ok(i);
+            }
+        }
+
+        Err(TableError::ColumnDoesNotExist(name))
+    }
+}
+
+#[derive(Error, Debug)]
+pub enum TableError {
+    #[error("Column named {0} does not exist")]
+    ColumnDoesNotExist(String),
 }

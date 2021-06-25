@@ -1,14 +1,21 @@
 //! This command will look up ONLY hardcoded table definitions first,
 //! should be able to fallback to reading new ones off disk
 
-use super::super::super::constants::TableDefinitions;
-use super::super::io::RowManager;
-use super::super::objects::Table;
+use super::super::super::constants::{
+    BuiltinSqlTypes, DeserializeTypes, SqlTypeError, TableDefinitions,
+};
+use super::super::io::row_formats::{RowData, RowDataError};
+use super::super::io::{RowManager, RowManagerError};
+use super::super::objects::{Attribute, Table, TableError};
 use super::super::transactions::TransactionId;
+use std::convert::TryFrom;
+use std::num::TryFromIntError;
+use std::str::FromStr;
 use std::sync::Arc;
 use thiserror::Error;
 use tokio::pin;
 use tokio_stream::StreamExt;
+use uuid::Uuid;
 
 #[derive(Clone, Debug)]
 pub struct DefinitionLookup {
@@ -33,17 +40,115 @@ impl DefinitionLookup {
             }
         }
 
+        let tbl_row = self.get_table_row(tran_id, name).await?;
+        let table_id = match tbl_row.get_column_not_null("id".to_string())? {
+            BuiltinSqlTypes::Uuid(u) => u,
+            _ => return Err(DefinitionLookupError::ColumnWrongType()),
+        };
+        let table_name = match tbl_row.get_column_not_null("name".to_string())? {
+            BuiltinSqlTypes::Text(t) => t,
+            _ => return Err(DefinitionLookupError::ColumnWrongType()),
+        };
+
+        let tbl_columns = self.get_table_columns(tran_id, table_id).await?;
+        let mut tbl_attrs = vec![];
+        for c in tbl_columns {
+            let c_name = match c.get_column_not_null("name".to_string())? {
+                BuiltinSqlTypes::Text(t) => t,
+                _ => return Err(DefinitionLookupError::ColumnWrongType()),
+            };
+            let c_type = match c.get_column_not_null("atttypid".to_string())? {
+                BuiltinSqlTypes::Text(t) => t,
+                _ => return Err(DefinitionLookupError::ColumnWrongType()),
+            };
+
+            tbl_attrs.push(Attribute::new(
+                //TODO: Oops didn't store the column's id
+                table_id,
+                c_name,
+                DeserializeTypes::from_str(&c_type)?,
+            ));
+        }
+
+        Ok(Arc::new(Table::new_existing(
+            table_id, table_name, tbl_attrs,
+        )))
+    }
+
+    async fn get_table_row(
+        &self,
+        tran_id: TransactionId,
+        name: String,
+    ) -> Result<RowData, DefinitionLookupError> {
         //Now we have to search
         let pg_class = TableDefinitions::PgClass.value();
         let row_stream = self.row_manager.clone().get_stream(tran_id, pg_class);
         pin!(row_stream);
-        while let Some(row) = row_stream.next().await {
-            //Have to debate now if I should push the visable rows down a level, I will have to implement
-            //the sql visibility rules there if I do. I think that makes sense though
-            println!("Got {:?}", row);
+        while let Some(row_res) = row_stream.next().await {
+            let row = row_res?;
+            if row.get_column_not_null("name".to_string())? == BuiltinSqlTypes::Text(name.clone()) {
+                return Ok(row);
+            }
         }
 
         Err(DefinitionLookupError::TableDoesNotExist(name))
+    }
+
+    async fn get_table_columns(
+        &self,
+        tran_id: TransactionId,
+        attrelid: Uuid,
+    ) -> Result<Vec<RowData>, DefinitionLookupError> {
+        let mut columns = vec![];
+        let pg_attr = TableDefinitions::PgAttribute.value();
+        let row_stream = self
+            .row_manager
+            .clone()
+            .get_stream(tran_id, pg_attr.clone());
+        pin!(row_stream);
+        while let Some(row_res) = row_stream.next().await {
+            let row = row_res?;
+            if row.get_column_not_null("attrelid".to_string())? == BuiltinSqlTypes::Uuid(attrelid) {
+                columns.push(row);
+            }
+        }
+
+        if columns.is_empty() {
+            return Err(DefinitionLookupError::NoColumnsFound());
+        }
+
+        //Figure out what column we're dealing with
+        let col_offset = pg_attr.get_column_index("attnum".to_string())?;
+
+        //Extract column number into tuples so we can sort
+        let mut column_tuples = vec![];
+        for c in &columns {
+            let wrapped_value = c
+                .user_data
+                .get(col_offset)
+                .ok_or_else(|| DefinitionLookupError::WrongColumnIndex(col_offset))?;
+            let not_null_value = wrapped_value
+                .as_ref()
+                .ok_or_else(|| DefinitionLookupError::ColumnNull(col_offset))?;
+            match not_null_value {
+                BuiltinSqlTypes::Integer(i) => column_tuples.push((i, c.clone())),
+                _ => return Err(DefinitionLookupError::ColumnWrongType()),
+            }
+        }
+
+        //Now the columns are good but we need to check for gaps
+        column_tuples.sort_by(|a, b| a.0.cmp(&b.0));
+        for i in 0..column_tuples.len() {
+            let i_u32 = u32::try_from(i)?;
+            if column_tuples[i].0 != &i_u32 {
+                return Err(DefinitionLookupError::ColumnGap(i));
+            }
+        }
+
+        //Re-extract the columns
+        let columns = column_tuples.into_iter().map(|c| c.1).collect();
+
+        Ok(columns)
     }
 }
 
@@ -51,6 +156,26 @@ impl DefinitionLookup {
 pub enum DefinitionLookupError {
     #[error("{0} is not a valid table")]
     TableDoesNotExist(String),
+    #[error("No columns found")]
+    NoColumnsFound(),
+    #[error("Column index does not exist {0}")]
+    WrongColumnIndex(usize),
+    #[error("Column empty on index {0}")]
+    ColumnNull(usize),
+    #[error("Column wrong type")]
+    ColumnWrongType(),
+    #[error("Gap in columns found at {0}")]
+    ColumnGap(usize),
+    #[error(transparent)]
+    RowDataError(#[from] RowDataError),
+    #[error(transparent)]
+    RowManagerError(#[from] RowManagerError),
+    #[error(transparent)]
+    SqlTypeError(#[from] SqlTypeError),
+    #[error(transparent)]
+    TableError(#[from] TableError),
+    #[error(transparent)]
+    TryFromIntError(#[from] TryFromIntError),
 }
 
 #[cfg(test)]
@@ -93,6 +218,7 @@ mod tests {
         match pg_class_def {
             Ok(_) => assert!(false),
             Err(DefinitionLookupError::TableDoesNotExist(_)) => assert!(true),
+            _ => assert!(false),
         }
     }
 }

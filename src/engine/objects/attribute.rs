@@ -7,7 +7,7 @@ use uuid::Uuid;
 pub struct Attribute {
     id: Uuid,
     pg_class_id: Uuid,
-    name: String,
+    pub name: String,
     pub sql_type: DeserializeTypes,
 }
 

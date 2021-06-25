@@ -60,6 +60,29 @@ impl RowData {
         })
     }
 
+    pub fn get_column(&self, name: String) -> Result<Option<BuiltinSqlTypes>, RowDataError> {
+        for i in 0..self.table.attributes.len() {
+            if self.table.attributes[i].name == name {
+                return Ok(self.user_data[i].clone());
+            }
+        }
+
+        Err(RowDataError::ColumnDoesNotExist(name))
+    }
+
+    pub fn get_column_not_null(&self, name: String) -> Result<BuiltinSqlTypes, RowDataError> {
+        for i in 0..self.table.attributes.len() {
+            if self.table.attributes[i].name == name {
+                let data = self.user_data[i]
+                    .as_ref()
+                    .ok_or_else(|| RowDataError::UnexpectedNull(name))?;
+                return Ok(data.clone());
+            }
+        }
+
+        Err(RowDataError::ColumnDoesNotExist(name))
+    }
+
     pub fn serialize(&self) -> Bytes {
         let mut buffer = BytesMut::new();
         buffer.put_u64_le(self.min.get_u64());
@@ -201,6 +224,10 @@ pub enum RowDataError {
     ColumnParseError(#[from] SqlTypeError),
     #[error(transparent)]
     ItemPointerError(#[from] ItemPointerError),
+    #[error("Column named {0} does not exist")]
+    ColumnDoesNotExist(String),
+    #[error("Column null when ask not to be {0}")]
+    UnexpectedNull(String),
 }
 
 #[cfg(test)]
