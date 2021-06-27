@@ -1,11 +1,11 @@
-//Vendor Imports
-#[macro_use]
-extern crate bitflags;
-
 #[macro_use]
 extern crate log;
 
 extern crate simplelog;
+use feophantlib::codec::{NetworkFrame, PgCodec};
+use feophantlib::engine::io::{IOManager, RowManager};
+use feophantlib::engine::transactions::TransactionManager;
+use feophantlib::processor::ClientProcessor;
 use futures::sink::SinkExt;
 use futures::stream::StreamExt;
 use simplelog::{ColorChoice, CombinedLogger, Config, LevelFilter, TermLogger, TerminalMode};
@@ -13,16 +13,6 @@ use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio::sync::RwLock;
 use tokio_util::codec::Framed;
-
-//Application Imports
-mod codec;
-use codec::{NetworkFrame, PgCodec};
-mod constants;
-mod engine;
-use engine::io::{IOManager, RowManager};
-use engine::transactions::TransactionManager;
-mod processor;
-use processor::ClientProcessor;
 
 #[tokio::main]
 async fn main() {

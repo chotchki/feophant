@@ -4,6 +4,14 @@ version = "0.3.0"
 authors = ["Christopher Hotchkiss <christopher.hotchkiss@gmail.com>"]
 edition = "2018"
 
+[lib]
+name = "feophantlib"
+path = "src/lib.rs"
+
+[[bin]]
+name = "feophant-server"
+path = "src/main.rs"
+
 [dev-dependencies]
 tokio-test = "0.4.2"
 
