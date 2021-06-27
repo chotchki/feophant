@@ -214,6 +214,13 @@ impl RowManager {
         tran_id: TransactionId,
         row_data: &RowData,
     ) -> Result<bool, RowManagerError> {
+        if row_data.min == tran_id {
+            match row_data.max {
+                Some(m) => return Ok(false),
+                None => return Ok(true),
+            }
+        }
+
         //TODO check hint bits
         if row_data.min > tran_id {
             return Ok(false);
@@ -375,7 +382,7 @@ mod tests {
         pin_mut!(rm);
         let result_rows: Vec<RowData> = aw!(rm
             .clone()
-            .get_raw_stream(table.clone())
+            .get_stream(tran_id, table.clone())
             .map(Result::unwrap)
             .collect());
 
@@ -404,7 +411,7 @@ mod tests {
 
         //Now let's make sure they're really in the table
         let res = rm
-            .get_raw_stream(table.clone())
+            .get_stream(tran_id, table.clone())
             .map(Result::unwrap)
             .collect();
         let result_rows: Vec<RowData> = aw!(res);
@@ -413,5 +420,35 @@ mod tests {
         for row in result_rows {
             assert_eq!(row.user_data, sample_row);
         }
+    }
+
+    #[test]
+    fn test_row_manager_visibility() {
+        let table = get_table();
+        let mut tm = TransactionManager::new();
+        let pm = Arc::new(RwLock::new(IOManager::new()));
+        let rm = RowManager::new(pm, tm.clone());
+        let row = get_row("test".to_string());
+
+        //Insert a row, it should be seen.
+        let tran_id = aw!(tm.start_trans()).unwrap();
+        assert!(aw!(rm.clone().insert_row(tran_id, table.clone(), row.clone())).is_ok());
+        let res: Vec<RowData> = aw!(rm
+            .clone()
+            .get_stream(tran_id, table.clone())
+            .map(Result::unwrap)
+            .collect());
+        assert_eq!(res[0].user_data, row);
+
+        //It should not be seen in the future
+        let tran_id_2 = aw!(tm.start_trans()).unwrap();
+        let res: Vec<RowData> = aw!(rm
+            .clone()
+            .get_stream(tran_id_2, table.clone())
+            .map(Result::unwrap)
+            .collect());
+        assert!(res.is_empty());
+
+        //It should be seen when deleted but still in the past
     }
 }
