@@ -53,7 +53,7 @@ impl DefinitionLookup {
         let tbl_columns = self.get_table_columns(tran_id, table_id).await?;
         let mut tbl_attrs = vec![];
         for c in tbl_columns {
-            let c_name = match c.get_column_not_null("name".to_string())? {
+            let c_name = match c.get_column_not_null("attname".to_string())? {
                 BuiltinSqlTypes::Text(t) => t,
                 _ => return Err(DefinitionLookupError::ColumnWrongType()),
             };
@@ -183,6 +183,7 @@ mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::super::super::io::IOManager;
     use super::super::super::transactions::TransactionManager;
+    use super::super::super::Engine;
     use super::*;
     use tokio::sync::RwLock;
 
@@ -220,5 +221,27 @@ mod tests {
             Err(DefinitionLookupError::TableDoesNotExist(_)) => assert!(true),
             _ => assert!(false),
         }
+    }
+
+    #[test]
+    fn test_table() {
+        let pm = Arc::new(RwLock::new(IOManager::new()));
+        let mut tm = TransactionManager::new();
+        let rm = RowManager::new(pm, tm.clone());
+        let dl = DefinitionLookup::new(rm.clone());
+        let mut engine = Engine::new(rm);
+
+        let tran = aw!(tm.start_trans()).unwrap();
+        assert_eq!(
+            aw!(engine.process_query(tran, "create table foo (bar text)".to_string())).unwrap(),
+            ()
+        );
+        aw!(tm.commit_trans(tran)).unwrap();
+
+        let tran = aw!(tm.start_trans()).unwrap();
+        let pg_class_def = aw!(dl.get_definition(tran, "foo".to_string()));
+        aw!(tm.commit_trans(tran)).unwrap();
+        let res_table = pg_class_def.unwrap();
+        assert!(true);
     }
 }

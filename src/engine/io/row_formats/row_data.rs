@@ -429,6 +429,14 @@ mod tests {
 
         let test_serial = test.serialize();
         let test_parse = RowData::parse(table, test_serial).unwrap();
-        assert_eq!(test, test_parse);
+        assert_eq!(test, test_parse.clone());
+
+        let column_val = test_parse
+            .get_column_not_null("header".to_string())
+            .unwrap();
+        assert_eq!(
+            column_val,
+            BuiltinSqlTypes::Text("this is a test".to_string())
+        );
     }
 }
