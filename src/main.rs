@@ -34,7 +34,7 @@ async fn main() {
     )])
     .unwrap();
 
-    info!("Welcome to the Rusty Elephant!");
+    info!("Welcome to FeOphant!");
 
     //Start the services first
     let io_manager = Arc::new(RwLock::new(IOManager::new()));

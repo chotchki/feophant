@@ -1,6 +1,6 @@
 Welcome to FeOphant, a database server written in Rust and inspired by PostreSQL.
 
-[![Test with Source Code Coverage](https://github.com/chotchki/rusty-elephant/actions/workflows/test_source_coverage.yaml/badge.svg)](https://github.com/chotchki/rusty-elephant/actions/workflows/test_source_coverage.yaml) [![codecov](https://codecov.io/gh/chotchki/rusty-elephant/branch/main/graph/badge.svg?token=6JV9391LY0)](https://codecov.io/gh/chotchki/rusty-elephant)
+[![Test with Source Code Coverage](https://github.com/chotchki/feophant/actions/workflows/test_source_coverage.yaml/badge.svg)](https://github.com/chotchki/feophant/actions/workflows/test_source_coverage.yaml) [![codecov](https://codecov.io/gh/chotchki/feophant/branch/main/graph/badge.svg?token=6JV9391LY0)](https://codecov.io/gh/chotchki/feophant)
 
 Just a toy but it's already taught me a lot about Rust.
 

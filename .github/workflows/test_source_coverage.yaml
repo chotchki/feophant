@@ -10,7 +10,7 @@ jobs:
   test:
     name: Test
     env:
-      PROJECT_NAME_UNDERSCORE: rusty_elephant
+      PROJECT_NAME_UNDERSCORE: feophant
       CARGO_INCREMENTAL: 0
       RUSTFLAGS: -Zinstrument-coverage
     runs-on: ubuntu-latest
