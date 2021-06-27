@@ -1,52 +1,58 @@
 {
-    "version": "0.2.0",
-    "configurations": [
-      {
-        "type": "lldb",
-        "request": "launch",
-        "name": "Launch",
-        "args": [],
-        "program": "${workspaceFolder}/target/debug/rusty-elephant",
-        "windows": {
-            "program": "${workspaceFolder}/target/debug/rusty-elephant.exe"
-        },
-        "cwd": "${workspaceFolder}",
-        "stopOnEntry": false,
-        "sourceLanguages": ["rust"],
-        "sourceMap": {
-          "/rustc/*": "${env:HOME}/.rustup/toolchains/stable-aarch64-apple-darwin/lib/rustlib/src/rust"
-        },
-        "preLaunchTask": "Rust: cargo build - rusty-elephant"
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Launch",
+      "args": [],
+      "program": "${workspaceFolder}/target/debug/feophant",
+      "windows": {
+        "program": "${workspaceFolder}/target/debug/feophant.exe"
       },
-      {
-        "name": "(Windows) Launch",
-        "type": "cppvsdbg",
-        "request": "launch",
-        "program": "${workspaceFolder}/target/debug/rusty-elephant.exe",
-        "stopAtEntry": false,
-        "cwd": "${workspaceFolder}",
-        "sourceFileMap": {
-          "/rustc/5e1a799842ba6ed4a57e91f7ab9435947482f7d8": "${env:USERPROFILE}/.rustup/toolchains/stable-x86_64-pc-windows-msvc/lib/rustlib/src/rust"
-        },
-        "symbolSearchPath": "https://msdl.microsoft.com/download/symbols",
-        "environment": []
+      "cwd": "${workspaceFolder}",
+      "stopOnEntry": false,
+      "sourceLanguages": [
+        "rust"
+      ],
+      "sourceMap": {
+        "/rustc/*": "${env:HOME}/.rustup/toolchains/stable-aarch64-apple-darwin/lib/rustlib/src/rust"
       },
-      {
-        "type": "lldb",
-        "request": "launch",
-        "name": "Debug selected unit test",
-        "cargo": {
-            "args": [
-                "test",
-                "--no-run",
-            ],
-        },
-        "args": ["${selectedText}"],
-        "cwd": "${workspaceFolder}",
-        "sourceLanguages": ["rust"],
-        "sourceMap": {
-          "/rustc/*": "${env:HOME}/.rustup/toolchains/stable-aarch64-apple-darwin/lib/rustlib/src/rust"
-        },
+      "preLaunchTask": "Rust: cargo build - feophant"
+    },
+    {
+      "name": "(Windows) Launch",
+      "type": "cppvsdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/target/debug/feophant.exe",
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}",
+      "sourceFileMap": {
+        "/rustc/5e1a799842ba6ed4a57e91f7ab9435947482f7d8": "${env:USERPROFILE}/.rustup/toolchains/stable-x86_64-pc-windows-msvc/lib/rustlib/src/rust"
       },
-    ]
-  }
+      "symbolSearchPath": "https://msdl.microsoft.com/download/symbols",
+      "environment": []
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug selected unit test",
+      "cargo": {
+        "args": [
+          "test",
+          "--no-run",
+        ],
+      },
+      "args": [
+        "${selectedText}"
+      ],
+      "cwd": "${workspaceFolder}",
+      "sourceLanguages": [
+        "rust"
+      ],
+      "sourceMap": {
+        "/rustc/*": "${env:HOME}/.rustup/toolchains/stable-aarch64-apple-darwin/lib/rustlib/src/rust"
+      },
+    },
+  ]
+}

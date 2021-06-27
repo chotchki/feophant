@@ -11,7 +11,7 @@
 				"kind": "build",
 				"isDefault": true
 			},
-			"label": "Rust: cargo build - rusty-elephant"
+			"label": "Rust: cargo build - feophant"
 		}
 	]
 }
