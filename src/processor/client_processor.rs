@@ -1,5 +1,4 @@
 use bytes::Bytes;
-use std::sync::Arc;
 use thiserror::Error;
 
 use super::super::engine::io::RowManager;
@@ -7,7 +6,7 @@ use super::super::engine::transactions::{TransactionManager, TransactionManagerE
 use super::super::engine::{Engine, EngineError};
 use super::ssl_and_gssapi_parser;
 use super::startup_parser;
-use crate::codec::{authentication_ok, error_response, ready_for_query, NetworkFrame};
+use crate::codec::NetworkFrame;
 use crate::constants::{PgErrorCodes, PgErrorLevels};
 
 pub struct ClientProcessor {
@@ -49,7 +48,10 @@ impl ClientProcessor {
             //We should also check for configured authentication methods... maybe later!
             //   we're just going to let them in so we can get further on message parsing.
             info!("Just going to let {:?} in", message.get("user"));
-            return Ok(vec![authentication_ok(), ready_for_query()]);
+            return Ok(vec![
+                NetworkFrame::authentication_ok(),
+                NetworkFrame::ready_for_query(),
+            ]);
         }
 
         //Support basic query
@@ -92,7 +94,7 @@ impl ClientProcessor {
             "Got a message we don't understand yet {}",
             frame.message_type
         );
-        Ok(vec![error_response(
+        Ok(vec![NetworkFrame::error_response(
             PgErrorLevels::Error,
             PgErrorCodes::SystemError,
             "Got an unimplemented message".to_string(),
