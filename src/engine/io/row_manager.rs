@@ -21,18 +21,11 @@ use tokio::sync::RwLock;
 #[derive(Clone, Debug)]
 pub struct RowManager {
     io_manager: Arc<RwLock<IOManager>>,
-    trans_manager: TransactionManager,
 }
 
 impl RowManager {
-    pub fn new(
-        io_manager: Arc<RwLock<IOManager>>,
-        trans_manager: TransactionManager,
-    ) -> RowManager {
-        RowManager {
-            io_manager,
-            trans_manager,
-        }
+    pub fn new(io_manager: Arc<RwLock<IOManager>>) -> RowManager {
+        RowManager { io_manager }
     }
 
     pub async fn insert_row(
@@ -52,9 +45,7 @@ impl RowManager {
         table: Arc<Table>,
         row_pointer: ItemPointer,
     ) -> Result<(), RowManagerError> {
-        let (mut page, mut row) = self
-            .get(current_tran_id, table.clone(), row_pointer)
-            .await?;
+        let (mut page, mut row) = self.get_raw(table.clone(), row_pointer).await?;
 
         if row.max.is_some() {
             return Err(RowManagerError::AlreadyDeleted(
@@ -83,9 +74,7 @@ impl RowManager {
         new_user_data: Vec<Option<BuiltinSqlTypes>>,
     ) -> Result<(), RowManagerError> {
         //First get the current row so we have it for the update/delete
-        let (mut old_page, mut old_row) = self
-            .get(current_tran_id, table.clone(), row_pointer)
-            .await?;
+        let (mut old_page, mut old_row) = self.get_raw(table.clone(), row_pointer).await?;
 
         if old_row.max.is_some() {
             return Err(RowManagerError::AlreadyDeleted(
@@ -152,21 +141,6 @@ impl RowManager {
         Ok((page, row))
     }
 
-    pub async fn get(
-        &self,
-        tran_id: TransactionId,
-        table: Arc<Table>,
-        row_pointer: ItemPointer,
-    ) -> Result<(PageData, RowData), RowManagerError> {
-        let (page, row) = self.get_raw(table, row_pointer).await?;
-
-        if RowManager::is_row_valid(self.trans_manager.clone(), tran_id, &row).await? {
-            Ok((page, row))
-        } else {
-            Err(RowManagerError::NotVisibleRow(row))
-        }
-    }
-
     // Provides an unfiltered view of the underlying table
     pub fn get_raw_stream(
         self,
@@ -181,68 +155,6 @@ impl RowManager {
                     yield row;
                 }
                 page_num += 1;
-            }
-        }
-    }
-
-    // Provides a filtered view that respects transaction visability
-    pub fn get_stream(
-        self,
-        tran_id: TransactionId,
-        table: Arc<Table>,
-    ) -> impl Stream<Item = Result<RowData, RowManagerError>> {
-        try_stream! {
-            let io_man = self.io_manager.read().await;
-            let tm = self.trans_manager;
-
-            let mut page_num = 0;
-            for await page_bytes in io_man.get_stream(table.clone()) {
-                let page = PageData::parse(table.clone(), page_num, page_bytes).map_err(RowManagerError::PageDataError)?;
-                for await row in page.get_stream() {
-                    if RowManager::is_row_valid(tm.clone(), tran_id, &row).await? {
-                        yield row;
-                    }
-                }
-                page_num += 1;
-            }
-        }
-    }
-
-    //TODO this will need MAJOR validation
-    async fn is_row_valid(
-        mut tm: TransactionManager,
-        tran_id: TransactionId,
-        row_data: &RowData,
-    ) -> Result<bool, RowManagerError> {
-        if row_data.min == tran_id {
-            match row_data.max {
-                Some(m) => return Ok(false),
-                None => return Ok(true),
-            }
-        }
-
-        //TODO check hint bits
-        if row_data.min > tran_id {
-            return Ok(false);
-        }
-
-        if tm.get_status(row_data.min).await? != TransactionStatus::Commited {
-            return Ok(false);
-        }
-
-        match row_data.max {
-            Some(m) => {
-                if m > tran_id {
-                    return Ok(true);
-                }
-                if tm.get_status(m).await? != TransactionStatus::Commited {
-                    return Ok(true);
-                } else {
-                    return Ok(false);
-                }
-            }
-            None => {
-                return Ok(true);
             }
         }
     }
@@ -306,8 +218,6 @@ pub enum RowManagerError {
     NonExistentRow(UInt12, usize),
     #[error("Row {0} already deleted in {1}")]
     AlreadyDeleted(UInt12, TransactionId),
-    #[error(transparent)]
-    TransactionManagerError(#[from] TransactionManagerError),
     #[error("Row {0} is not visible")]
     NotVisibleRow(RowData),
 }
@@ -365,7 +275,7 @@ mod tests {
         let table = get_table();
         let mut tm = TransactionManager::new();
         let pm = Arc::new(RwLock::new(IOManager::new()));
-        let rm = RowManager::new(pm, tm);
+        let rm = RowManager::new(pm);
 
         let tran_id = TransactionId::new(1);
 
@@ -382,7 +292,7 @@ mod tests {
         pin_mut!(rm);
         let result_rows: Vec<RowData> = aw!(rm
             .clone()
-            .get_stream(tran_id, table.clone())
+            .get_raw_stream(table.clone())
             .map(Result::unwrap)
             .collect());
 
@@ -393,62 +303,5 @@ mod tests {
     }
 
     #[test]
-    fn test_row_manager_roundtrip() {
-        let table = get_table();
-        let mut tm = TransactionManager::new();
-        let pm = Arc::new(RwLock::new(IOManager::new()));
-        let rm = RowManager::new(pm, tm);
-
-        let tran_id = TransactionId::new(1);
-
-        for _ in 0..500 {
-            let rm_inner = rm.clone();
-            assert!(
-                aw!(rm_inner.insert_row(tran_id, table.clone(), get_row("test".to_string())))
-                    .is_ok()
-            );
-        }
-
-        //Now let's make sure they're really in the table
-        let res = rm
-            .get_stream(tran_id, table.clone())
-            .map(Result::unwrap)
-            .collect();
-        let result_rows: Vec<RowData> = aw!(res);
-
-        let sample_row = get_row("test".to_string());
-        for row in result_rows {
-            assert_eq!(row.user_data, sample_row);
-        }
-    }
-
-    #[test]
-    fn test_row_manager_visibility() {
-        let table = get_table();
-        let mut tm = TransactionManager::new();
-        let pm = Arc::new(RwLock::new(IOManager::new()));
-        let rm = RowManager::new(pm, tm.clone());
-        let row = get_row("test".to_string());
-
-        //Insert a row, it should be seen.
-        let tran_id = aw!(tm.start_trans()).unwrap();
-        assert!(aw!(rm.clone().insert_row(tran_id, table.clone(), row.clone())).is_ok());
-        let res: Vec<RowData> = aw!(rm
-            .clone()
-            .get_stream(tran_id, table.clone())
-            .map(Result::unwrap)
-            .collect());
-        assert_eq!(res[0].user_data, row);
-
-        //It should not be seen in the future
-        let tran_id_2 = aw!(tm.start_trans()).unwrap();
-        let res: Vec<RowData> = aw!(rm
-            .clone()
-            .get_stream(tran_id_2, table.clone())
-            .map(Result::unwrap)
-            .collect());
-        assert!(res.is_empty());
-
-        //It should be seen when deleted but still in the past
-    }
+    fn test_row_manager_crud() {}
 }

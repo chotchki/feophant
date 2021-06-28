@@ -3,7 +3,7 @@ extern crate log;
 
 extern crate simplelog;
 use feophantlib::codec::{NetworkFrame, PgCodec};
-use feophantlib::engine::io::{IOManager, RowManager};
+use feophantlib::engine::io::{IOManager, RowManager, VisibleRowManager};
 use feophantlib::engine::transactions::TransactionManager;
 use feophantlib::processor::ClientProcessor;
 use futures::sink::SinkExt;
@@ -29,7 +29,8 @@ async fn main() {
     //Start the services first
     let io_manager = Arc::new(RwLock::new(IOManager::new()));
     let transaction_manager = TransactionManager::new();
-    let row_manager = RowManager::new(io_manager, transaction_manager.clone());
+    let row_manager = RowManager::new(io_manager);
+    let vis_row_man = VisibleRowManager::new(row_manager.clone(), transaction_manager.clone());
 
     //Bind to a fixed port
     let port: u32 = 50000;

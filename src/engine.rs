@@ -110,10 +110,7 @@ mod tests {
         let select_test = "select bar from foo".to_string();
 
         let mut transaction_manager = TransactionManager::new();
-        let row_manager = RowManager::new(
-            Arc::new(RwLock::new(IOManager::new())),
-            transaction_manager.clone(),
-        );
+        let row_manager = RowManager::new(Arc::new(RwLock::new(IOManager::new())));
         let mut engine = Engine::new(row_manager);
 
         let tran = aw!(transaction_manager.start_trans()).unwrap();

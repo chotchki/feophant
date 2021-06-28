@@ -5,7 +5,7 @@ use super::super::super::constants::{
     BuiltinSqlTypes, DeserializeTypes, SqlTypeError, TableDefinitions,
 };
 use super::super::io::row_formats::{RowData, RowDataError};
-use super::super::io::{RowManager, RowManagerError};
+use super::super::io::{VisibleRowManager, VisibleRowManagerError};
 use super::super::objects::{Attribute, Table, TableError};
 use super::super::transactions::TransactionId;
 use std::convert::TryFrom;
@@ -19,11 +19,11 @@ use uuid::Uuid;
 
 #[derive(Clone, Debug)]
 pub struct DefinitionLookup {
-    row_manager: RowManager,
+    row_manager: VisibleRowManager,
 }
 
 impl DefinitionLookup {
-    pub fn new(row_manager: RowManager) -> DefinitionLookup {
+    pub fn new(row_manager: VisibleRowManager) -> DefinitionLookup {
         DefinitionLookup { row_manager }
     }
 
@@ -169,7 +169,7 @@ pub enum DefinitionLookupError {
     #[error(transparent)]
     RowDataError(#[from] RowDataError),
     #[error(transparent)]
-    RowManagerError(#[from] RowManagerError),
+    VisibleRowManagerError(#[from] VisibleRowManagerError),
     #[error(transparent)]
     SqlTypeError(#[from] SqlTypeError),
     #[error(transparent)]
@@ -181,7 +181,7 @@ pub enum DefinitionLookupError {
 #[cfg(test)]
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
-    use super::super::super::io::IOManager;
+    use super::super::super::io::{IOManager, RowManager};
     use super::super::super::transactions::TransactionManager;
     use super::super::super::Engine;
     use super::*;
@@ -197,8 +197,9 @@ mod tests {
     fn test_find_pg_class() {
         let pm = Arc::new(RwLock::new(IOManager::new()));
         let tm = TransactionManager::new();
-        let rm = RowManager::new(pm, tm);
-        let dl = DefinitionLookup::new(rm);
+        let rm = RowManager::new(pm);
+        let vm = VisibleRowManager::new(rm, tm);
+        let dl = DefinitionLookup::new(vm);
 
         let tran_id = TransactionId::new(1);
 
@@ -210,8 +211,9 @@ mod tests {
     fn test_no_such_class() {
         let pm = Arc::new(RwLock::new(IOManager::new()));
         let tm = TransactionManager::new();
-        let rm = RowManager::new(pm, tm);
-        let dl = DefinitionLookup::new(rm);
+        let rm = RowManager::new(pm);
+        let vm = VisibleRowManager::new(rm, tm);
+        let dl = DefinitionLookup::new(vm);
 
         let tran_id = TransactionId::new(1);
 
@@ -227,8 +229,9 @@ mod tests {
     fn test_table() {
         let pm = Arc::new(RwLock::new(IOManager::new()));
         let mut tm = TransactionManager::new();
-        let rm = RowManager::new(pm, tm.clone());
-        let dl = DefinitionLookup::new(rm.clone());
+        let rm = RowManager::new(pm);
+        let vm = VisibleRowManager::new(rm.clone(), tm.clone());
+        let dl = DefinitionLookup::new(vm);
         let mut engine = Engine::new(rm);
 
         let tran = aw!(tm.start_trans()).unwrap();
