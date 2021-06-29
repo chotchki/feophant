@@ -6,7 +6,6 @@ use feophantlib::{
         transactions::TransactionManager,
     },
 };
-use futures::pin_mut;
 use futures::stream::StreamExt;
 use log::{debug, info};
 use simplelog::{ColorChoice, CombinedLogger, Config, LevelFilter, TermLogger, TerminalMode};
