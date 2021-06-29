@@ -229,10 +229,10 @@ mod tests {
     fn test_table() {
         let pm = Arc::new(RwLock::new(IOManager::new()));
         let mut tm = TransactionManager::new();
-        let rm = RowManager::new(pm);
+        let rm = RowManager::new(pm.clone());
         let vm = VisibleRowManager::new(rm.clone(), tm.clone());
         let dl = DefinitionLookup::new(vm);
-        let mut engine = Engine::new(rm);
+        let mut engine = Engine::new(pm, tm.clone());
 
         let tran = aw!(tm.start_trans()).unwrap();
         assert_eq!(

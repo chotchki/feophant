@@ -3,8 +3,7 @@ extern crate log;
 
 extern crate simplelog;
 use feophantlib::codec::{NetworkFrame, PgCodec};
-use feophantlib::engine::io::{IOManager, RowManager, VisibleRowManager};
-use feophantlib::engine::transactions::TransactionManager;
+use feophantlib::engine::{io::IOManager, transactions::TransactionManager, Engine};
 use feophantlib::processor::ClientProcessor;
 use futures::sink::SinkExt;
 use futures::stream::StreamExt;
@@ -29,8 +28,7 @@ async fn main() {
     //Start the services first
     let io_manager = Arc::new(RwLock::new(IOManager::new()));
     let transaction_manager = TransactionManager::new();
-    let row_manager = RowManager::new(io_manager);
-    let vis_row_man = VisibleRowManager::new(row_manager.clone(), transaction_manager.clone());
+    let engine = Engine::new(io_manager, transaction_manager.clone());
 
     //Bind to a fixed port
     let port: u32 = 50000;
@@ -45,13 +43,13 @@ async fn main() {
 
         info!("Got a connection from {}", client_addr);
 
-        let rm = row_manager.clone();
         let tm = transaction_manager.clone();
+        let eng = engine.clone();
         tokio::spawn(async move {
             let codec = PgCodec {};
             let (mut sink, mut input) = Framed::new(stream, codec).split();
 
-            let mut process = ClientProcessor::new(rm, tm);
+            let mut process = ClientProcessor::new(eng, tm);
             while let Some(Ok(event)) = input.next().await {
                 let responses: Vec<NetworkFrame> = match process.process(event).await {
                     Ok(responses) => responses,

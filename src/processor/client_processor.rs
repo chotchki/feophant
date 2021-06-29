@@ -15,12 +15,9 @@ pub struct ClientProcessor {
 }
 
 impl ClientProcessor {
-    pub fn new(
-        row_manager: RowManager,
-        transaction_manager: TransactionManager,
-    ) -> ClientProcessor {
+    pub fn new(engine: Engine, transaction_manager: TransactionManager) -> ClientProcessor {
         ClientProcessor {
-            engine: Engine::new(row_manager),
+            engine,
             transaction_manager,
         }
     }

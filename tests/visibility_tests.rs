@@ -8,6 +8,8 @@ use feophantlib::{
 };
 use futures::pin_mut;
 use futures::stream::StreamExt;
+use log::{debug, info};
+use simplelog::{ColorChoice, CombinedLogger, Config, LevelFilter, TermLogger, TerminalMode};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -49,6 +51,14 @@ fn get_table() -> Arc<Table> {
 
 #[test]
 fn test_row_manager_visibility() {
+    CombinedLogger::init(vec![TermLogger::new(
+        LevelFilter::Warn,
+        Config::default(),
+        TerminalMode::Mixed,
+        ColorChoice::Auto,
+    )])
+    .unwrap();
+
     let table = get_table();
     let mut tm = TransactionManager::new();
     let pm = Arc::new(RwLock::new(IOManager::new()));
@@ -56,7 +66,7 @@ fn test_row_manager_visibility() {
     let vm = VisibleRowManager::new(rm.clone(), tm.clone());
     let row = get_row("test".to_string());
 
-    //Insert a row, it should be seen.
+    info!("Insert a row that should be seen.");
     let tran_id = aw!(tm.start_trans()).unwrap();
     let row_pointer = aw!(rm.clone().insert_row(tran_id, table.clone(), row.clone())).unwrap();
     let res: Vec<RowData> = aw!(vm
@@ -66,7 +76,7 @@ fn test_row_manager_visibility() {
         .collect());
     assert_eq!(res[0].user_data, row);
 
-    //It should not be seen in the future
+    info!("It should not be seen in the future.");
     let tran_id_2 = aw!(tm.start_trans()).unwrap();
     let res: Vec<RowData> = aw!(vm
         .clone()
@@ -78,8 +88,9 @@ fn test_row_manager_visibility() {
     aw!(tm.commit_trans(tran_id)).unwrap();
     aw!(tm.commit_trans(tran_id_2)).unwrap();
 
-    //It should be seen when deleted but still in the past
+    info!("It should be seen when deleted but still in the past");
     let tran_id_3 = aw!(tm.start_trans()).unwrap();
+    debug!("On transaction {:?}, viewing as {:?}", tran_id_3, tran_id);
     aw!(rm.clone().delete_row(tran_id_3, table.clone(), row_pointer)).unwrap();
     aw!(tm.commit_trans(tran_id_3)).unwrap();
     let res: Vec<RowData> = aw!(vm
@@ -89,6 +100,7 @@ fn test_row_manager_visibility() {
         .collect());
     assert_eq!(res[0].user_data, row);
 
+    info!("It should be gone in the present");
     let res: Vec<RowData> = aw!(vm
         .clone()
         .get_stream(tran_id_3, table.clone())

@@ -39,13 +39,14 @@ impl RowManager {
     }
 
     //Note this is a logical delete
+    //TODO debating if this should respect the visibility map, probably yes just trying to limit the pain
     pub async fn delete_row(
         self,
         current_tran_id: TransactionId,
         table: Arc<Table>,
         row_pointer: ItemPointer,
     ) -> Result<(), RowManagerError> {
-        let (mut page, mut row) = self.get_raw(table.clone(), row_pointer).await?;
+        let (mut page, mut row) = self.get(table.clone(), row_pointer).await?;
 
         if row.max.is_some() {
             return Err(RowManagerError::AlreadyDeleted(
@@ -74,7 +75,7 @@ impl RowManager {
         new_user_data: Vec<Option<BuiltinSqlTypes>>,
     ) -> Result<(), RowManagerError> {
         //First get the current row so we have it for the update/delete
-        let (mut old_page, mut old_row) = self.get_raw(table.clone(), row_pointer).await?;
+        let (mut old_page, mut old_row) = self.get(table.clone(), row_pointer).await?;
 
         if old_row.max.is_some() {
             return Err(RowManagerError::AlreadyDeleted(
@@ -121,7 +122,7 @@ impl RowManager {
         return Ok(());
     }
 
-    pub async fn get_raw(
+    pub async fn get(
         &self,
         table: Arc<Table>,
         row_pointer: ItemPointer,
@@ -142,7 +143,7 @@ impl RowManager {
     }
 
     // Provides an unfiltered view of the underlying table
-    pub fn get_raw_stream(
+    pub fn get_stream(
         self,
         table: Arc<Table>,
     ) -> impl Stream<Item = Result<RowData, RowManagerError>> {
@@ -292,7 +293,7 @@ mod tests {
         pin_mut!(rm);
         let result_rows: Vec<RowData> = aw!(rm
             .clone()
-            .get_raw_stream(table.clone())
+            .get_stream(table.clone())
             .map(Result::unwrap)
             .collect());
 
@@ -303,5 +304,27 @@ mod tests {
     }
 
     #[test]
-    fn test_row_manager_crud() {}
+    fn test_row_manager_crud() {
+        let table = get_table();
+        let mut tm = TransactionManager::new();
+        let pm = Arc::new(RwLock::new(IOManager::new()));
+        let rm = RowManager::new(pm);
+
+        let tran_id = TransactionId::new(1);
+
+        let insert_pointer =
+            aw!(rm
+                .clone()
+                .insert_row(tran_id, table.clone(), get_row("test".to_string())));
+        assert!(insert_pointer.is_ok());
+
+        let insert_pointer = insert_pointer.unwrap();
+
+        let tran_id_2 = TransactionId::new(2);
+
+        let delete_res = aw!(rm
+            .clone()
+            .delete_row(tran_id_2, table.clone(), insert_pointer));
+        assert!(delete_res.is_ok());
+    }
 }

@@ -2,6 +2,7 @@
 //! See here for basic discussion: http://www.interdb.jp/pg/pgsql05.html#_5.6.
 //!
 //! If you need to bypass this, go down a layer
+use super::super::super::constants::BuiltinSqlTypes;
 use super::super::objects::Table;
 use super::super::transactions::{
     TransactionId, TransactionManager, TransactionManagerError, TransactionStatus,
@@ -13,6 +14,7 @@ use super::{
 };
 use async_stream::try_stream;
 use futures::stream::Stream;
+use log::debug;
 use std::sync::Arc;
 use thiserror::Error;
 
@@ -30,13 +32,25 @@ impl VisibleRowManager {
         }
     }
 
+    pub async fn insert_row(
+        self,
+        current_tran_id: TransactionId,
+        table: Arc<Table>,
+        user_data: Vec<Option<BuiltinSqlTypes>>,
+    ) -> Result<ItemPointer, VisibleRowManagerError> {
+        self.row_manager
+            .insert_row(current_tran_id, table, user_data)
+            .await
+            .map_err(VisibleRowManagerError::RowManagerError)
+    }
+
     pub async fn get(
         &self,
         tran_id: TransactionId,
         table: Arc<Table>,
         row_pointer: ItemPointer,
     ) -> Result<(PageData, RowData), VisibleRowManagerError> {
-        let (page, row) = self.row_manager.get_raw(table, row_pointer).await?;
+        let (page, row) = self.row_manager.get(table, row_pointer).await?;
 
         if VisibleRowManager::is_visible(self.tran_manager.clone(), tran_id, &row).await? {
             Ok((page, row))
@@ -54,10 +68,13 @@ impl VisibleRowManager {
         try_stream! {
             let tm = self.tran_manager;
 
-            for await row in self.row_manager.get_raw_stream(table) {
+            for await row in self.row_manager.get_stream(table) {
                 let unwrap_row = row?;
                 if VisibleRowManager::is_visible(tm.clone(), tran_id, &unwrap_row).await? {
+                    debug!("Found visible row {:?}", unwrap_row);
                     yield unwrap_row;
+                } else {
+                    debug!("Found not visible row {:?}", unwrap_row);
                 }
             }
         }
@@ -71,7 +88,14 @@ impl VisibleRowManager {
     ) -> Result<bool, VisibleRowManagerError> {
         if row_data.min == tran_id {
             match row_data.max {
-                Some(m) => return Ok(false),
+                Some(m) => {
+                    if m == tran_id {
+                        return Ok(false);
+                    } else {
+                        //In the future for us since min cannot be greater than max
+                        return Ok(true);
+                    }
+                }
                 None => return Ok(true),
             }
         }

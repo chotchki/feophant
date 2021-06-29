@@ -1,5 +1,5 @@
 use super::super::constants::{BuiltinSqlTypes, TableDefinitions};
-use super::io::{RowManager, RowManagerError};
+use super::io::{VisibleRowManager, VisibleRowManagerError};
 use super::objects::{ParseTree, PlannedStatement};
 use super::transactions::TransactionId;
 use std::convert::TryFrom;
@@ -14,12 +14,12 @@ pub use full_table_scan::FullTableScan;
 
 #[derive(Clone, Debug)]
 pub struct Executor {
-    row_manager: RowManager,
+    vis_row_man: VisibleRowManager,
 }
 
 impl Executor {
-    pub fn new(row_manager: RowManager) -> Executor {
-        Executor { row_manager }
+    pub fn new(vis_row_man: VisibleRowManager) -> Executor {
+        Executor { vis_row_man }
     }
 
     //Return type is unknown at the moment
@@ -33,7 +33,7 @@ impl Executor {
         tran_id: TransactionId,
         parse_tree: Arc<ParseTree>,
     ) -> Result<(), ExecutorError> {
-        let rm = self.row_manager.clone();
+        let rm = self.vis_row_man.clone();
 
         let create_table = match parse_tree.deref() {
             ParseTree::CreateTable(t) => t,
@@ -51,7 +51,7 @@ impl Executor {
 
         let pg_attribute = TableDefinitions::PgAttribute.value();
         for i in 0..create_table.provided_columns.len() {
-            let rm = self.row_manager.clone();
+            let rm = self.vis_row_man.clone();
             let i_u32 = u32::try_from(i).map_err(ExecutorError::ConversionError)?;
             let table_row = vec![
                 Some(BuiltinSqlTypes::Uuid(table_id)),
@@ -84,7 +84,7 @@ pub enum ExecutorError {
     #[error("Not a utility statement")]
     NotUtility(),
     #[error(transparent)]
-    RowManagerError(#[from] RowManagerError),
+    VisibleRowManagerError(#[from] VisibleRowManagerError),
     #[error("Unable to convert usize to u32")]
     ConversionError(#[from] TryFromIntError),
     #[error("Unknown")]

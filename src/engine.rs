@@ -7,7 +7,7 @@ pub use executor::Executor;
 pub use executor::ExecutorError;
 
 pub mod io;
-use io::RowManager;
+use io::{IOManager, RowManager, VisibleRowManager};
 pub mod objects;
 use objects::ParseTree;
 
@@ -24,20 +24,25 @@ pub use sql_parser::SqlParser;
 pub use sql_parser::SqlParserError;
 
 pub mod transactions;
-use transactions::TransactionId;
+use transactions::{TransactionId, TransactionManager};
 
 use std::ops::Deref;
 use std::sync::Arc;
 use thiserror::Error;
+use tokio::sync::RwLock;
 
+#[derive(Clone, Debug)]
 pub struct Engine {
     executor: Executor,
 }
 
 impl Engine {
-    pub fn new(row_manager: RowManager) -> Engine {
+    pub fn new(io_manager: Arc<RwLock<IOManager>>, tran_manager: TransactionManager) -> Engine {
         Engine {
-            executor: Executor::new(row_manager),
+            executor: Executor::new(VisibleRowManager::new(
+                RowManager::new(io_manager),
+                tran_manager,
+            )),
         }
     }
 
@@ -110,8 +115,10 @@ mod tests {
         let select_test = "select bar from foo".to_string();
 
         let mut transaction_manager = TransactionManager::new();
-        let row_manager = RowManager::new(Arc::new(RwLock::new(IOManager::new())));
-        let mut engine = Engine::new(row_manager);
+        let mut engine = Engine::new(
+            Arc::new(RwLock::new(IOManager::new())),
+            transaction_manager.clone(),
+        );
 
         let tran = aw!(transaction_manager.start_trans()).unwrap();
         assert_eq!(aw!(engine.process_query(tran, create_test)).unwrap(), ());
