@@ -31,11 +31,11 @@ impl Executor {
     pub async fn execute_utility(
         &self,
         tran_id: TransactionId,
-        parse_tree: Arc<ParseTree>,
+        parse_tree: ParseTree,
     ) -> Result<(), ExecutorError> {
         let rm = self.vis_row_man.clone();
 
-        let create_table = match parse_tree.deref() {
+        let create_table = match parse_tree {
             ParseTree::CreateTable(t) => t,
             _ => return Err(ExecutorError::NotUtility()),
         };

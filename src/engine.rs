@@ -33,16 +33,16 @@ use tokio::sync::RwLock;
 
 #[derive(Clone, Debug)]
 pub struct Engine {
+    analyzer: Analyzer,
     executor: Executor,
 }
 
 impl Engine {
     pub fn new(io_manager: Arc<RwLock<IOManager>>, tran_manager: TransactionManager) -> Engine {
+        let vis_row_man = VisibleRowManager::new(RowManager::new(io_manager), tran_manager);
         Engine {
-            executor: Executor::new(VisibleRowManager::new(
-                RowManager::new(io_manager),
-                tran_manager,
-            )),
+            analyzer: Analyzer::new(vis_row_man.clone()),
+            executor: Executor::new(vis_row_man),
         }
     }
 
@@ -54,12 +54,12 @@ impl Engine {
         //Parse it - I need to figure out if I should do statement splitting here
         let parse_tree = SqlParser::parse(&query)?;
 
-        if Engine::should_bypass_planning(parse_tree.clone()) {
+        if Engine::should_bypass_planning(&parse_tree) {
             return Ok(self.executor.execute_utility(tran_id, parse_tree).await?);
         }
 
         //Analyze it
-        let query_tree = Analyzer::analyze(parse_tree)?;
+        let query_tree = self.analyzer.analyze(tran_id, parse_tree).await?;
 
         //Rewrite it
         let rewrite_tree = Rewriter::rewrite(query_tree)?;
@@ -71,7 +71,7 @@ impl Engine {
         Ok(())
     }
 
-    fn should_bypass_planning(parse_tree: Arc<ParseTree>) -> bool {
+    fn should_bypass_planning(parse_tree: &ParseTree) -> bool {
         match parse_tree.deref() {
             ParseTree::CreateTable(_) => true,
             _ => false,

@@ -19,12 +19,12 @@ use uuid::Uuid;
 
 #[derive(Clone, Debug)]
 pub struct DefinitionLookup {
-    row_manager: VisibleRowManager,
+    vis_row_man: VisibleRowManager,
 }
 
 impl DefinitionLookup {
-    pub fn new(row_manager: VisibleRowManager) -> DefinitionLookup {
-        DefinitionLookup { row_manager }
+    pub fn new(vis_row_man: VisibleRowManager) -> DefinitionLookup {
+        DefinitionLookup { vis_row_man }
     }
 
     pub async fn get_definition(
@@ -82,7 +82,7 @@ impl DefinitionLookup {
     ) -> Result<RowData, DefinitionLookupError> {
         //Now we have to search
         let pg_class = TableDefinitions::PgClass.value();
-        let row_stream = self.row_manager.clone().get_stream(tran_id, pg_class);
+        let row_stream = self.vis_row_man.clone().get_stream(tran_id, pg_class);
         pin!(row_stream);
         while let Some(row_res) = row_stream.next().await {
             let row = row_res?;
@@ -102,7 +102,7 @@ impl DefinitionLookup {
         let mut columns = vec![];
         let pg_attr = TableDefinitions::PgAttribute.value();
         let row_stream = self
-            .row_manager
+            .vis_row_man
             .clone()
             .get_stream(tran_id, pg_attr.clone());
         pin!(row_stream);
