@@ -3,10 +3,11 @@
 mod definition_lookup;
 use definition_lookup::{DefinitionLookup, DefinitionLookupError};
 
+use crate::engine::objects::TargetEntry;
+
 use super::io::VisibleRowManager;
 use super::objects::{
-    CommandType, ParseTree, QueryTree, RangeRelation, RangeRelationTable, RawCreateTableCommand,
-    RawInsertCommand,
+    CommandType, ParseTree, QueryTree, RangeRelation, RangeRelationTable, RawInsertCommand,
 };
 use super::transactions::TransactionId;
 use std::sync::Arc;
@@ -47,6 +48,10 @@ impl Analyzer {
             .get_definition(tran_id, raw_insert.table_name)
             .await?;
 
+        //So for a simple insert we have two possible outcomes, we get the columns or we don't
+
+        //I might need to implement nullable columns to do this right
+
         //Now let's make sure insert has the right columns
         match raw_insert.provided_columns {
             Some(pc) => {
@@ -80,16 +85,21 @@ impl Analyzer {
             }
         }
 
-        let rr = RangeRelation::Table(RangeRelationTable {
-            table: definition,
-            alias: None,
-        });
+        //let anon_tbl = RangeRelation::AnonymousTable(raw_insert.provided_values);
 
         //We should be good to build the query tree if we got here
-        Ok(QueryTree {
-            command_type: CommandType::Insert,
-            range_tables: vec![Arc::new(rr)],
-        })
+        // Ok(QueryTree {
+        //     command_type: CommandType::Insert,
+        //     //Insert columns will be the target
+        //     targets: definition
+        //         .attributes
+        //         .clone()
+        //         .into_iter()
+        //         .map(|d| TargetEntry::Parameter(d))
+        //         .collect(),
+        //     range_tables: vec![anon_tbl],
+        // })
+        return Err(AnalyzerError::NotImplemented());
     }
 }
 

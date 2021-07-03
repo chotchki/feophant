@@ -6,7 +6,7 @@ pub struct Rewriter {}
 
 impl Rewriter {
     pub fn rewrite(query_tree: QueryTree) -> Result<QueryTree, RewriterError> {
-        Ok(query_tree.clone())
+        Ok(query_tree)
     }
 }
 

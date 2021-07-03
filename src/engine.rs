@@ -61,7 +61,7 @@ impl Engine {
         //Analyze it
         let query_tree = self.analyzer.analyze(tran_id, parse_tree).await?;
 
-        //Rewrite it
+        //Rewrite it - noop for right now
         let rewrite_tree = Rewriter::rewrite(query_tree)?;
 
         //Plan it
@@ -124,6 +124,7 @@ mod tests {
         assert_eq!(aw!(engine.process_query(tran, create_test)).unwrap(), ());
         aw!(transaction_manager.commit_trans(tran)).unwrap();
 
+        //Postgres equivalent
         //assert_eq!(aw!(engine.process_query(tran, insert_test)).unwrap(), ());
         //assert!(aw!(engine.process_query(tran, select_test)).is_ok());
     }

@@ -4,8 +4,6 @@ use super::objects::{ParseTree, PlannedStatement};
 use super::transactions::TransactionId;
 use std::convert::TryFrom;
 use std::num::TryFromIntError;
-use std::ops::Deref;
-use std::sync::Arc;
 use thiserror::Error;
 use uuid::Uuid;
 

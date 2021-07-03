@@ -11,6 +11,9 @@ pub use parse_tree::RawCreateTableCommand;
 pub use parse_tree::RawInsertCommand;
 
 mod planned_statement;
+pub use planned_statement::ModifyTablePlan;
+pub use planned_statement::Plan;
+pub use planned_statement::PlannedCommon;
 pub use planned_statement::PlannedStatement;
 
 mod query_tree;
@@ -18,3 +21,4 @@ pub use query_tree::CommandType;
 pub use query_tree::QueryTree;
 pub use query_tree::RangeRelation;
 pub use query_tree::RangeRelationTable;
+pub use query_tree::TargetEntry;
