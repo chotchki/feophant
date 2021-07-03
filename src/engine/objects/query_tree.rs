@@ -1,6 +1,7 @@
 //! Is the result of the parse tree post validation
 //! See here: https://www.postgresql.org/docs/current/querytree.html
 use super::super::super::constants::BuiltinSqlTypes;
+use super::Table;
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -12,13 +13,13 @@ pub struct QueryTree {
     pub range_tables: Vec<Arc<RangeRelation>>,
     //the result relation - may not be needed
     //the target list
-    pub targets: Vec<TargetEntry>,
+    //pub targets: Vec<TargetEntry>,
     //the qualification - Don't really understand this yet
-    pub qualification: Vec<WhereEntry>,
+    //pub qualification: Vec<WhereEntry>,
     //the join tree
-    pub joins: Vec<(JoinType, Arc<RangeRelation>, Arc<RangeRelation>)>,
+    //pub joins: Vec<(JoinType, Arc<RangeRelation>, Arc<RangeRelation>)>,
     //the others
-    pub sorts: Vec<(SortType, TargetEntry)>,
+    //pub sorts: Vec<(SortType, TargetEntry)>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -33,15 +34,14 @@ pub enum CommandType {
 #[derive(Clone, Debug)]
 pub enum RangeRelation {
     Table(RangeRelationTable),
-    View(RangeRelationTable),
-    SubQuery(Option<QueryTree>),
+    //View(RangeRelationTable),
+    //SubQuery(Option<QueryTree>),
 }
 
 #[derive(Clone, Debug)]
 pub struct RangeRelationTable {
-    name: String,
-    id: Uuid,
-    alias: Option<String>,
+    pub table: Arc<Table>,
+    pub alias: Option<String>,
 }
 
 //Every entry in the target list contains an expression that can be a

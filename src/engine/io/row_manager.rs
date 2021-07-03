@@ -6,9 +6,7 @@
 
 use super::super::super::constants::BuiltinSqlTypes;
 use super::super::objects::Table;
-use super::super::transactions::{
-    TransactionId, TransactionManager, TransactionManagerError, TransactionStatus,
-};
+use super::super::transactions::TransactionId;
 use super::page_formats::{PageData, PageDataError, UInt12};
 use super::row_formats::{ItemPointer, RowData, RowDataError};
 use super::{IOManager, IOManagerError};
@@ -195,7 +193,7 @@ impl RowManager {
                     }
                 }
                 None => {
-                    let mut new_page = PageData::new(table.clone(), page_num);
+                    let mut new_page = PageData::new(page_num);
                     let new_row_pointer = new_page.insert(row)?; //TODO Will NOT handle overly large rows
                     io_manager.add_page(table, new_page.serialize()).await;
                     return Ok(new_row_pointer);
@@ -274,7 +272,6 @@ mod tests {
     #[test]
     fn test_row_manager_mass_insert() {
         let table = get_table();
-        let mut tm = TransactionManager::new();
         let pm = Arc::new(RwLock::new(IOManager::new()));
         let rm = RowManager::new(pm);
 
@@ -306,7 +303,6 @@ mod tests {
     #[test]
     fn test_row_manager_crud() {
         let table = get_table();
-        let mut tm = TransactionManager::new();
         let pm = Arc::new(RwLock::new(IOManager::new()));
         let rm = RowManager::new(pm);
 

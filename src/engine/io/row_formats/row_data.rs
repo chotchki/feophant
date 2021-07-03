@@ -236,7 +236,7 @@ mod tests {
     use super::super::super::page_formats::UInt12;
     use super::*;
 
-    fn getItemPointer() -> ItemPointer {
+    fn get_item_pointer() -> ItemPointer {
         ItemPointer::new(0, UInt12::new(0).unwrap())
     }
 
@@ -255,7 +255,7 @@ mod tests {
             table.clone(),
             TransactionId::new(1),
             None,
-            getItemPointer(),
+            get_item_pointer(),
             vec![Some(BuiltinSqlTypes::Text("this is a test".to_string()))],
         )
         .unwrap();
@@ -287,7 +287,7 @@ mod tests {
             table.clone(),
             TransactionId::new(1),
             None,
-            getItemPointer(),
+            get_item_pointer(),
             vec![
                 Some(BuiltinSqlTypes::Text("this is a test".to_string())),
                 Some(BuiltinSqlTypes::Text("this is not a test".to_string())),
@@ -315,7 +315,7 @@ mod tests {
             table.clone(),
             TransactionId::new(1),
             None,
-            getItemPointer(),
+            get_item_pointer(),
             vec![Some(BuiltinSqlTypes::Uuid(uuid::Uuid::new_v4()))],
         )
         .unwrap();
@@ -347,7 +347,7 @@ mod tests {
             table.clone(),
             TransactionId::new(1),
             None,
-            getItemPointer(),
+            get_item_pointer(),
             vec![
                 Some(BuiltinSqlTypes::Uuid(uuid::Uuid::new_v4())),
                 Some(BuiltinSqlTypes::Uuid(uuid::Uuid::new_v4())),
@@ -382,7 +382,7 @@ mod tests {
             table.clone(),
             TransactionId::new(1),
             None,
-            getItemPointer(),
+            get_item_pointer(),
             vec![Some(BuiltinSqlTypes::Uuid(uuid::Uuid::new_v4())), None],
         )
         .unwrap();
@@ -419,7 +419,7 @@ mod tests {
         let test = RowData::new(table.clone(),
             TransactionId::new(1),
             None,
-            getItemPointer(),
+            get_item_pointer(),
             vec![
                 Some(BuiltinSqlTypes::Text("this is a test".to_string())),
                 None,

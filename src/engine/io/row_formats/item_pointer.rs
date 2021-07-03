@@ -47,8 +47,8 @@ impl ItemPointer {
 
 impl fmt::Display for ItemPointer {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "\tItemPointer\n");
-        write!(f, "\tPage: {}\n", self.page);
+        write!(f, "\tItemPointer\n")?;
+        write!(f, "\tPage: {}\n", self.page)?;
         write!(f, "\tCount: {}\n", self.count)
     }
 }

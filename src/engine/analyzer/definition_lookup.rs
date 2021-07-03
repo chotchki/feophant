@@ -244,7 +244,7 @@ mod tests {
         let tran = aw!(tm.start_trans()).unwrap();
         let pg_class_def = aw!(dl.get_definition(tran, "foo".to_string()));
         aw!(tm.commit_trans(tran)).unwrap();
-        let res_table = pg_class_def.unwrap();
+        pg_class_def.unwrap();
         assert!(true);
     }
 }

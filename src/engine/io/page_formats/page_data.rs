@@ -3,18 +3,13 @@ use super::super::row_formats::{ItemPointer, RowData, RowDataError};
 use super::{ItemIdData, ItemIdDataError, PageHeader, PageHeaderError, UInt12, UInt12Error};
 use async_stream::stream;
 use bytes::{BufMut, Bytes, BytesMut};
-use futures::pin_mut;
 use futures::stream::Stream;
-use futures::stream::StreamExt;
 use std::convert::TryFrom;
 use std::mem;
-use std::num::TryFromIntError;
-use std::slice::Iter;
 use std::sync::Arc;
 use thiserror::Error;
 
 pub struct PageData {
-    table: Arc<Table>,
     page: usize,
     page_header: PageHeader,
     item_ids: Vec<ItemIdData>,
@@ -23,9 +18,8 @@ pub struct PageData {
 }
 
 impl PageData {
-    pub fn new(table: Arc<Table>, page: usize) -> PageData {
+    pub fn new(page: usize) -> PageData {
         PageData {
-            table,
             page,
             page_header: PageHeader::new(),
             item_ids: vec![],
@@ -110,11 +104,7 @@ impl PageData {
         buffer.freeze()
     }
 
-    pub fn parse(
-        table: Arc<Table>,
-        page: usize,
-        mut buffer: Bytes,
-    ) -> Result<PageData, PageDataError> {
+    pub fn parse(table: Arc<Table>, page: usize, buffer: Bytes) -> Result<PageData, PageDataError> {
         //Note since we need random access, everything MUST work off slices otherwise counts will be off
 
         let mut page_header_slice = buffer.slice(0..mem::size_of::<PageHeader>());
@@ -137,7 +127,6 @@ impl PageData {
         }
 
         Ok(PageData {
-            table,
             page,
             page_header,
             item_ids,
@@ -170,6 +159,8 @@ mod tests {
     use super::super::super::super::objects::{Attribute, Table};
     use super::super::super::super::transactions::TransactionId;
     use super::*;
+    use futures::pin_mut;
+    use futures::stream::StreamExt;
 
     //Async testing help can be found here: https://blog.x5ff.xyz/blog/async-tests-tokio-rust/
     macro_rules! aw {
@@ -178,7 +169,7 @@ mod tests {
         };
     }
 
-    fn getItemPointer(row_num: usize) -> ItemPointer {
+    fn get_item_pointer(row_num: usize) -> ItemPointer {
         ItemPointer::new(0, UInt12::new(row_num as u16).unwrap())
     }
 
@@ -212,7 +203,7 @@ mod tests {
         let rows = vec!(RowData::new(table.clone(),
             TransactionId::new(0xDEADBEEF),
             None,
-            getItemPointer(0),
+            get_item_pointer(0),
             vec![
                 Some(BuiltinSqlTypes::Text("this is a test".to_string())),
                 None,
@@ -220,7 +211,7 @@ mod tests {
             ],
         ).unwrap());
 
-        let mut pg = PageData::new(table.clone(), 0);
+        let mut pg = PageData::new(0);
         for r in rows.clone() {
             assert!(pg.insert(r.clone()).is_ok());
         }
@@ -239,7 +230,7 @@ mod tests {
         let rows = vec!(RowData::new(table.clone(),
             TransactionId::new(0xDEADBEEF),
             None,
-            getItemPointer(0),
+            get_item_pointer(0),
             vec![
                 Some(BuiltinSqlTypes::Text("this is a test".to_string())),
                 None,
@@ -248,7 +239,7 @@ mod tests {
         ).unwrap(), RowData::new(table.clone(),
         TransactionId::new(0xDEADBEEF),
         None,
-        getItemPointer(1),
+        get_item_pointer(1),
         vec![
             Some(BuiltinSqlTypes::Text("this also a test".to_string())),
             None,
@@ -256,7 +247,7 @@ mod tests {
         ],
         ).unwrap());
 
-        let mut pg = PageData::new(table.clone(), 0);
+        let mut pg = PageData::new(0);
         for r in rows.clone() {
             assert!(pg.insert(r.clone()).is_ok());
         }
@@ -275,7 +266,7 @@ mod tests {
         let mut row = RowData::new(table.clone(),
             TransactionId::new(0xDEADBEEF),
             None,
-            getItemPointer(0),
+            get_item_pointer(0),
             vec![
                 Some(BuiltinSqlTypes::Text("this is a test".to_string())),
                 None,
@@ -283,13 +274,13 @@ mod tests {
             ],
         ).unwrap();
 
-        let mut pg = PageData::new(table.clone(), 0);
+        let mut pg = PageData::new(0);
         let rip = pg.insert(row.clone());
         assert!(rip.is_ok());
 
         let ip = rip.unwrap();
 
-        row.item_pointer = getItemPointer(1);
+        row.item_pointer = get_item_pointer(1);
 
         assert!(pg.update(row.clone(), ip.count).is_ok());
 
