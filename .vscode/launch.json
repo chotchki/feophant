@@ -20,26 +20,5 @@
         "/rustc/*": "${env:HOME}/.rustup/toolchains/stable-aarch64-apple-darwin/lib/rustlib/src/rust"
       },
     },
-    {
-      "type": "lldb",
-      "request": "launch",
-      "name": "Debug selected unit test",
-      "cargo": {
-        "args": [
-          "test",
-          "--no-run",
-        ],
-      },
-      "args": [
-        "${selectedText}"
-      ],
-      "cwd": "${workspaceFolder}",
-      "sourceLanguages": [
-        "rust"
-      ],
-      "sourceMap": {
-        "/rustc/*": "${env:HOME}/.rustup/toolchains/stable-aarch64-apple-darwin/lib/rustlib/src/rust"
-      },
-    },
   ]
 }
