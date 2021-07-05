@@ -1,12 +1,4 @@
-use feophantlib::{
-    constants::{BuiltinSqlTypes, DeserializeTypes},
-    engine::{
-        io::{row_formats::RowData, IOManager, RowManager, VisibleRowManager},
-        objects::{Attribute, Table},
-        transactions::TransactionManager,
-        Engine, EngineError,
-    },
-};
+use feophantlib::engine::{io::IOManager, transactions::TransactionManager, Engine};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -28,13 +20,7 @@ fn create_table_with_nullable() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let tran = aw!(transaction_manager.start_trans())?;
-    match aw!(engine.process_query(tran, create_test)) {
-        Ok(_) => {}
-        Err(e) => {
-            println!("{0}", e);
-            panic!();
-        }
-    };
+    aw!(engine.process_query(tran, create_test))?;
     aw!(transaction_manager.commit_trans(tran))?;
 
     Ok(())
