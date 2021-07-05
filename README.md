@@ -39,8 +39,10 @@ Now let's do inserts!
 
 
 
+
+
 **Path to 0.5**
-Implement nullable columns, the underlying data structures already support it. Would move this up except that I don't have an easy way to test it.
+Implement nullable columns, the underlying data structures already support it. Would move this up except that I don't have an easy way to test it. (done)
 
 **Path to 0.6**
 Implement unique indexes. Inserts should fail on violations.
@@ -49,7 +51,7 @@ Implement unique indexes. Inserts should fail on violations.
 Implement single non joined select. No wildcards, aliases or other items.
 
 **Path to 0.8**
-At this point I have enough infrastructure to start caring about transactions. Implement filtering of tuples based on visibility rules.
+At this point I have enough infrastructure to start caring about transactions. Implement filtering of tuples based on visibility rules. (done)
 
 **Path to 0.9**
 Implement delete for tuples
