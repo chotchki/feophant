@@ -84,7 +84,7 @@ fn is_null<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
         return Ok((input, false));
     }
     let (input, null) = opt(match_null)(input)?;
-    if not_null.is_some() {
+    if null.is_some() {
         return Ok((input, true));
     }
     Ok((input, true))
