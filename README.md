@@ -1,20 +1,32 @@
-Welcome to FeOphant, a database server written in Rust and inspired by PostreSQL.
+# FeOphant
 
-[![Test with Source Code Coverage](https://github.com/chotchki/feophant/actions/workflows/test_source_coverage.yaml/badge.svg)](https://github.com/chotchki/feophant/actions/workflows/test_source_coverage.yaml) [![codecov](https://codecov.io/gh/chotchki/feophant/branch/main/graph/badge.svg?token=6JV9391LY0)](https://codecov.io/gh/chotchki/feophant)
+A SQL database server written in Rust and inspired by PostreSQL.
 
-Just a toy but it's already taught me a lot about Rust.
+Just a toy for the moment, but I'm actively working to fix that!
 
-# Launch
+[![Latest Build][build-badge]][build-url]
+[![codecov][codecov-badge]][codecov-url]
+
+[build-badge]: https://github.com/chotchki/feophant/actions/workflows/test_source_coverage.yaml/badge.svg
+[build-url]: https://github.com/chotchki/feophant/actions/workflows/test_source_coverage.yaml
+[codecov-badge]: https://codecov.io/gh/chotchki/feophant/branch/main/graph/badge.svg?token=6JV9391LY0
+[codecov-url]: https://codecov.io/gh/chotchki/feophant
+
+[Website](https://feophant.com)
+
+## Launch
+
 Launch the server
 `./feophant`
 
 Lauch a postgres client application to test
 `./pgbench -h 127.0.0.1 -p 50000`
 
-# What works user facing
+## What works user facing
 You can currently start the server, connect to it and have it throw tons of errors. To support more there is a ton of infrastructure required to wire up next steps.
 
-# Current TODO List - Subject to constant change!
+## Current TODO List - Subject to constant change!
+
 **Path to 0.4:** 
 Implement insert to a system table such as pg_class.
 
@@ -36,10 +48,6 @@ Pipeline: -(string)> sql_parser -(ParseTree)> analyzer -(QueryTree)> rewriter -(
 Pipeline has been plumbed into client_processor. Now to make create table work since inserts need a non system table. (done)
 
 Now let's do inserts!
-
-
-
-
 
 **Path to 0.5**
 Implement nullable columns, the underlying data structures already support it. Would move this up except that I don't have an easy way to test it. (done)
@@ -71,7 +79,8 @@ Persist to disk with moderate crash safety
 Be prepared to actually use it
 
 
-# # Longer Term TODO
+### Longer Term TODO
+
 This is stuff that I should get to but aren't vital to getting to a minimal viable product.
 * Right now the main function runs the server from primitives. The Tokio Tower layer will probably do it better.
 * The codec that parses the network traffic is pretty naive. You could make the server allocate 2GB of data for a DDOS easily.
@@ -79,7 +88,8 @@ This is stuff that I should get to but aren't vital to getting to a minimal viab
 * There is an extension that removes the need to lock tables to repack / vaccum. Figure out how it works!
 * * https://github.com/reorg/pg_repack
 
-# Postgres Divergance
+## Postgres Divergance
+
 Its kinda pointless to blindly reproduce what has already been done so I'm making the following changes to the db server design vs Postgres.
 
 * Rust's memory safety and strong type system.
@@ -90,7 +100,8 @@ Its kinda pointless to blindly reproduce what has already been done so I'm makin
 * Replacing OIDs with UUIDv4s.
 
 
-## Rust Notes
+### Rust Notes
+
 How to setup modules sanely: https://dev.to/stevepryde/intro-to-rust-modules-3g8k
 
 Reasonable application error type creation: https://github.com/dtolnay/anyhow
@@ -99,5 +110,6 @@ Library Errors: https://github.com/dtolnay/thiserror
 
 Rust's inability to treat enum variants as a type is a HUGE pain. I cheated and separated serialization from deserialization.
 
-# Legal Stuff (Note I'm not a lawyer!)
+## Legal Stuff (Note I'm not a lawyer!)
+
 I am explicitly striving for SQL+Driver compatibility with [PostgreSQL](https://www.postgresql.org) so things such as system tables and code that handles them will be named the same. I don't think this violates their [trademark policy](https://www.postgresql.org/about/policies/trademarks/) but if I am please just reach out to me! I have also gone with a pretty restrictive license but I'm not tied to it if that is causing an issue for others who are using the code.
