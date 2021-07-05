@@ -3,6 +3,9 @@ pub use builtin_sql_types::BuiltinSqlTypes;
 pub use builtin_sql_types::DeserializeTypes;
 pub use builtin_sql_types::SqlTypeError;
 
+mod nullable;
+pub use nullable::Nullable;
+
 mod pg_error_codes;
 pub use pg_error_codes::PgErrorCodes;
 

@@ -54,13 +54,14 @@ impl Executor {
             let table_row = vec![
                 Some(BuiltinSqlTypes::Uuid(table_id)),
                 Some(BuiltinSqlTypes::Text(
-                    create_table.provided_columns[i].0.clone(),
+                    create_table.provided_columns[i].name.clone(),
                 )),
                 Some(BuiltinSqlTypes::Text(
                     //TODO we did not validate that it is a real type
-                    create_table.provided_columns[i].1.clone(),
+                    create_table.provided_columns[i].sql_type.clone(),
                 )),
                 Some(BuiltinSqlTypes::Integer(i_u32)),
+                Some(BuiltinSqlTypes::Bool(create_table.provided_columns[i].null)),
             ];
             rm.clone()
                 .insert_row(tran_id, pg_attribute.clone(), table_row)

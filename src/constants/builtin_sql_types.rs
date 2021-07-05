@@ -6,6 +6,7 @@ use thiserror::Error;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum BuiltinSqlTypes {
+    Bool(bool),
     Integer(u32),
     Text(String),
     Uuid(uuid::Uuid),
@@ -14,6 +15,7 @@ pub enum BuiltinSqlTypes {
 //This is effectively a selector for BuiltinSqlTypes since I can't figure out a better method :(
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum DeserializeTypes {
+    Bool,
     Integer,
     Text,
     Uuid,
@@ -29,6 +31,10 @@ impl BuiltinSqlTypes {
     //Used to map if we have the types linked up right
     pub fn type_matches(&self, right: DeserializeTypes) -> bool {
         match *self {
+            BuiltinSqlTypes::Bool(_) => match right {
+                DeserializeTypes::Bool => return true,
+                _ => return false,
+            },
             BuiltinSqlTypes::Integer(_) => match right {
                 DeserializeTypes::Integer => return true,
                 _ => return false,
@@ -46,6 +52,15 @@ impl BuiltinSqlTypes {
 
     pub fn serialize(&self) -> Bytes {
         match *self {
+            BuiltinSqlTypes::Bool(ref value) => {
+                let mut buff = BytesMut::with_capacity(mem::size_of::<u8>());
+                if *value {
+                    buff.put_u8(0x1);
+                } else {
+                    buff.put_u8(0x0);
+                }
+                buff.freeze()
+            }
             BuiltinSqlTypes::Integer(ref value) => {
                 let mut buff = BytesMut::with_capacity(mem::size_of::<u32>());
                 buff.put_u32_le(*value);
@@ -83,6 +98,18 @@ impl BuiltinSqlTypes {
         mut buffer: impl Buf,
     ) -> Result<Self, SqlTypeError> {
         match target_type {
+            DeserializeTypes::Bool => {
+                if buffer.remaining() < mem::size_of::<u8>() {
+                    return Err(SqlTypeError::LengthTooShort(buffer.remaining()));
+                }
+                let dest = buffer.get_u8();
+                let value = match dest {
+                    0x0 => BuiltinSqlTypes::Bool(false),
+                    _ => BuiltinSqlTypes::Bool(true),
+                };
+
+                Ok(value)
+            }
             DeserializeTypes::Integer => {
                 if buffer.remaining() < mem::size_of::<u32>() {
                     return Err(SqlTypeError::LengthTooShort(buffer.remaining()));
@@ -157,6 +184,9 @@ impl FromStr for DeserializeTypes {
 impl fmt::Display for BuiltinSqlTypes {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            BuiltinSqlTypes::Bool(ref value) => {
+                write!(f, "Bool {}", value)
+            }
             BuiltinSqlTypes::Integer(ref value) => {
                 write!(f, "Integer {}", value)
             }
@@ -173,6 +203,9 @@ impl fmt::Display for BuiltinSqlTypes {
 impl fmt::Display for DeserializeTypes {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            DeserializeTypes::Bool => {
+                write!(f, "Bool")
+            }
             DeserializeTypes::Integer => {
                 write!(f, "Integer")
             }
@@ -200,6 +233,8 @@ pub enum SqlTypeError {
     InvalidUtf8(#[from] std::string::FromUtf8Error),
     #[error("Invalid type {0}")]
     InvalidType(String),
+    #[error("Invalid bool {0}")]
+    InvalidBool(u8),
 }
 
 #[cfg(test)]
@@ -237,18 +272,26 @@ mod tests {
     #[test]
     //Used to map if we have the types linked up right
     pub fn test_type_matches() {
+        assert!(BuiltinSqlTypes::Bool(true).type_matches(DeserializeTypes::Bool));
+        assert!(!BuiltinSqlTypes::Bool(true).type_matches(DeserializeTypes::Integer));
+        assert!(!BuiltinSqlTypes::Bool(true).type_matches(DeserializeTypes::Uuid));
+        assert!(!BuiltinSqlTypes::Bool(true).type_matches(DeserializeTypes::Text));
+
+        assert!(!BuiltinSqlTypes::Integer(0).type_matches(DeserializeTypes::Bool));
         assert!(BuiltinSqlTypes::Integer(0).type_matches(DeserializeTypes::Integer));
         assert!(!BuiltinSqlTypes::Integer(0).type_matches(DeserializeTypes::Uuid));
         assert!(!BuiltinSqlTypes::Integer(0).type_matches(DeserializeTypes::Text));
 
-        assert!(BuiltinSqlTypes::Uuid(uuid::Uuid::new_v4()).type_matches(DeserializeTypes::Uuid));
+        assert!(!BuiltinSqlTypes::Uuid(uuid::Uuid::new_v4()).type_matches(DeserializeTypes::Bool));
         assert!(
             !BuiltinSqlTypes::Uuid(uuid::Uuid::new_v4()).type_matches(DeserializeTypes::Integer)
         );
+        assert!(BuiltinSqlTypes::Uuid(uuid::Uuid::new_v4()).type_matches(DeserializeTypes::Uuid));
         assert!(!BuiltinSqlTypes::Uuid(uuid::Uuid::new_v4()).type_matches(DeserializeTypes::Text));
 
-        assert!(BuiltinSqlTypes::Text("foo".to_string()).type_matches(DeserializeTypes::Text));
+        assert!(!BuiltinSqlTypes::Text("foo".to_string()).type_matches(DeserializeTypes::Bool));
         assert!(!BuiltinSqlTypes::Text("foo".to_string()).type_matches(DeserializeTypes::Integer));
         assert!(!BuiltinSqlTypes::Text("foo".to_string()).type_matches(DeserializeTypes::Uuid));
+        assert!(BuiltinSqlTypes::Text("foo".to_string()).type_matches(DeserializeTypes::Text));
     }
 }

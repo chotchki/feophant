@@ -4,6 +4,8 @@
 //!
 //! TODO Need to chew on if I should split the meta data and user data between two types
 //!
+use crate::constants::Nullable;
+
 use super::super::super::super::constants::{BuiltinSqlTypes, DeserializeTypes, SqlTypeError};
 use super::super::super::objects::Table;
 use super::super::super::transactions::TransactionId;
@@ -47,7 +49,11 @@ impl RowData {
                         ));
                     }
                 }
-                None => {} //TODO Should handle whether is null even allowed, will get there
+                None => {
+                    if column.nullable != Nullable::Null {
+                        return Err(RowDataError::UnexpectedNull(column.name));
+                    }
+                }
             }
         }
 
@@ -232,6 +238,8 @@ pub enum RowDataError {
 
 #[cfg(test)]
 mod tests {
+    use crate::constants::Nullable;
+
     use super::super::super::super::objects::Attribute;
     use super::super::super::page_formats::UInt12;
     use super::*;
@@ -248,6 +256,7 @@ mod tests {
                 uuid::Uuid::new_v4(),
                 "header".to_string(),
                 DeserializeTypes::Text,
+                Nullable::NotNull,
             )],
         ));
 
@@ -274,11 +283,13 @@ mod tests {
                     uuid::Uuid::new_v4(),
                     "header".to_string(),
                     DeserializeTypes::Text,
+                    Nullable::NotNull,
                 ),
                 Attribute::new(
                     uuid::Uuid::new_v4(),
                     "header2".to_string(),
                     DeserializeTypes::Text,
+                    Nullable::NotNull,
                 ),
             ],
         ));
@@ -308,6 +319,7 @@ mod tests {
                 uuid::Uuid::new_v4(),
                 "header".to_string(),
                 DeserializeTypes::Uuid,
+                Nullable::NotNull,
             )],
         ));
 
@@ -334,11 +346,13 @@ mod tests {
                     uuid::Uuid::new_v4(),
                     "header".to_string(),
                     DeserializeTypes::Uuid,
+                    Nullable::NotNull,
                 ),
                 Attribute::new(
                     uuid::Uuid::new_v4(),
                     "header2".to_string(),
                     DeserializeTypes::Uuid,
+                    Nullable::NotNull,
                 ),
             ],
         ));
@@ -369,11 +383,13 @@ mod tests {
                     uuid::Uuid::new_v4(),
                     "header".to_string(),
                     DeserializeTypes::Uuid,
+                    Nullable::NotNull,
                 ),
                 Attribute::new(
                     uuid::Uuid::new_v4(),
                     "header2".to_string(),
                     DeserializeTypes::Uuid,
+                    Nullable::Null,
                 ),
             ],
         ));
@@ -402,16 +418,19 @@ mod tests {
                     uuid::Uuid::new_v4(),
                     "header".to_string(),
                     DeserializeTypes::Text,
+                    Nullable::NotNull,
                 ),
                 Attribute::new(
                     uuid::Uuid::new_v4(),
                     "id".to_string(),
                     DeserializeTypes::Uuid,
+                    Nullable::Null,
                 ),
                 Attribute::new(
                     uuid::Uuid::new_v4(),
                     "header3".to_string(),
                     DeserializeTypes::Text,
+                    Nullable::NotNull,
                 ),
             ],
         ));

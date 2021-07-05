@@ -1,6 +1,8 @@
 //! This command will look up ONLY hardcoded table definitions first,
 //! should be able to fallback to reading new ones off disk
 
+use crate::constants::Nullable;
+
 use super::super::super::constants::{
     BuiltinSqlTypes, DeserializeTypes, SqlTypeError, TableDefinitions,
 };
@@ -62,11 +64,17 @@ impl DefinitionLookup {
                 _ => return Err(DefinitionLookupError::ColumnWrongType()),
             };
 
+            let c_null = match c.get_column_not_null("attnotnull".to_string())? {
+                BuiltinSqlTypes::Bool(b) => Nullable::from(b),
+                _ => return Err(DefinitionLookupError::ColumnWrongType()),
+            };
+
             tbl_attrs.push(Attribute::new(
                 //TODO: Oops didn't store the column's id
                 table_id,
                 c_name,
                 DeserializeTypes::from_str(&c_type)?,
+                c_null,
             ));
         }
 
@@ -226,7 +234,7 @@ mod tests {
     }
 
     #[test]
-    fn test_table() {
+    fn test_def_lookup() -> Result<(), Box<dyn std::error::Error>> {
         let pm = Arc::new(RwLock::new(IOManager::new()));
         let mut tm = TransactionManager::new();
         let rm = RowManager::new(pm.clone());
@@ -234,17 +242,15 @@ mod tests {
         let dl = DefinitionLookup::new(vm);
         let mut engine = Engine::new(pm, tm.clone());
 
-        let tran = aw!(tm.start_trans()).unwrap();
-        assert_eq!(
-            aw!(engine.process_query(tran, "create table foo (bar text)".to_string())).unwrap(),
-            ()
-        );
-        aw!(tm.commit_trans(tran)).unwrap();
+        let tran = aw!(tm.start_trans())?;
+        aw!(engine.process_query(tran, "create table foo (bar text)".to_string()))?;
+        aw!(tm.commit_trans(tran))?;
 
-        let tran = aw!(tm.start_trans()).unwrap();
-        let pg_class_def = aw!(dl.get_definition(tran, "foo".to_string()));
-        aw!(tm.commit_trans(tran)).unwrap();
-        pg_class_def.unwrap();
+        let tran = aw!(tm.start_trans())?;
+        aw!(dl.get_definition(tran, "foo".to_string()))?;
+        aw!(tm.commit_trans(tran))?;
+
         assert!(true);
+        Ok(())
     }
 }

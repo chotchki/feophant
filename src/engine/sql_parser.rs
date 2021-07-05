@@ -5,47 +5,36 @@ mod create;
 mod insert;
 
 use super::objects::ParseTree;
-use create::{match_create, parse_create_table};
+use create::parse_create_table;
 use insert::parse_insert;
-use nom::combinator::complete;
+use nom::branch::alt;
+use nom::combinator::{all_consuming, complete, cut};
+use nom::error::{convert_error, ContextError, ParseError, VerboseError};
 use nom::IResult;
+use nom::{Err, Finish};
 use thiserror::Error;
 
 pub struct SqlParser {}
 
 impl SqlParser {
     pub fn parse(input: &str) -> Result<ParseTree, SqlParserError> {
-        match complete(SqlParser::nom_parse)(input) {
+        match SqlParser::nom_parse::<VerboseError<&str>>(input).finish() {
             Ok((_, cmd)) => Ok(cmd),
-            Err(_) => Err(SqlParserError::ParseError()),
+            Err(e) => Err(SqlParserError::ParseError(convert_error(input, e))),
         }
     }
 
-    fn nom_parse(input: &str) -> IResult<&str, ParseTree> {
-        if match_create(input).is_ok() {
-            let (input, _) = match_create(input)?;
-
-            match parse_create_table(input) {
-                Ok((i, cmd)) => return Ok((i, ParseTree::CreateTable(cmd))),
-                Err(_) => {}
-            }
-        }
-
-        match parse_insert(input) {
-            Ok((i, cmd)) => return Ok((i, ParseTree::Insert(cmd))),
-            Err(_) => {}
-        }
-
-        //Fail since we have no idea what we got
-        Err(nom::Err::Error(nom::error::Error::new(
-            "Unable to parse",
-            nom::error::ErrorKind::Complete,
-        )))
+    fn nom_parse<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
+        input: &'a str,
+    ) -> IResult<&'a str, ParseTree, E> {
+        complete(all_consuming(alt((parse_create_table, parse_insert))))(input)
     }
 }
 
 #[derive(Debug, Error)]
 pub enum SqlParserError {
-    #[error("There was an error parsing, rework will be needed to make this user friendly")]
-    ParseError(),
+    #[error("SQL Parse Error {0}")]
+    ParseError(String),
+    #[error("Got an incomplete on {0} which shouldn't be possible")]
+    Incomplete(String),
 }

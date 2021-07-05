@@ -109,7 +109,7 @@ mod tests {
     }
 
     #[test]
-    fn create_insert_select() {
+    fn create_insert_select() -> Result<(), Box<dyn std::error::Error>> {
         let create_test = "create table foo (bar text)".to_string();
         let insert_test = "insert into foo values('test text')".to_string();
         let select_test = "select bar from foo".to_string();
@@ -120,12 +120,14 @@ mod tests {
             transaction_manager.clone(),
         );
 
-        let tran = aw!(transaction_manager.start_trans()).unwrap();
-        assert_eq!(aw!(engine.process_query(tran, create_test)).unwrap(), ());
-        aw!(transaction_manager.commit_trans(tran)).unwrap();
+        let tran = aw!(transaction_manager.start_trans())?;
+        aw!(engine.process_query(tran, create_test))?;
+        aw!(transaction_manager.commit_trans(tran))?;
 
         //Postgres equivalent
         //assert_eq!(aw!(engine.process_query(tran, insert_test)).unwrap(), ());
         //assert!(aw!(engine.process_query(tran, select_test)).is_ok());
+
+        Ok(())
     }
 }

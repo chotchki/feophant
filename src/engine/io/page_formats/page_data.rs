@@ -155,6 +155,8 @@ pub enum PageDataError {
 
 #[cfg(test)]
 mod tests {
+    use crate::constants::Nullable;
+
     use super::super::super::super::super::constants::{BuiltinSqlTypes, DeserializeTypes};
     use super::super::super::super::objects::{Attribute, Table};
     use super::super::super::super::transactions::TransactionId;
@@ -181,16 +183,19 @@ mod tests {
                     uuid::Uuid::new_v4(),
                     "header".to_string(),
                     DeserializeTypes::Text,
+                    Nullable::NotNull,
                 ),
                 Attribute::new(
                     uuid::Uuid::new_v4(),
                     "id".to_string(),
                     DeserializeTypes::Uuid,
+                    Nullable::Null,
                 ),
                 Attribute::new(
                     uuid::Uuid::new_v4(),
                     "header3".to_string(),
                     DeserializeTypes::Text,
+                    Nullable::NotNull,
                 ),
             ],
         ))

@@ -1,5 +1,5 @@
 use feophantlib::{
-    constants::{BuiltinSqlTypes, DeserializeTypes},
+    constants::{BuiltinSqlTypes, DeserializeTypes, Nullable},
     engine::{
         io::{row_formats::RowData, IOManager, RowManager, VisibleRowManager},
         objects::{Attribute, Table},
@@ -33,16 +33,19 @@ fn get_table() -> Arc<Table> {
                 uuid::Uuid::new_v4(),
                 "header".to_string(),
                 DeserializeTypes::Text,
+                Nullable::NotNull,
             ),
             Attribute::new(
                 uuid::Uuid::new_v4(),
                 "id".to_string(),
                 DeserializeTypes::Uuid,
+                Nullable::Null,
             ),
             Attribute::new(
                 uuid::Uuid::new_v4(),
                 "header3".to_string(),
                 DeserializeTypes::Text,
+                Nullable::NotNull,
             ),
         ],
     ))

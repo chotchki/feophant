@@ -7,6 +7,7 @@ pub use table::TableError;
 
 mod parse_tree;
 pub use parse_tree::ParseTree;
+pub use parse_tree::RawColumn;
 pub use parse_tree::RawCreateTableCommand;
 pub use parse_tree::RawInsertCommand;
 

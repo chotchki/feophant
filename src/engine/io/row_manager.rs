@@ -223,6 +223,8 @@ pub enum RowManagerError {
 
 #[cfg(test)]
 mod tests {
+    use crate::constants::Nullable;
+
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::super::super::super::constants::DeserializeTypes;
     use super::super::super::objects::Attribute;
@@ -246,16 +248,19 @@ mod tests {
                     uuid::Uuid::new_v4(),
                     "header".to_string(),
                     DeserializeTypes::Text,
+                    Nullable::NotNull,
                 ),
                 Attribute::new(
                     uuid::Uuid::new_v4(),
                     "id".to_string(),
                     DeserializeTypes::Uuid,
+                    Nullable::Null,
                 ),
                 Attribute::new(
                     uuid::Uuid::new_v4(),
                     "header3".to_string(),
                     DeserializeTypes::Text,
+                    Nullable::NotNull,
                 ),
             ],
         ))
