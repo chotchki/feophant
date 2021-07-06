@@ -47,14 +47,13 @@ fn get_table() -> Arc<Table> {
 }
 
 #[test]
-fn test_row_manager_visibility() {
+fn test_row_manager_visibility() -> Result<(), Box<dyn std::error::Error>> {
     CombinedLogger::init(vec![TermLogger::new(
         LevelFilter::Warn,
         Config::default(),
         TerminalMode::Mixed,
         ColorChoice::Auto,
-    )])
-    .unwrap();
+    )])?;
 
     let table = get_table();
     let mut tm = TransactionManager::new();
@@ -64,8 +63,8 @@ fn test_row_manager_visibility() {
     let row = get_row("test".to_string());
 
     info!("Insert a row that should be seen.");
-    let tran_id = aw!(tm.start_trans()).unwrap();
-    let row_pointer = aw!(rm.clone().insert_row(tran_id, table.clone(), row.clone())).unwrap();
+    let tran_id = aw!(tm.start_trans())?;
+    let row_pointer = aw!(rm.clone().insert_row(tran_id, table.clone(), row.clone()))?;
     let res: Vec<RowData> = aw!(vm
         .clone()
         .get_stream(tran_id, table.clone())
@@ -74,7 +73,7 @@ fn test_row_manager_visibility() {
     assert_eq!(res[0].user_data, row);
 
     info!("It should not be seen in the future.");
-    let tran_id_2 = aw!(tm.start_trans()).unwrap();
+    let tran_id_2 = aw!(tm.start_trans())?;
     let res: Vec<RowData> = aw!(vm
         .clone()
         .get_stream(tran_id_2, table.clone())
@@ -82,14 +81,14 @@ fn test_row_manager_visibility() {
         .collect());
     assert!(res.is_empty());
 
-    aw!(tm.commit_trans(tran_id)).unwrap();
-    aw!(tm.commit_trans(tran_id_2)).unwrap();
+    aw!(tm.commit_trans(tran_id))?;
+    aw!(tm.commit_trans(tran_id_2))?;
 
     info!("It should be seen when deleted but still in the past");
-    let tran_id_3 = aw!(tm.start_trans()).unwrap();
+    let tran_id_3 = aw!(tm.start_trans())?;
     debug!("On transaction {:?}, viewing as {:?}", tran_id_3, tran_id);
-    aw!(rm.clone().delete_row(tran_id_3, table.clone(), row_pointer)).unwrap();
-    aw!(tm.commit_trans(tran_id_3)).unwrap();
+    aw!(rm.clone().delete_row(tran_id_3, table.clone(), row_pointer))?;
+    aw!(tm.commit_trans(tran_id_3))?;
     let res: Vec<RowData> = aw!(vm
         .clone()
         .get_stream(tran_id, table.clone())
@@ -104,4 +103,6 @@ fn test_row_manager_visibility() {
         .map(Result::unwrap)
         .collect());
     assert!(res.is_empty());
+
+    Ok(())
 }
