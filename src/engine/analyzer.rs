@@ -49,8 +49,7 @@ impl Analyzer {
             .await?;
 
         //So for a simple insert we have two possible outcomes, we get the columns or we don't
-
-        //I might need to implement nullable columns to do this right
+        //If we didn't get columns, we MUST assume
 
         //Now let's make sure insert has the right columns
         match raw_insert.provided_columns {

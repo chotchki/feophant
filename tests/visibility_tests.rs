@@ -11,12 +11,7 @@ use log::{debug, info};
 use simplelog::{ColorChoice, CombinedLogger, Config, LevelFilter, TermLogger, TerminalMode};
 use std::sync::Arc;
 use tokio::sync::RwLock;
-
-macro_rules! aw {
-    ($e:expr) => {
-        tokio_test::block_on($e)
-    };
-}
+mod common;
 
 fn get_row(input: String) -> Vec<Option<BuiltinSqlTypes>> {
     vec![
