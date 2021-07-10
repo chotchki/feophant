@@ -47,7 +47,9 @@ Pipeline: -(string)> sql_parser -(ParseTree)> analyzer -(QueryTree)> rewriter -(
 
 Pipeline has been plumbed into client_processor. Now to make create table work since inserts need a non system table. (done)
 
-Now let's do inserts!
+Now let's do inserts! .... got distracted and went sideways into nullable columns
+
+Going back to inserts.
 
 **Path to 0.5**
 Implement nullable columns, the underlying data structures already support it. Would move this up except that I don't have an easy way to test it. (done)

@@ -97,13 +97,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_simple_insert() {
-        let test = "insert into foo (hah,he) values('stuff and things', 2)";
+    fn test_simple_insert() -> Result<(), Box<dyn std::error::Error>> {
+        let test = "insert into foo (first, second,third) values('stuff and things', 2)";
 
-        let res = parse_insert::<VerboseError<&str>>(test);
-        assert!(res.is_ok());
+        let (output, value) = parse_insert::<VerboseError<&str>>(test)?;
 
-        let (output, value) = res.unwrap();
         let value = match value {
             ParseTree::Insert(i) => i,
             _ => panic!("Wrong type"),
@@ -112,9 +110,15 @@ mod tests {
 
         let expected = RawInsertCommand {
             table_name: "foo".to_string(),
-            provided_columns: Some(vec!["hah".to_string(), "he".to_string()]),
+            provided_columns: Some(vec![
+                "first".to_string(),
+                "second".to_string(),
+                "third".to_string(),
+            ]),
             provided_values: vec!["stuff and things".to_string(), "2".to_string()],
         };
         assert_eq!(expected, value);
+
+        Ok(())
     }
 }
