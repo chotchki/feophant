@@ -13,4 +13,4 @@ Cargo.lock
 #Added by cargo
 
 /target
-docs/.DS_Store
+**/.DS_Store
