@@ -1,7 +1,8 @@
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::fmt;
 use std::mem;
-use std::str::FromStr;
+use std::num::ParseIntError;
+use std::str::{FromStr, ParseBoolError};
 use thiserror::Error;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -167,6 +168,15 @@ impl BuiltinSqlTypes {
             }
         }
     }
+
+    pub fn parse(target_type: DeserializeTypes, buffer: String) -> Result<Self, SqlTypeError> {
+        match target_type {
+            DeserializeTypes::Bool => Ok(BuiltinSqlTypes::Bool(buffer.parse::<bool>()?)),
+            DeserializeTypes::Integer => Ok(BuiltinSqlTypes::Integer(buffer.parse::<u32>()?)),
+            DeserializeTypes::Uuid => Ok(BuiltinSqlTypes::Uuid(uuid::Uuid::parse_str(&buffer)?)),
+            DeserializeTypes::Text => Ok(BuiltinSqlTypes::Text(buffer)),
+        }
+    }
 }
 
 impl FromStr for DeserializeTypes {
@@ -231,10 +241,14 @@ pub enum SqlTypeError {
     InvalidStringLength(usize, usize),
     #[error(transparent)]
     InvalidUtf8(#[from] std::string::FromUtf8Error),
+    #[error(transparent)]
+    InvalidBool(#[from] ParseBoolError),
+    #[error(transparent)]
+    InvalidInt(#[from] ParseIntError),
+    #[error(transparent)]
+    InvalidUuid(#[from] uuid::Error),
     #[error("Invalid type {0}")]
     InvalidType(String),
-    #[error("Invalid bool {0}")]
-    InvalidBool(u8),
 }
 
 #[cfg(test)]

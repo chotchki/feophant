@@ -1,5 +1,7 @@
 //!Postgres Doc: https://www.postgresql.org/docs/current/catalog-pg-attribute.html
 
+use std::fmt;
+
 use crate::constants::{DeserializeTypes, Nullable};
 use uuid::Uuid;
 
@@ -41,6 +43,16 @@ impl Attribute {
             sql_type,
             nullable,
         }
+    }
+}
+
+impl fmt::Display for Attribute {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "Attribute id:{0}, parent: {1}, name: {2}, sql_type: {3}, nullable: {4}",
+            self.id, self.pg_class_id, self.name, self.sql_type, self.nullable
+        )
     }
 }
 
