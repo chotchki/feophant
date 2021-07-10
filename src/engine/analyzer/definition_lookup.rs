@@ -133,6 +133,7 @@ impl DefinitionLookup {
         for c in &columns {
             let wrapped_value = c
                 .user_data
+                .0
                 .get(col_offset)
                 .ok_or_else(|| DefinitionLookupError::WrongColumnIndex(col_offset))?;
             let not_null_value = wrapped_value

@@ -1,7 +1,7 @@
 use crate::constants::BuiltinSqlTypes;
 use std::sync::Arc;
 
-use super::Table;
+use super::{SqlTuple, Table};
 
 pub struct PlannedStatement {
     pub common: PlannedCommon,
@@ -12,7 +12,7 @@ pub struct PlannedCommon {}
 
 pub enum Plan {
     ModifyTable(ModifyTablePlan),
-    StaticData(Vec<Option<BuiltinSqlTypes>>),
+    StaticData(SqlTuple),
 }
 
 pub struct ModifyTablePlan {

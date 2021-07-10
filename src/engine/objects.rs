@@ -19,7 +19,11 @@ pub use planned_statement::PlannedStatement;
 
 mod query_tree;
 pub use query_tree::CommandType;
+pub use query_tree::JoinType;
 pub use query_tree::QueryTree;
 pub use query_tree::RangeRelation;
 pub use query_tree::RangeRelationTable;
 pub use query_tree::TargetEntry;
+
+mod sql_tuple;
+pub use sql_tuple::SqlTuple;

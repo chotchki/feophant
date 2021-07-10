@@ -4,6 +4,8 @@
 //!
 //! NO LOCKING or transaction control yet. I did implement it at the IO layer but its probably wrong.
 
+use crate::engine::objects::SqlTuple;
+
 use super::super::super::constants::BuiltinSqlTypes;
 use super::super::objects::Table;
 use super::super::transactions::TransactionId;
@@ -30,7 +32,7 @@ impl RowManager {
         self,
         current_tran_id: TransactionId,
         table: Arc<Table>,
-        user_data: Vec<Option<BuiltinSqlTypes>>,
+        user_data: SqlTuple,
     ) -> Result<ItemPointer, RowManagerError> {
         let io_mut = self.io_manager.write().await;
         RowManager::insert_row_internal(&io_mut, current_tran_id, table, user_data).await
@@ -70,7 +72,7 @@ impl RowManager {
         current_tran_id: TransactionId,
         table: Arc<Table>,
         row_pointer: ItemPointer,
-        new_user_data: Vec<Option<BuiltinSqlTypes>>,
+        new_user_data: SqlTuple,
     ) -> Result<(), RowManagerError> {
         //First get the current row so we have it for the update/delete
         let (mut old_page, mut old_row) = self.get(table.clone(), row_pointer).await?;
@@ -162,7 +164,7 @@ impl RowManager {
         io_manager: &IOManager,
         current_tran_id: TransactionId,
         table: Arc<Table>,
-        user_data: Vec<Option<BuiltinSqlTypes>>,
+        user_data: SqlTuple,
     ) -> Result<ItemPointer, RowManagerError> {
         //Serialize with a dummy pointer so we can evaluate space needed
         let row = RowData::new(
@@ -266,12 +268,12 @@ mod tests {
         ))
     }
 
-    fn get_row(input: String) -> Vec<Option<BuiltinSqlTypes>> {
-        vec![
+    fn get_row(input: String) -> SqlTuple {
+        SqlTuple(vec![
                 Some(BuiltinSqlTypes::Text(input)),
                 None,
                 Some(BuiltinSqlTypes::Text("blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah".to_string())),
-            ]
+            ])
     }
 
     #[test]

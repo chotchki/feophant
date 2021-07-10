@@ -5,6 +5,7 @@
 //! TODO Need to chew on if I should split the meta data and user data between two types
 //!
 use crate::constants::Nullable;
+use crate::engine::objects::SqlTuple;
 
 use super::super::super::super::constants::{BuiltinSqlTypes, DeserializeTypes, SqlTypeError};
 use super::super::super::objects::Table;
@@ -22,7 +23,7 @@ pub struct RowData {
     pub min: TransactionId,
     pub max: Option<TransactionId>,
     pub item_pointer: ItemPointer,
-    pub user_data: Vec<Option<BuiltinSqlTypes>>,
+    pub user_data: SqlTuple,
 }
 
 impl RowData {
@@ -31,15 +32,15 @@ impl RowData {
         min: TransactionId,
         max: Option<TransactionId>,
         item_pointer: ItemPointer,
-        user_data: Vec<Option<BuiltinSqlTypes>>,
+        user_data: SqlTuple,
     ) -> Result<RowData, RowDataError> {
-        if table.attributes.len() != user_data.len() {
+        if table.attributes.len() != user_data.0.len() {
             return Err(RowDataError::TableRowSizeMismatch(
                 table.attributes.len(),
-                user_data.len(),
+                user_data.0.len(),
             ));
         }
-        for (data, column) in user_data.iter().zip(table.attributes.clone()) {
+        for (data, column) in user_data.0.iter().zip(table.attributes.clone()) {
             match data {
                 Some(d) => {
                     if !d.type_matches(column.sql_type) {
@@ -69,7 +70,7 @@ impl RowData {
     pub fn get_column(&self, name: String) -> Result<Option<BuiltinSqlTypes>, RowDataError> {
         for i in 0..self.table.attributes.len() {
             if self.table.attributes[i].name == name {
-                return Ok(self.user_data[i].clone());
+                return Ok(self.user_data.0[i].clone());
             }
         }
 
@@ -79,7 +80,7 @@ impl RowData {
     pub fn get_column_not_null(&self, name: String) -> Result<BuiltinSqlTypes, RowDataError> {
         for i in 0..self.table.attributes.len() {
             if self.table.attributes[i].name == name {
-                let data = self.user_data[i]
+                let data = self.user_data.0[i]
                     .as_ref()
                     .ok_or_else(|| RowDataError::UnexpectedNull(name))?;
                 return Ok(data.clone());
@@ -97,7 +98,7 @@ impl RowData {
         buffer.put(self.item_pointer.serialize());
 
         let mut mask = InfoMask::empty();
-        for i in self.user_data.iter() {
+        for i in self.user_data.0.iter() {
             match i {
                 Some(_) => {}
                 None => {
@@ -110,7 +111,7 @@ impl RowData {
         let nulls = NullMask::serialize(&self.user_data);
         buffer.put(nulls);
 
-        for data in &self.user_data {
+        for data in &self.user_data.0 {
             if data.is_none() {
                 continue;
             }
@@ -147,12 +148,12 @@ impl RowData {
 
         let null_mask = RowData::get_null_mask(table.clone(), &mut row_buffer)?;
 
-        let mut user_data = vec![];
+        let mut user_data = SqlTuple(vec![]);
         for (column, mask) in table.attributes.iter().zip(null_mask.iter()) {
             if *mask {
-                user_data.push(None);
+                user_data.0.push(None);
             } else {
-                user_data.push(Some(BuiltinSqlTypes::deserialize(
+                user_data.0.push(Some(BuiltinSqlTypes::deserialize(
                     column.sql_type,
                     &mut row_buffer,
                 )?));
@@ -202,7 +203,7 @@ impl fmt::Display for RowData {
             None => write!(f, "\tMax Tran: Unset\n"),
         }?;
         write!(f, "\t{}\n", self.item_pointer)?;
-        for column in &self.user_data {
+        for column in &self.user_data.0 {
             match column {
                 Some(c) => write!(f, "\t{}\n", c),
                 None => write!(f, "\tNull\n"),
@@ -265,7 +266,9 @@ mod tests {
             TransactionId::new(1),
             None,
             get_item_pointer(),
-            vec![Some(BuiltinSqlTypes::Text("this is a test".to_string()))],
+            SqlTuple(vec![Some(BuiltinSqlTypes::Text(
+                "this is a test".to_string(),
+            ))]),
         )
         .unwrap();
 
@@ -299,10 +302,10 @@ mod tests {
             TransactionId::new(1),
             None,
             get_item_pointer(),
-            vec![
+            SqlTuple(vec![
                 Some(BuiltinSqlTypes::Text("this is a test".to_string())),
                 Some(BuiltinSqlTypes::Text("this is not a test".to_string())),
-            ],
+            ]),
         )
         .unwrap();
 
@@ -328,7 +331,7 @@ mod tests {
             TransactionId::new(1),
             None,
             get_item_pointer(),
-            vec![Some(BuiltinSqlTypes::Uuid(uuid::Uuid::new_v4()))],
+            SqlTuple(vec![Some(BuiltinSqlTypes::Uuid(uuid::Uuid::new_v4()))]),
         )
         .unwrap();
 
@@ -362,10 +365,10 @@ mod tests {
             TransactionId::new(1),
             None,
             get_item_pointer(),
-            vec![
+            SqlTuple(vec![
                 Some(BuiltinSqlTypes::Uuid(uuid::Uuid::new_v4())),
                 Some(BuiltinSqlTypes::Uuid(uuid::Uuid::new_v4())),
-            ],
+            ]),
         )
         .unwrap();
 
@@ -399,7 +402,10 @@ mod tests {
             TransactionId::new(1),
             None,
             get_item_pointer(),
-            vec![Some(BuiltinSqlTypes::Uuid(uuid::Uuid::new_v4())), None],
+            SqlTuple(vec![
+                Some(BuiltinSqlTypes::Uuid(uuid::Uuid::new_v4())),
+                None,
+            ]),
         )
         .unwrap();
 
@@ -439,11 +445,11 @@ mod tests {
             TransactionId::new(1),
             None,
             get_item_pointer(),
-            vec![
+            SqlTuple(vec![
                 Some(BuiltinSqlTypes::Text("this is a test".to_string())),
                 None,
                 Some(BuiltinSqlTypes::Text("blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah".to_string())),
-            ],
+            ]),
         ).unwrap();
 
         let test_serial = test.serialize();

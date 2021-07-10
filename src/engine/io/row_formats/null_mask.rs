@@ -2,11 +2,13 @@
 //! I'm not using a standard library because the bitvector library collides with nom
 use bytes::{BufMut, Bytes, BytesMut};
 
+use crate::engine::objects::SqlTuple;
+
 pub struct NullMask {}
 
 impl NullMask {
-    pub fn serialize<T>(input: &Vec<Option<T>>) -> Bytes {
-        if input.len() == 0 {
+    pub fn serialize(input: &SqlTuple) -> Bytes {
+        if input.0.len() == 0 {
             return Bytes::new();
         }
 
@@ -17,12 +19,12 @@ impl NullMask {
         let mut mask: u8 = 0x80;
         let mut i = 0;
         loop {
-            if input[i].is_none() {
+            if input.0[i].is_none() {
                 value |= mask;
                 any_null = true;
             }
 
-            if (i + 1) == input.len() {
+            if (i + 1) == input.0.len() {
                 if (i + 1) % 8 != 0 {
                     buffer.put_u8(value);
                 }
@@ -68,23 +70,29 @@ impl NullMask {
 
 #[cfg(test)]
 mod tests {
+    use crate::constants::BuiltinSqlTypes;
+
     use super::*;
     use hex_literal::hex;
 
+    fn get_tuple() -> SqlTuple {
+        SqlTuple(vec![
+            None,
+            Some(BuiltinSqlTypes::Bool(true)),
+            None,
+            Some(BuiltinSqlTypes::Bool(true)),
+            None,
+            Some(BuiltinSqlTypes::Bool(true)),
+            None,
+            Some(BuiltinSqlTypes::Bool(true)),
+            None,
+            Some(BuiltinSqlTypes::Bool(true)),
+        ])
+    }
+
     #[test]
     fn test_null_mask_serialize() {
-        let test = vec![
-            None,
-            Some(true),
-            None,
-            Some(true),
-            None,
-            Some(true),
-            None,
-            Some(true),
-            None,
-            Some(true),
-        ];
+        let test = get_tuple();
 
         let result = NullMask::serialize(&test);
 
@@ -93,7 +101,7 @@ mod tests {
 
     #[test]
     fn test_null_mask_single() {
-        let test: Vec<Option<bool>> = vec![None];
+        let test = SqlTuple(vec![None]);
 
         let result = NullMask::serialize(&test);
 
@@ -102,7 +110,11 @@ mod tests {
 
     #[test]
     fn test_null_mask_all_false() {
-        let test = vec![Some(true), Some(true), Some(true)];
+        let test = SqlTuple(vec![
+            Some(BuiltinSqlTypes::Bool(true)),
+            Some(BuiltinSqlTypes::Bool(true)),
+            Some(BuiltinSqlTypes::Bool(true)),
+        ]);
 
         let result = NullMask::serialize(&test);
 
@@ -131,18 +143,7 @@ mod tests {
 
     #[test]
     fn test_null_mask_roundtrip() {
-        let test = vec![
-            None,
-            Some(true),
-            None,
-            Some(true),
-            None,
-            Some(true),
-            None,
-            Some(true),
-            None,
-            Some(true),
-        ];
+        let test = get_tuple();
 
         let end = vec![
             true, false, true, false, true, false, true, false, true, false, false, false,

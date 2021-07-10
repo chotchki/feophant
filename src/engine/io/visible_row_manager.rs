@@ -2,6 +2,8 @@
 //! See here for basic discussion: http://www.interdb.jp/pg/pgsql05.html#_5.6.
 //!
 //! If you need to bypass this, go down a layer
+use crate::engine::objects::SqlTuple;
+
 use super::super::super::constants::BuiltinSqlTypes;
 use super::super::objects::Table;
 use super::super::transactions::{
@@ -36,7 +38,7 @@ impl VisibleRowManager {
         self,
         current_tran_id: TransactionId,
         table: Arc<Table>,
-        user_data: Vec<Option<BuiltinSqlTypes>>,
+        user_data: SqlTuple,
     ) -> Result<ItemPointer, VisibleRowManagerError> {
         self.row_manager
             .insert_row(current_tran_id, table, user_data)
