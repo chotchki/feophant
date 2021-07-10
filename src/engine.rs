@@ -67,7 +67,7 @@ impl Engine {
         //Plan it
         let planned_stmt = Planner::plan(rewrite_tree)?;
 
-        Executor::execute(planned_stmt)?;
+        self.executor.execute(tran_id, planned_stmt).await?;
         Ok(())
     }
 

@@ -2,7 +2,7 @@ use feophantlib::{
     constants::{BuiltinSqlTypes, DeserializeTypes, Nullable},
     engine::{
         io::{row_formats::RowData, IOManager, RowManager, VisibleRowManager},
-        objects::{Attribute, Table},
+        objects::{Attribute, SqlTuple, Table},
         transactions::TransactionManager,
     },
 };
@@ -13,12 +13,12 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 mod common;
 
-fn get_row(input: String) -> Vec<Option<BuiltinSqlTypes>> {
-    vec![
-                Some(BuiltinSqlTypes::Text(input)),
-                None,
-                Some(BuiltinSqlTypes::Text("blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah".to_string())),
-            ]
+fn get_row(input: String) -> Arc<SqlTuple> {
+    Arc::new(SqlTuple(vec![
+        Some(BuiltinSqlTypes::Text(input)),
+        None,
+        Some(BuiltinSqlTypes::Text("blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah".to_string())),
+    ]))
 }
 fn get_table() -> Arc<Table> {
     Arc::new(Table::new(

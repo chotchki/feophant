@@ -210,11 +210,11 @@ mod tests {
             TransactionId::new(0xDEADBEEF),
             None,
             get_item_pointer(0),
-            SqlTuple(vec![
+            Arc::new(SqlTuple(vec![
                 Some(BuiltinSqlTypes::Text("this is a test".to_string())),
                 None,
                 Some(BuiltinSqlTypes::Text("blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah".to_string())),
-            ]),
+            ])),
         ).unwrap());
 
         let mut pg = PageData::new(0);
@@ -237,20 +237,20 @@ mod tests {
             TransactionId::new(0xDEADBEEF),
             None,
             get_item_pointer(0),
-            SqlTuple(vec![
+            Arc::new(SqlTuple(vec![
                 Some(BuiltinSqlTypes::Text("this is a test".to_string())),
                 None,
                 Some(BuiltinSqlTypes::Text("blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah".to_string())),
-            ]),
+            ])),
         ).unwrap(), RowData::new(table.clone(),
         TransactionId::new(0xDEADBEEF),
         None,
         get_item_pointer(1),
-        SqlTuple(vec![
+        Arc::new(SqlTuple(vec![
             Some(BuiltinSqlTypes::Text("this also a test".to_string())),
             None,
             Some(BuiltinSqlTypes::Text("it would help if I didn't mix and match types".to_string())),
-        ]),
+        ])),
         ).unwrap());
 
         let mut pg = PageData::new(0);
@@ -273,11 +273,11 @@ mod tests {
             TransactionId::new(0xDEADBEEF),
             None,
             get_item_pointer(0),
-            SqlTuple(vec![
+            Arc::new(SqlTuple(vec![
                 Some(BuiltinSqlTypes::Text("this is a test".to_string())),
                 None,
                 Some(BuiltinSqlTypes::Text("blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah".to_string())),
-            ]),
+            ])),
         ).unwrap();
 
         let mut pg = PageData::new(0);

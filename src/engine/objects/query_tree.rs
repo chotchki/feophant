@@ -2,23 +2,33 @@
 //! See here: https://www.postgresql.org/docs/current/querytree.html
 use super::super::super::constants::BuiltinSqlTypes;
 use super::Attribute;
+use super::SqlTuple;
 use super::Table;
 use std::sync::Arc;
-use uuid::Uuid;
 
+//Note the comments below are based on my current understanding of how Postgres works,
+//I'm sure these comments will age poorly
+//
+//Its important to note that postgres heavily uses references in these structs I'm not sure
+//if that makes sense in Rust. My focus is understanding the data relationships.
 #[derive(Clone, Debug)]
 pub struct QueryTree {
     //the command type
     pub command_type: CommandType,
-    //the range tables - Code smell don't like the use of options
-    pub range_tables: Vec<Arc<RangeRelation>>,
-    //the result relation - may not be needed
-    //the target list
+
+    //the target list of columns to be affected
     pub targets: Vec<TargetEntry>,
+
+    //These are tables being used as inputs for the query.
+    //They could be a table, view, static data, or even a sub query.
+    //How to represent some of this is TBD
+    pub range_tables: Vec<RangeRelation>,
+
     //the qualification - Don't really understand this yet
     //pub qualification: Vec<WhereEntry>,
-    //the join tree
-    //pub joins: Vec<(JoinType, Arc<RangeRelation>, Arc<RangeRelation>)>,
+
+    //the join tree is to relate entries in the range tables to each other
+    pub joins: Vec<(JoinType, RangeRelation, RangeRelation)>,
     //the others
     //pub sorts: Vec<(SortType, TargetEntry)>,
 }
@@ -37,7 +47,7 @@ pub enum RangeRelation {
     Table(RangeRelationTable),
     //View(RangeRelationTable),
     //SubQuery(Option<QueryTree>),
-    AnonymousTable(Vec<Option<BuiltinSqlTypes>>), //Used for inserts
+    AnonymousTable(Arc<SqlTuple>), //Used for inserts
 }
 
 #[derive(Clone, Debug)]

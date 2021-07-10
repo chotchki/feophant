@@ -1,9 +1,12 @@
+use crate::engine::objects::SqlTuple;
+
 use super::super::constants::{BuiltinSqlTypes, TableDefinitions};
 use super::io::{VisibleRowManager, VisibleRowManagerError};
-use super::objects::{ParseTree, PlannedStatement};
+use super::objects::{ParseTree, Plan, PlannedStatement, Table};
 use super::transactions::TransactionId;
 use std::convert::TryFrom;
 use std::num::TryFromIntError;
+use std::sync::Arc;
 use thiserror::Error;
 use uuid::Uuid;
 
@@ -21,8 +24,33 @@ impl Executor {
     }
 
     //Return type is unknown at the moment
-    pub fn execute(plan_tree: PlannedStatement) -> Result<(), ExecutorError> {
-        Err(ExecutorError::Unknown())
+    pub async fn execute(
+        &self,
+        tran_id: TransactionId,
+        plan_tree: PlannedStatement,
+    ) -> Result<(), ExecutorError> {
+        match plan_tree.plan {
+            Plan::ModifyTable(mt) => self.modify_table(tran_id, mt.table, mt.source).await,
+            _ => Err(ExecutorError::Unknown()),
+        }
+    }
+
+    async fn modify_table(
+        &self,
+        tran_id: TransactionId,
+        table: Arc<Table>,
+        source: Arc<Plan>,
+    ) -> Result<(), ExecutorError> {
+        let rm = self.vis_row_man.clone();
+
+        let values = match source.as_ref() {
+            Plan::StaticData(sd) => sd.clone(),
+            _ => return Err(ExecutorError::RecursionNotAllowed()),
+        };
+
+        rm.insert_row(tran_id, table, values).await?;
+
+        Ok(())
     }
 
     //Bypass planning since there isn't anything optimize
@@ -40,10 +68,10 @@ impl Executor {
 
         let table_id = Uuid::new_v4();
         let pg_class = TableDefinitions::PgClass.value();
-        let table_row = vec![
+        let table_row = Arc::new(SqlTuple(vec![
             Some(BuiltinSqlTypes::Uuid(table_id)),
             Some(BuiltinSqlTypes::Text(create_table.table_name.clone())),
-        ];
+        ]));
 
         rm.insert_row(tran_id, pg_class, table_row).await?;
 
@@ -51,7 +79,7 @@ impl Executor {
         for i in 0..create_table.provided_columns.len() {
             let rm = self.vis_row_man.clone();
             let i_u32 = u32::try_from(i).map_err(ExecutorError::ConversionError)?;
-            let table_row = vec![
+            let table_row = Arc::new(SqlTuple(vec![
                 Some(BuiltinSqlTypes::Uuid(table_id)),
                 Some(BuiltinSqlTypes::Text(
                     create_table.provided_columns[i].name.clone(),
@@ -62,7 +90,7 @@ impl Executor {
                 )),
                 Some(BuiltinSqlTypes::Integer(i_u32)),
                 Some(BuiltinSqlTypes::Bool(create_table.provided_columns[i].null)),
-            ];
+            ]));
             rm.clone()
                 .insert_row(tran_id, pg_attribute.clone(), table_row)
                 .await?;
@@ -86,6 +114,8 @@ pub enum ExecutorError {
     VisibleRowManagerError(#[from] VisibleRowManagerError),
     #[error("Unable to convert usize to u32")]
     ConversionError(#[from] TryFromIntError),
+    #[error("Recursive Plans Not Allowed")]
+    RecursionNotAllowed(),
     #[error("Unknown")]
     Unknown(),
 }

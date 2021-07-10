@@ -30,7 +30,7 @@ impl Planner {
             .first()
             .ok_or_else(|| PlannerError::TooManyJoins(query_tree.joins.len()))?;
 
-        match (join.0, join.1.as_ref(), join.2.as_ref()) {
+        match join {
             (JoinType::Inner, RangeRelation::Table(t), RangeRelation::AnonymousTable(at)) => {
                 return Ok(PlannedStatement {
                     common: PlannedCommon {},

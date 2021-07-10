@@ -4,7 +4,7 @@ mod definition_lookup;
 use definition_lookup::{DefinitionLookup, DefinitionLookupError};
 
 use crate::constants::{BuiltinSqlTypes, Nullable, SqlTypeError};
-use crate::engine::objects::TargetEntry;
+use crate::engine::objects::{JoinType, SqlTuple, TargetEntry};
 
 use super::io::VisibleRowManager;
 use super::objects::{
@@ -51,26 +51,28 @@ impl Analyzer {
             .get_definition(tran_id, raw_insert.table_name)
             .await?;
 
-        let columns_and_values = Analyzer::validate_columns(
+        let (tbl_cols, val_cols) = Analyzer::validate_columns(
             definition.clone(),
             raw_insert.provided_columns,
             raw_insert.provided_values,
         )?;
 
-        let values = columns_and_values.into_iter().map(|(a, v)| v).collect();
-        let anon_tbl = Arc::new(RangeRelation::AnonymousTable(values));
+        let anon_tbl = RangeRelation::AnonymousTable(Arc::new(SqlTuple(val_cols)));
+        let target_tbl = RangeRelation::Table(RangeRelationTable {
+            alias: None,
+            table: definition.clone(),
+        });
 
         //We should be good to build the query tree if we got here
         Ok(QueryTree {
             command_type: CommandType::Insert,
             //Insert columns will be the target
-            targets: definition
-                .attributes
-                .clone()
+            targets: tbl_cols
                 .into_iter()
                 .map(|d| TargetEntry::Parameter(d))
                 .collect(),
-            range_tables: vec![anon_tbl],
+            range_tables: vec![target_tbl.clone(), anon_tbl.clone()],
+            joins: vec![((JoinType::Inner, target_tbl, anon_tbl))],
         })
     }
 
@@ -79,7 +81,7 @@ impl Analyzer {
         table: Arc<Table>,
         provided_columns: Option<Vec<String>>,
         provided_values: Vec<String>,
-    ) -> Result<Vec<(Attribute, Option<BuiltinSqlTypes>)>, AnalyzerError> {
+    ) -> Result<(Vec<Attribute>, Vec<Option<BuiltinSqlTypes>>), AnalyzerError> {
         let columns = match provided_columns {
             Some(pc) => {
                 //Can't assume we got the columns in order so we'll have to reorder to match the table
@@ -124,21 +126,27 @@ impl Analyzer {
 
     fn convert_into_types(
         provided: Vec<(Attribute, Option<String>)>,
-    ) -> Result<Vec<(Attribute, Option<BuiltinSqlTypes>)>, AnalyzerError> {
-        let mut output = vec![];
+    ) -> Result<(Vec<Attribute>, Vec<Option<BuiltinSqlTypes>>), AnalyzerError> {
+        let mut tbl_cols = vec![];
+        let mut val_cols = vec![];
         for (a, s) in provided {
             match s {
                 Some(s2) => {
                     if s2.to_lowercase() == "null" {
-                        output.push((a, None))
+                        tbl_cols.push(a);
+                        val_cols.push(None);
                     } else {
-                        output.push((a.clone(), Some(BuiltinSqlTypes::parse(a.sql_type, s2)?)))
+                        tbl_cols.push(a.clone());
+                        val_cols.push(Some(BuiltinSqlTypes::parse(a.sql_type, s2)?));
                     }
                 }
-                None => output.push((a, None)),
+                None => {
+                    tbl_cols.push(a);
+                    val_cols.push(None);
+                }
             }
         }
-        Ok(output)
+        Ok((tbl_cols, val_cols))
     }
 }
 

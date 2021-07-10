@@ -12,7 +12,7 @@ pub struct PlannedCommon {}
 
 pub enum Plan {
     ModifyTable(ModifyTablePlan),
-    StaticData(SqlTuple),
+    StaticData(Arc<SqlTuple>),
 }
 
 pub struct ModifyTablePlan {

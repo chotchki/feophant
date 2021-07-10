@@ -38,7 +38,7 @@ impl VisibleRowManager {
         self,
         current_tran_id: TransactionId,
         table: Arc<Table>,
-        user_data: SqlTuple,
+        user_data: Arc<SqlTuple>,
     ) -> Result<ItemPointer, VisibleRowManagerError> {
         self.row_manager
             .insert_row(current_tran_id, table, user_data)

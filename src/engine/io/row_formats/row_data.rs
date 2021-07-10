@@ -23,7 +23,7 @@ pub struct RowData {
     pub min: TransactionId,
     pub max: Option<TransactionId>,
     pub item_pointer: ItemPointer,
-    pub user_data: SqlTuple,
+    pub user_data: Arc<SqlTuple>,
 }
 
 impl RowData {
@@ -32,7 +32,7 @@ impl RowData {
         min: TransactionId,
         max: Option<TransactionId>,
         item_pointer: ItemPointer,
-        user_data: SqlTuple,
+        user_data: Arc<SqlTuple>,
     ) -> Result<RowData, RowDataError> {
         if table.attributes.len() != user_data.0.len() {
             return Err(RowDataError::TableRowSizeMismatch(
@@ -160,7 +160,7 @@ impl RowData {
             }
         }
 
-        RowData::new(table, min, max, item_pointer, user_data)
+        RowData::new(table, min, max, item_pointer, Arc::new(user_data))
     }
 
     //Gets the null mask, if it doesn't exist it will return a vector of all not nulls
@@ -266,9 +266,9 @@ mod tests {
             TransactionId::new(1),
             None,
             get_item_pointer(),
-            SqlTuple(vec![Some(BuiltinSqlTypes::Text(
+            Arc::new(SqlTuple(vec![Some(BuiltinSqlTypes::Text(
                 "this is a test".to_string(),
-            ))]),
+            ))])),
         )
         .unwrap();
 
@@ -302,10 +302,10 @@ mod tests {
             TransactionId::new(1),
             None,
             get_item_pointer(),
-            SqlTuple(vec![
+            Arc::new(SqlTuple(vec![
                 Some(BuiltinSqlTypes::Text("this is a test".to_string())),
                 Some(BuiltinSqlTypes::Text("this is not a test".to_string())),
-            ]),
+            ])),
         )
         .unwrap();
 
@@ -331,7 +331,9 @@ mod tests {
             TransactionId::new(1),
             None,
             get_item_pointer(),
-            SqlTuple(vec![Some(BuiltinSqlTypes::Uuid(uuid::Uuid::new_v4()))]),
+            Arc::new(SqlTuple(vec![Some(BuiltinSqlTypes::Uuid(
+                uuid::Uuid::new_v4(),
+            ))])),
         )
         .unwrap();
 
@@ -365,10 +367,10 @@ mod tests {
             TransactionId::new(1),
             None,
             get_item_pointer(),
-            SqlTuple(vec![
+            Arc::new(SqlTuple(vec![
                 Some(BuiltinSqlTypes::Uuid(uuid::Uuid::new_v4())),
                 Some(BuiltinSqlTypes::Uuid(uuid::Uuid::new_v4())),
-            ]),
+            ])),
         )
         .unwrap();
 
@@ -402,10 +404,10 @@ mod tests {
             TransactionId::new(1),
             None,
             get_item_pointer(),
-            SqlTuple(vec![
+            Arc::new(SqlTuple(vec![
                 Some(BuiltinSqlTypes::Uuid(uuid::Uuid::new_v4())),
                 None,
-            ]),
+            ])),
         )
         .unwrap();
 
@@ -445,11 +447,11 @@ mod tests {
             TransactionId::new(1),
             None,
             get_item_pointer(),
-            SqlTuple(vec![
+            Arc::new(SqlTuple(vec![
                 Some(BuiltinSqlTypes::Text("this is a test".to_string())),
                 None,
                 Some(BuiltinSqlTypes::Text("blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah".to_string())),
-            ]),
+            ])),
         ).unwrap();
 
         let test_serial = test.serialize();
