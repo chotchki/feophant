@@ -27,30 +27,6 @@ You can currently start the server, connect to it and have it throw tons of erro
 
 ## Current TODO List - Subject to constant change!
 
-**Path to 0.4:** 
-Implement insert to a system table such as pg_class.
-
-* Renamed files and folders in the engine to correspond to how the postgres stages work.
-* I still like the speciality raw types I made in ParseTree but as I understand more I might get rid of it.
-
-Sample explain plan for insert, explain doesn't work for create table.
-```
-postgres=# explain insert into foo values ('temp');
-                    QUERY PLAN                    
---------------------------------------------------
- Insert on foo  (cost=0.00..0.01 rows=1 width=32)
-   ->  Result  (cost=0.00..0.01 rows=1 width=32)
-(2 rows)
-```
-
-Pipeline: -(string)> sql_parser -(ParseTree)> analyzer -(QueryTree)> rewriter -(QueryTree)> planner -(PlannedStatement)> executer -> do stuff
-
-Pipeline has been plumbed into client_processor. Now to make create table work since inserts need a non system table. (done)
-
-Now let's do inserts! .... got distracted and went sideways into nullable columns
-
-Going back to inserts.
-
 **Path to 0.5**
 Implement nullable columns, the underlying data structures already support it. Would move this up except that I don't have an easy way to test it. (done)
 
