@@ -28,33 +28,41 @@ You can currently start the server, connect to it and have it throw tons of erro
 ## Current TODO List - Subject to constant change!
 
 **Path to 0.5**
+
 Implement single non joined select. No wildcards, aliases or other items.
 
 **Path to 0.6**
+
 Implement nullable columns, the underlying data structures already support it. Would move this up except that I don't have an easy way to test it. (done)
 
 **Path to 0.7**
+
 Implement unique indexes. Inserts should fail on violations.
 
 **Path to 0.8**
+
 At this point I have enough infrastructure to start caring about transactions. Implement filtering of tuples based on visibility rules. (done)
 
 **Path to 0.9**
+
 Implement delete for tuples
 
 **Path to 0.10:**
+
 pgbench setup can run successfully, in memory
 
 **Path to 0.11**
+
 Did some reading on how the buffer manager works and my implementation seems to be firmly in the right direction. Take that knowledge and implement persistence
 
 **1.0 Release Criteria**
-pgbench can run successfully
-~~Pick a new distinct name, rename everything~~ Done
-Pick a license
-Setup fuzz testing
-Persist to disk with moderate crash safety
-Be prepared to actually use it
+
+* pgbench can run successfully
+* ~~Pick a new distinct name, rename everything~~ Done
+* Pick a license
+* Setup fuzz testing
+* Persist to disk with moderate crash safety
+* Be prepared to actually use it
 
 
 ### Longer Term TODO
