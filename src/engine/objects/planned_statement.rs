@@ -1,4 +1,3 @@
-use crate::constants::BuiltinSqlTypes;
 use std::sync::Arc;
 
 use super::{SqlTuple, Table};

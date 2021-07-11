@@ -4,7 +4,6 @@
 //! If you need to bypass this, go down a layer
 use crate::engine::objects::SqlTuple;
 
-use super::super::super::constants::BuiltinSqlTypes;
 use super::super::objects::Table;
 use super::super::transactions::{
     TransactionId, TransactionManager, TransactionManagerError, TransactionStatus,

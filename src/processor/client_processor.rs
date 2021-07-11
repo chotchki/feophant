@@ -1,7 +1,6 @@
 use bytes::Bytes;
 use thiserror::Error;
 
-use super::super::engine::io::RowManager;
 use super::super::engine::transactions::{TransactionManager, TransactionManagerError};
 use super::super::engine::{Engine, EngineError};
 use super::ssl_and_gssapi_parser;

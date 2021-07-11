@@ -6,7 +6,6 @@
 
 use crate::engine::objects::SqlTuple;
 
-use super::super::super::constants::BuiltinSqlTypes;
 use super::super::objects::Table;
 use super::super::transactions::TransactionId;
 use super::page_formats::{PageData, PageDataError, UInt12};
@@ -225,6 +224,7 @@ pub enum RowManagerError {
 
 #[cfg(test)]
 mod tests {
+    use crate::constants::BuiltinSqlTypes;
     use crate::constants::Nullable;
 
     // Note this useful idiom: importing names from outer (for mod tests) scope.

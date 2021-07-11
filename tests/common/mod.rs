@@ -9,7 +9,7 @@ macro_rules! aw {
     };
 }
 
-pub fn create_engine() -> (TransactionManager, Engine) {
+pub fn _create_engine() -> (TransactionManager, Engine) {
     let transaction_manager = TransactionManager::new();
     let engine = Engine::new(
         Arc::new(RwLock::new(IOManager::new())),

@@ -12,7 +12,7 @@ impl Planner {
     pub fn plan(query_tree: QueryTree) -> Result<PlannedStatement, PlannerError> {
         match query_tree.command_type {
             CommandType::Insert => {
-                return Planner::planInsert(query_tree);
+                return Planner::plan_insert(query_tree);
             }
             _ => {
                 return Err(PlannerError::NotImplemented());
@@ -20,7 +20,7 @@ impl Planner {
         }
     }
 
-    fn planInsert(query_tree: QueryTree) -> Result<PlannedStatement, PlannerError> {
+    fn plan_insert(query_tree: QueryTree) -> Result<PlannedStatement, PlannerError> {
         //So we know we want to insert, now the question is into what.
         //I'm going to start with a simple insert and let it evolve.
 

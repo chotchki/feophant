@@ -8,10 +8,10 @@ use super::objects::ParseTree;
 use create::parse_create_table;
 use insert::parse_insert;
 use nom::branch::alt;
-use nom::combinator::{all_consuming, complete, cut};
+use nom::combinator::{all_consuming, complete};
 use nom::error::{convert_error, ContextError, ParseError, VerboseError};
+use nom::Finish;
 use nom::IResult;
-use nom::{Err, Finish};
 use thiserror::Error;
 
 pub struct SqlParser {}

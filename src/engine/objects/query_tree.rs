@@ -1,6 +1,5 @@
 //! Is the result of the parse tree post validation
 //! See here: https://www.postgresql.org/docs/current/querytree.html
-use super::super::super::constants::BuiltinSqlTypes;
 use super::Attribute;
 use super::SqlTuple;
 use super::Table;
