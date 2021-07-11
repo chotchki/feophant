@@ -10,6 +10,7 @@ pub use parse_tree::ParseTree;
 pub use parse_tree::RawColumn;
 pub use parse_tree::RawCreateTableCommand;
 pub use parse_tree::RawInsertCommand;
+pub use parse_tree::RawSelectCommand;
 
 mod planned_statement;
 pub use planned_statement::ModifyTablePlan;

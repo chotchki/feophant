@@ -1,8 +1,9 @@
 use nom::branch::alt;
 use nom::bytes::complete::{is_a, tag, take_until};
-use nom::character::complete::{digit1, multispace0, multispace1};
+use nom::character::complete::{alphanumeric1, digit1, multispace0, multispace1};
 use nom::combinator::{cut, map};
 use nom::error::{ContextError, ParseError};
+use nom::multi::separated_list0;
 use nom::sequence::tuple;
 use nom::IResult;
 
@@ -49,11 +50,24 @@ fn parse_sql_integer<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
     Ok((input, num))
 }
 
-//pub(super) fn convert_to_string<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
-//    input: &'a str,
-//) -> IResult<&'a str, String, E> {
-//    map(all_consuming, |s: &str| s.to_string())(input)
-//}
+pub(super) fn parse_column_names<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
+    input: &'a str,
+) -> IResult<&'a str, Vec<String>, E> {
+    let (input, (_, names, _)) = tuple((
+        match_open_paren,
+        separated_list0(match_comma, match_column_name),
+        match_close_paren,
+    ))(input)?;
+    Ok((input, names))
+}
+
+pub(super) fn match_column_name<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
+    input: &'a str,
+) -> IResult<&'a str, String, E> {
+    let (input, (_, name, _)) =
+        tuple((maybe_take_whitespace, alphanumeric1, maybe_take_whitespace))(input)?;
+    Ok((input, name.to_string()))
+}
 
 pub(super) fn maybe_take_whitespace<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
     input: &'a str,

@@ -2,6 +2,7 @@
 pub enum ParseTree {
     CreateTable(RawCreateTableCommand),
     Insert(RawInsertCommand),
+    Select(RawSelectCommand),
 }
 
 #[derive(Clone, Debug)]
@@ -22,4 +23,11 @@ pub struct RawInsertCommand {
     pub table_name: String,
     pub provided_columns: Option<Vec<String>>,
     pub provided_values: Vec<String>,
+}
+
+//TODO This is VERY bare bones, will be radically changed once more is implemented
+#[derive(Clone, Debug, PartialEq)]
+pub struct RawSelectCommand {
+    pub columns: Vec<String>,
+    pub table: String,
 }

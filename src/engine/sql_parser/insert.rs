@@ -5,8 +5,8 @@ use crate::engine::objects::ParseTree;
 
 use super::super::objects::RawInsertCommand;
 use super::common::{
-    match_close_paren, match_comma, match_open_paren, maybe_take_whitespace, parse_expression,
-    parse_sql_identifier, take_whitespace,
+    match_close_paren, match_comma, match_open_paren, maybe_take_whitespace, parse_column_names,
+    parse_expression, parse_sql_identifier, take_whitespace,
 };
 use nom::bytes::complete::tag_no_case;
 use nom::character::complete::alphanumeric1;
@@ -46,26 +46,6 @@ fn match_insert_into<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
     let (input, (_, _, _)) =
         tuple((tag_no_case("insert"), take_whitespace, tag_no_case("into")))(input)?;
     Ok((input, ()))
-}
-
-//TODO candidate for moving into common
-fn match_column_name<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
-    input: &'a str,
-) -> IResult<&'a str, String, E> {
-    let (input, (_, name, _)) =
-        tuple((maybe_take_whitespace, alphanumeric1, maybe_take_whitespace))(input)?;
-    Ok((input, name.to_string()))
-}
-
-fn parse_column_names<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
-    input: &'a str,
-) -> IResult<&'a str, Vec<String>, E> {
-    let (input, (_, names, _)) = tuple((
-        match_open_paren,
-        separated_list0(match_comma, match_column_name),
-        match_close_paren,
-    ))(input)?;
-    Ok((input, names))
 }
 
 fn match_values<'a, E: ParseError<&'a str> + ContextError<&'a str>>(

@@ -3,6 +3,7 @@
 mod common;
 mod create;
 mod insert;
+mod select;
 
 use super::objects::ParseTree;
 use create::parse_create_table;
