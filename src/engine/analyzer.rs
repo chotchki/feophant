@@ -9,7 +9,7 @@ use crate::engine::objects::{JoinType, SqlTuple, TargetEntry};
 use super::io::VisibleRowManager;
 use super::objects::{
     Attribute, CommandType, ParseTree, QueryTree, RangeRelation, RangeRelationTable,
-    RawInsertCommand, Table,
+    RawInsertCommand, RawSelectCommand, Table,
 };
 use super::transactions::TransactionId;
 use std::collections::HashMap;
@@ -36,6 +36,9 @@ impl Analyzer {
         match parse_tree {
             ParseTree::Insert(i) => {
                 return self.insert_processing(tran_id, i).await;
+            }
+            ParseTree::Select(i) => {
+                return self.select_processing(tran_id, i).await;
             }
             _ => return Err(AnalyzerError::NotImplemented()),
         }
@@ -73,6 +76,37 @@ impl Analyzer {
                 .collect(),
             range_tables: vec![target_tbl.clone(), anon_tbl.clone()],
             joins: vec![((JoinType::Inner, target_tbl, anon_tbl))],
+        })
+    }
+
+    async fn select_processing(
+        &self,
+        tran_id: TransactionId,
+        raw_select: RawSelectCommand,
+    ) -> Result<QueryTree, AnalyzerError> {
+        let definition = self.dl.get_definition(tran_id, raw_select.table).await?;
+
+        //Need to valid the columns asked for exist
+        let mut targets = vec![];
+        'outer: for rcol in raw_select.columns {
+            for c in definition.attributes.as_slice() {
+                if rcol == c.name {
+                    targets.push(TargetEntry::Parameter(c.clone()));
+                    continue 'outer;
+                }
+            }
+            return Err(AnalyzerError::UnknownColumn(rcol));
+        }
+
+        //We should be good to build the query tree if we got here
+        Ok(QueryTree {
+            command_type: CommandType::Select,
+            targets,
+            range_tables: vec![RangeRelation::Table(RangeRelationTable {
+                table: definition,
+                alias: None,
+            })],
+            joins: vec![],
         })
     }
 
@@ -162,7 +196,9 @@ pub enum AnalyzerError {
     ValueVsColumnMismatch(usize, usize),
     #[error("Missing required column {0}")]
     MissingColumn(Attribute),
-    #[error("Unknow columns received {0:?}")]
+    #[error("Unknown column received {0}")]
+    UnknownColumn(String),
+    #[error("Unknown columns received {0:?}")]
     UnknownColumns(Vec<String>),
     #[error("Not implemented")]
     NotImplemented(),

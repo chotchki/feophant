@@ -9,15 +9,18 @@ use nom::{
 
 use crate::engine::objects::{ParseTree, RawSelectCommand};
 
-use super::common::{match_column_name, match_comma, parse_sql_identifier, take_whitespace};
+use super::common::{
+    match_column_name, match_comma, maybe_take_whitespace, parse_sql_identifier, take_whitespace,
+};
 
 pub(super) fn parse_select<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
     input: &'a str,
 ) -> IResult<&'a str, ParseTree, E> {
-    let (input, (_, (columns, _, table))) = tuple((
+    let (input, (_, (columns, _, _, table))) = tuple((
         match_select,
         cut(tuple((
             separated_list0(match_comma, match_column_name),
+            maybe_take_whitespace,
             match_from,
             parse_sql_identifier,
         ))),

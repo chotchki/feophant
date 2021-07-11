@@ -31,6 +31,8 @@ use std::sync::Arc;
 use thiserror::Error;
 use tokio::sync::RwLock;
 
+use self::objects::SqlTuple;
+
 #[derive(Clone, Debug)]
 pub struct Engine {
     analyzer: Analyzer,
@@ -50,7 +52,7 @@ impl Engine {
         &mut self,
         tran_id: TransactionId,
         query: String,
-    ) -> Result<(), EngineError> {
+    ) -> Result<Vec<Arc<SqlTuple>>, EngineError> {
         //Parse it - I need to figure out if I should do statement splitting here
         let parse_tree = SqlParser::parse(&query)?;
 
@@ -67,8 +69,7 @@ impl Engine {
         //Plan it
         let planned_stmt = Planner::plan(rewrite_tree)?;
 
-        self.executor.execute(tran_id, planned_stmt).await?;
-        Ok(())
+        return Ok(self.executor.execute(tran_id, planned_stmt).await?);
     }
 
     fn should_bypass_planning(parse_tree: &ParseTree) -> bool {

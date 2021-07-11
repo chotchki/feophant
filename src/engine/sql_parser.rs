@@ -5,6 +5,8 @@ mod create;
 mod insert;
 mod select;
 
+use self::select::parse_select;
+
 use super::objects::ParseTree;
 use create::parse_create_table;
 use insert::parse_insert;
@@ -28,7 +30,11 @@ impl SqlParser {
     fn nom_parse<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
         input: &'a str,
     ) -> IResult<&'a str, ParseTree, E> {
-        complete(all_consuming(alt((parse_create_table, parse_insert))))(input)
+        complete(all_consuming(alt((
+            parse_create_table,
+            parse_insert,
+            parse_select,
+        ))))(input)
     }
 }
 

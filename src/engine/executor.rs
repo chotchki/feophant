@@ -28,7 +28,7 @@ impl Executor {
         &self,
         tran_id: TransactionId,
         plan_tree: PlannedStatement,
-    ) -> Result<(), ExecutorError> {
+    ) -> Result<Vec<Arc<SqlTuple>>, ExecutorError> {
         match plan_tree.plan {
             Plan::ModifyTable(mt) => self.modify_table(tran_id, mt.table, mt.source).await,
             _ => Err(ExecutorError::Unknown()),
@@ -40,7 +40,7 @@ impl Executor {
         tran_id: TransactionId,
         table: Arc<Table>,
         source: Arc<Plan>,
-    ) -> Result<(), ExecutorError> {
+    ) -> Result<Vec<Arc<SqlTuple>>, ExecutorError> {
         let rm = self.vis_row_man.clone();
 
         let values = match source.as_ref() {
@@ -50,7 +50,7 @@ impl Executor {
 
         rm.insert_row(tran_id, table, values).await?;
 
-        Ok(())
+        Ok(vec![])
     }
 
     //Bypass planning since there isn't anything optimize
@@ -58,7 +58,7 @@ impl Executor {
         &self,
         tran_id: TransactionId,
         parse_tree: ParseTree,
-    ) -> Result<(), ExecutorError> {
+    ) -> Result<Vec<Arc<SqlTuple>>, ExecutorError> {
         let rm = self.vis_row_man.clone();
 
         let create_table = match parse_tree {
@@ -95,14 +95,7 @@ impl Executor {
                 .insert_row(tran_id, pg_attribute.clone(), table_row)
                 .await?;
         }
-
-        //Making a table right now requires
-        //  the insertion of a row in pg_class
-        //      Need the definition of pg_class
-        //  the insertion of a row per column in pg_attributes
-        //      Need the definition of pg_attribute
-
-        Ok(())
+        Ok(vec![])
     }
 }
 
