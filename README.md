@@ -29,7 +29,9 @@ You can currently start the server, connect to it and have it throw tons of erro
 
 **Path to 0.5**
 
-Implement single non joined select. No wildcards, aliases or other items.
+Implement single non joined select. No wildcards, aliases or other items. (Done)
+
+Going to take some extra time to add unit tests.
 
 **Path to 0.6**
 
