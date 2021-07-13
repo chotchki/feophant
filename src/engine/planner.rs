@@ -3,6 +3,7 @@ use super::objects::{
     CommandType, JoinType, ModifyTablePlan, Plan, PlannedCommon, PlannedStatement, QueryTree,
     RangeRelation,
 };
+use crate::engine::objects::{FullTableScan, TargetEntry};
 use std::sync::Arc;
 use thiserror::Error;
 
@@ -13,6 +14,9 @@ impl Planner {
         match query_tree.command_type {
             CommandType::Insert => {
                 return Planner::plan_insert(query_tree);
+            }
+            CommandType::Select => {
+                return Planner::plan_select(query_tree);
             }
             _ => {
                 return Err(PlannerError::NotImplemented());
@@ -34,19 +38,65 @@ impl Planner {
             (JoinType::Inner, RangeRelation::Table(t), RangeRelation::AnonymousTable(at)) => {
                 return Ok(PlannedStatement {
                     common: PlannedCommon {},
-                    plan: Plan::ModifyTable(ModifyTablePlan {
+                    plan: Arc::new(Plan::ModifyTable(ModifyTablePlan {
                         table: t.table.clone(),
                         source: Arc::new(Plan::StaticData(at.clone())),
-                    }),
+                    })),
                 });
             }
             (_, _, _) => return Err(PlannerError::NotImplemented()),
+        }
+    }
+
+    fn plan_select(query_tree: QueryTree) -> Result<PlannedStatement, PlannerError> {
+        //TODO I'm ignoring joins at the moment
+
+        let mut targets = vec![];
+        for t in query_tree.targets {
+            match t {
+                TargetEntry::Parameter(p) => targets.push(p),
+            }
+        }
+
+        let mut unjoined = vec![];
+        for rr in query_tree.range_tables {
+            match rr {
+                RangeRelation::Table(rrt) => {
+                    unjoined.push(Arc::new(Plan::FullTableScan(FullTableScan {
+                        columns: targets.clone(), //TODO I know not every table needs every column
+                        table: rrt.table,
+                    })));
+                }
+                RangeRelation::AnonymousTable(anon_tbl) => {
+                    unjoined.push(Arc::new(Plan::StaticData(anon_tbl.clone())));
+                }
+            }
+        }
+
+        if unjoined.len() == 0 {
+            return Err(PlannerError::NoDataProvided());
+        } else if unjoined.len() == 1 {
+            return Ok(PlannedStatement {
+                common: PlannedCommon {},
+                plan: unjoined[0].clone(),
+            });
+        } else {
+            //let cart_joins = return Ok(PlannedStatement {
+            //    common: PlannedCommon {},
+            //    plan: Arc::new(Plan::CrossProduct(CrossProduct {
+            //        columns: targets,
+            //        source: unjoined,
+            //    })),
+            //});
+            return Err(PlannerError::NotImplemented());
         }
     }
 }
 
 #[derive(Debug, Error)]
 pub enum PlannerError {
+    #[error("No data provided")]
+    NoDataProvided(),
     #[error("Too Many Joins {0}")]
     TooManyJoins(usize),
     #[error("Not Implemented")]

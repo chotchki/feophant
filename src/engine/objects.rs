@@ -13,6 +13,8 @@ pub use parse_tree::RawInsertCommand;
 pub use parse_tree::RawSelectCommand;
 
 mod planned_statement;
+pub use planned_statement::CartesianJoin;
+pub use planned_statement::FullTableScan;
 pub use planned_statement::ModifyTablePlan;
 pub use planned_statement::Plan;
 pub use planned_statement::PlannedCommon;
@@ -28,3 +30,4 @@ pub use query_tree::TargetEntry;
 
 mod sql_tuple;
 pub use sql_tuple::SqlTuple;
+pub use sql_tuple::SqlTupleError;

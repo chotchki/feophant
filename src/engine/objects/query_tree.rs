@@ -46,7 +46,7 @@ pub enum RangeRelation {
     Table(RangeRelationTable),
     //View(RangeRelationTable),
     //SubQuery(Option<QueryTree>),
-    AnonymousTable(Arc<SqlTuple>), //Used for inserts
+    AnonymousTable(Arc<Vec<SqlTuple>>), //Used for inserts
 }
 
 #[derive(Clone, Debug)]

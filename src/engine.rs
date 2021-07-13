@@ -7,6 +7,7 @@ pub use executor::Executor;
 pub use executor::ExecutorError;
 
 pub mod io;
+use futures::pin_mut;
 use io::{IOManager, RowManager, VisibleRowManager};
 pub mod objects;
 use objects::ParseTree;
@@ -30,6 +31,7 @@ use std::ops::Deref;
 use std::sync::Arc;
 use thiserror::Error;
 use tokio::sync::RwLock;
+use tokio_stream::StreamExt;
 
 use self::objects::SqlTuple;
 
@@ -52,7 +54,7 @@ impl Engine {
         &mut self,
         tran_id: TransactionId,
         query: String,
-    ) -> Result<Vec<Arc<SqlTuple>>, EngineError> {
+    ) -> Result<Vec<SqlTuple>, EngineError> {
         //Parse it - I need to figure out if I should do statement splitting here
         let parse_tree = SqlParser::parse(&query)?;
 
@@ -69,7 +71,16 @@ impl Engine {
         //Plan it
         let planned_stmt = Planner::plan(rewrite_tree)?;
 
-        return Ok(self.executor.execute(tran_id, planned_stmt).await?);
+        //Execute it, single shot for now
+        let mut result = vec![];
+        let execute_stream = self.executor.clone().execute(tran_id, planned_stmt);
+        pin_mut!(execute_stream);
+
+        while let Some(value) = execute_stream.next().await {
+            result.push(value?);
+        }
+
+        return Ok(result);
     }
 
     fn should_bypass_planning(parse_tree: &ParseTree) -> bool {

@@ -7,8 +7,8 @@ use uuid::Uuid;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Attribute {
-    id: Uuid,
-    pg_class_id: Uuid,
+    pub id: Uuid,
+    pub pg_class_id: Uuid,
     pub name: String,
     pub sql_type: DeserializeTypes,
     pub nullable: Nullable,

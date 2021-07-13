@@ -60,7 +60,7 @@ impl Analyzer {
             raw_insert.provided_values,
         )?;
 
-        let anon_tbl = RangeRelation::AnonymousTable(Arc::new(SqlTuple(val_cols)));
+        let anon_tbl = RangeRelation::AnonymousTable(Arc::new(vec![SqlTuple(val_cols)]));
         let target_tbl = RangeRelation::Table(RangeRelationTable {
             alias: None,
             table: definition.clone(),
