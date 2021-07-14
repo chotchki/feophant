@@ -53,6 +53,10 @@ pgbench setup can run successfully, in memory
 
 **Path to 0.12**
 
+Ensure data about table structures is thread safe in the face of excessive Arc usage.
+
+**Path to 0.13**
+
 Did some reading on how the buffer manager works and my implementation seems to be firmly in the right direction. Take that knowledge and implement persistence
 
 **1.0 Release Criteria**
