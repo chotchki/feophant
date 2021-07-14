@@ -33,6 +33,10 @@ Implement single non joined select. No wildcards, aliases or other items. (Done)
 
 Going to take some extra time to add unit tests.
 
+Nvm, I think I'm happy where I'm at until I get better column tracing.
+
+Starting 0.5 release process.
+
 **Path to 0.6**
 
 Implement nullable columns, the underlying data structures already support it. Would move this up except that I don't have an easy way to test it. (done)
