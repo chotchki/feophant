@@ -88,7 +88,7 @@ impl Executor {
                 let data = row?.user_data.clone();
 
                 //Need to rewrite to the column / order needed
-                let requested_row = data.filterMap(&table, &columns)?;
+                let requested_row = data.filter_map(&table, &columns)?;
 
                 yield requested_row;
             }

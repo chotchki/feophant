@@ -12,7 +12,7 @@ pub struct SqlTuple(pub Vec<Option<BuiltinSqlTypes>>);
 
 impl SqlTuple {
     //Rewrites the tuple to only provide columns requested in the order requested
-    pub fn filterMap(
+    pub fn filter_map(
         &self,
         source: &Table,
         target: &Vec<Attribute>,
