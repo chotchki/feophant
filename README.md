@@ -29,7 +29,7 @@ You can currently start the server, connect to it and have it throw tons of erro
 
 **Path to 0.6**
 
-Implement nullable columns, the underlying data structures already support it. Would move this up except that I don't have an easy way to test it. Changing this to support null through inserts.
+Implement nullable columns, the underlying data structures already support it. Would move this up except that I don't have an easy way to test it. Changing this to support null through inserts. (done)
 
 **Path to 0.7**
 
