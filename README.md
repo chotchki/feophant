@@ -27,37 +27,31 @@ You can currently start the server, connect to it and have it throw tons of erro
 
 ## Current TODO List - Subject to constant change!
 
-**Path to 0.5**
-
-Implement single non joined select. No wildcards, aliases or other items. (Done)
-
-Going to take some extra time to add unit tests.
-
-Nvm, I think I'm happy where I'm at until I get better column tracing.
-
-Starting 0.5 release process.
-
 **Path to 0.6**
 
-Implement nullable columns, the underlying data structures already support it. Would move this up except that I don't have an easy way to test it. (done)
+Implement nullable columns, the underlying data structures already support it. Would move this up except that I don't have an easy way to test it. Changing this to support null through inserts.
 
 **Path to 0.7**
 
-Implement unique indexes. Inserts should fail on violations.
+psql should support running the query and returning results
 
 **Path to 0.8**
 
-At this point I have enough infrastructure to start caring about transactions. Implement filtering of tuples based on visibility rules. (done)
+Implement unique indexes. Inserts should fail on violations.
 
 **Path to 0.9**
 
+At this point I have enough infrastructure to start caring about transactions. Implement filtering of tuples based on visibility rules. (done)
+
+**Path to 0.10**
+
 Implement delete for tuples
 
-**Path to 0.10:**
+**Path to 0.11**
 
 pgbench setup can run successfully, in memory
 
-**Path to 0.11**
+**Path to 0.12**
 
 Did some reading on how the buffer manager works and my implementation seems to be firmly in the right direction. Take that knowledge and implement persistence
 
