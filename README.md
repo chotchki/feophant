@@ -27,13 +27,15 @@ You can currently start the server, connect to it and have it throw tons of erro
 
 ## Current TODO List - Subject to constant change!
 
-**Path to 0.6**
-
-Implement nullable columns, the underlying data structures already support it. Would move this up except that I don't have an easy way to test it. Changing this to support null through inserts. (done)
-
 **Path to 0.7**
 
 psql should support running the query and returning results
+
+Big complication was just found, postgres OIDs are embedded into the protocol. I might need to switch from uuid to 32-bit OIDs depending on how postgres handles communicating data types.
+
+Maybe not, looks like postgres is killing them off except for system tables. https://postgresql.verite.pro/blog/2019/04/24/oid-column.html
+
+Need to investigate how psql handles data types
 
 **Path to 0.8**
 
