@@ -5,6 +5,9 @@ mod table;
 pub use table::Table;
 pub use table::TableError;
 
+mod parse_expression;
+pub use parse_expression::ParseExpression;
+
 mod parse_tree;
 pub use parse_tree::ParseTree;
 pub use parse_tree::RawColumn;

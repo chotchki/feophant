@@ -1,3 +1,5 @@
+use super::ParseExpression;
+
 #[derive(Clone, Debug)]
 pub enum ParseTree {
     CreateTable(RawCreateTableCommand),
@@ -22,7 +24,7 @@ pub struct RawColumn {
 pub struct RawInsertCommand {
     pub table_name: String,
     pub provided_columns: Option<Vec<String>>,
-    pub provided_values: Vec<String>,
+    pub provided_values: Vec<ParseExpression>,
 }
 
 //TODO This is VERY bare bones, will be radically changed once more is implemented

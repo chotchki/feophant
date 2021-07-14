@@ -8,8 +8,8 @@ use crate::engine::objects::{JoinType, SqlTuple, TargetEntry};
 
 use super::io::VisibleRowManager;
 use super::objects::{
-    Attribute, CommandType, ParseTree, QueryTree, RangeRelation, RangeRelationTable,
-    RawInsertCommand, RawSelectCommand, Table,
+    Attribute, CommandType, ParseExpression, ParseTree, QueryTree, RangeRelation,
+    RangeRelationTable, RawInsertCommand, RawSelectCommand, Table,
 };
 use super::transactions::TransactionId;
 use std::collections::HashMap;
@@ -114,12 +114,12 @@ impl Analyzer {
     fn validate_columns(
         table: Arc<Table>,
         provided_columns: Option<Vec<String>>,
-        provided_values: Vec<String>,
+        provided_values: Vec<ParseExpression>,
     ) -> Result<(Vec<Attribute>, Vec<Option<BuiltinSqlTypes>>), AnalyzerError> {
         let columns = match provided_columns {
             Some(pc) => {
                 //Can't assume we got the columns in order so we'll have to reorder to match the table
-                let mut provided_pair: HashMap<String, String> =
+                let mut provided_pair: HashMap<String, ParseExpression> =
                     pc.into_iter().zip(provided_values).collect();
                 let mut result = vec![];
                 for a in table.attributes.clone() {
@@ -159,21 +159,22 @@ impl Analyzer {
     }
 
     fn convert_into_types(
-        provided: Vec<(Attribute, Option<String>)>,
+        provided: Vec<(Attribute, Option<ParseExpression>)>,
     ) -> Result<(Vec<Attribute>, Vec<Option<BuiltinSqlTypes>>), AnalyzerError> {
         let mut tbl_cols = vec![];
         let mut val_cols = vec![];
         for (a, s) in provided {
             match s {
-                Some(s2) => {
-                    if s2.to_lowercase() == "null" {
+                Some(s2) => match s2 {
+                    ParseExpression::String(s3) => {
+                        tbl_cols.push(a.clone());
+                        val_cols.push(Some(BuiltinSqlTypes::parse(a.sql_type, s3)?));
+                    }
+                    ParseExpression::Null() => {
                         tbl_cols.push(a);
                         val_cols.push(None);
-                    } else {
-                        tbl_cols.push(a.clone());
-                        val_cols.push(Some(BuiltinSqlTypes::parse(a.sql_type, s2)?));
                     }
-                }
+                },
                 None => {
                     tbl_cols.push(a);
                     val_cols.push(None);

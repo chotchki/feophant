@@ -12,9 +12,16 @@ fn simple_insert() -> Result<(), Box<dyn std::error::Error>> {
     aw!(tm.commit_trans(tran))?;
 
     let insert_test =
-        "insert into foo (another, baz, bar) values('one', 'two', 'three')".to_string();
+        "insert into foo (another, baz, bar) values(null, 'two', 'three')".to_string();
     let tran = aw!(tm.start_trans())?;
-    aw!(engine.process_query(tran, insert_test))?;
+    let result = aw!(engine.process_query(tran, insert_test));
+    let result = match result {
+        Ok(o) => o,
+        Err(e) => {
+            println!("{} {:?}", e, e);
+            panic!("Ah crap");
+        }
+    };
     aw!(tm.commit_trans(tran))?;
 
     Ok(())

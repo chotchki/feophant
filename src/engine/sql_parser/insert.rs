@@ -1,7 +1,7 @@
 //! Format here: https://www.postgresql.org/docs/current/sql-insert.html
 //! This is only implementing a basic insert, fancy will come later
 
-use crate::engine::objects::ParseTree;
+use crate::engine::objects::{ParseExpression, ParseTree};
 
 use super::super::objects::RawInsertCommand;
 use super::common::{
@@ -62,7 +62,7 @@ fn match_values<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
 
 fn parse_values<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
     input: &'a str,
-) -> IResult<&'a str, Vec<String>, E> {
+) -> IResult<&'a str, Vec<ParseExpression>, E> {
     let (input, (values, _)) = tuple((
         separated_list0(match_comma, parse_expression),
         match_close_paren,
@@ -95,7 +95,10 @@ mod tests {
                 "second".to_string(),
                 "third".to_string(),
             ]),
-            provided_values: vec!["stuff and things".to_string(), "2".to_string()],
+            provided_values: vec![
+                ParseExpression::String("stuff and things".to_string()),
+                ParseExpression::String("2".to_string()),
+            ],
         };
         assert_eq!(expected, value);
 
