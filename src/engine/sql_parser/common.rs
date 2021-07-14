@@ -1,10 +1,10 @@
 use nom::branch::alt;
-use nom::bytes::complete::{is_a, tag, take_until};
-use nom::character::complete::{alphanumeric1, digit1, multispace0, multispace1};
-use nom::combinator::{cut, map};
+use nom::bytes::complete::{escaped, escaped_transform, is_a, is_not, tag, take_until};
+use nom::character::complete::{alphanumeric1, digit1, multispace0, multispace1, none_of};
+use nom::combinator::{cut, map, map_parser, recognize, value};
 use nom::error::{ContextError, ParseError};
-use nom::multi::separated_list0;
-use nom::sequence::tuple;
+use nom::multi::{many0, separated_list0, separated_list1};
+use nom::sequence::{delimited, tuple};
 use nom::IResult;
 
 pub(super) fn parse_sql_identifier<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
@@ -23,31 +23,24 @@ pub(super) fn parse_sql_identifier<'a, E: ParseError<&'a str> + ContextError<&'a
 pub(super) fn parse_expression<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
     input: &'a str,
 ) -> IResult<&'a str, String, E> {
-    map(
-        cut(alt((parse_sql_string, parse_sql_integer))),
-        |s: &str| s.to_string(),
-    )(input)
+    cut(alt((parse_sql_string, parse_sql_integer)))(input)
 }
 
 fn parse_sql_string<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
     input: &'a str,
-) -> IResult<&'a str, &'a str, E> {
-    let (input, (_, _, value, _, _)) = tuple((
-        maybe_take_whitespace,
-        tag("'"),
-        take_until("'"),
-        tag("'"),
-        maybe_take_whitespace,
-    ))(input)?;
-    Ok((input, value))
+) -> IResult<&'a str, String, E> {
+    //Code from here: https://stackoverflow.com/a/58520871
+    let seq = recognize(separated_list1(tag("''"), many0(none_of("'"))));
+    let unquote = escaped_transform(none_of("'"), '\'', tag("'"));
+    delimited(tag("'"), map_parser(seq, unquote), tag("'"))(input)
 }
 
 fn parse_sql_integer<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
     input: &'a str,
-) -> IResult<&'a str, &'a str, E> {
+) -> IResult<&'a str, String, E> {
     let (input, (_, num, _)) =
         tuple((maybe_take_whitespace, digit1, maybe_take_whitespace))(input)?;
-    Ok((input, num))
+    Ok((input, num.to_string()))
 }
 
 pub(super) fn parse_column_names<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
@@ -112,5 +105,24 @@ mod tests {
         let (output, value) = res.unwrap();
         assert_eq!(output.len(), 0);
         assert_eq!(test, value);
+    }
+
+    #[test]
+    fn test_parse_sql_string() {
+        let test = "'one''two'";
+        let expected = "one'two";
+
+        let res = parse_sql_string::<VerboseError<&str>>(test);
+        let res = match res {
+            Ok(o) => o,
+            Err(e) => {
+                println!("{} {:?}", e, e);
+                panic!("Ah crap");
+            }
+        };
+        //assert!(res.is_ok());
+        let (output, value) = res;
+        assert_eq!(output.len(), 0);
+        assert_eq!(expected, value);
     }
 }
