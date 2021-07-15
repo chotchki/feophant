@@ -35,7 +35,9 @@ Big complication was just found, postgres OIDs are embedded into the protocol. I
 
 Maybe not, looks like postgres is killing them off except for system tables. https://postgresql.verite.pro/blog/2019/04/24/oid-column.html
 
-Need to investigate how psql handles data types
+Need to investigate how psql handles data types.
+
+I'm going to wire up simple query support into psql and see what happens with a query.
 
 **Path to 0.8**
 
