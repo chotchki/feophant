@@ -40,6 +40,8 @@ Need to investigate how psql handles data types.
 
 I'm going to wire up simple query support into psql and see what happens with a query.
 
+Wired up and discovered I need to at least support a semi colon command terminator.
+
 **Path to 0.8**
 
 Implement unique indexes. Inserts should fail on violations.
