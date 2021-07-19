@@ -19,11 +19,11 @@ use tokio::sync::RwLock;
 
 #[derive(Clone, Debug)]
 pub struct RowManager {
-    io_manager: Arc<RwLock<IOManager>>,
+    io_manager: IOManager,
 }
 
 impl RowManager {
-    pub fn new(io_manager: Arc<RwLock<IOManager>>) -> RowManager {
+    pub fn new(io_manager: IOManager) -> RowManager {
         RowManager { io_manager }
     }
 
@@ -33,8 +33,9 @@ impl RowManager {
         table: Arc<Table>,
         user_data: Arc<SqlTuple>,
     ) -> Result<ItemPointer, RowManagerError> {
-        let io_mut = self.io_manager.write().await;
-        RowManager::insert_row_internal(&io_mut, current_tran_id, table, user_data).await
+        //let io_mut = self.io_manager.write().await;
+        RowManager::insert_row_internal(self.io_manager.clone(), current_tran_id, table, user_data)
+            .await
     }
 
     //Note this is a logical delete
@@ -58,8 +59,8 @@ impl RowManager {
 
         page.update(row, row_pointer.count)?;
 
-        let io_mut = self.io_manager.write().await;
-        io_mut
+        //let io_mut = self.io_manager.write().await;
+        self.io_manager
             .update_page(table, page.serialize(), row_pointer.page)
             .await?;
         Ok(())
@@ -93,7 +94,7 @@ impl RowManager {
         )?;
         let new_row_len = new_row.serialize().len();
 
-        let io_mut = self.io_manager.write().await;
+        //let io_mut = self.io_manager.write().await;
 
         //Prefer using the old page if possible
         let new_row_pointer;
@@ -101,7 +102,7 @@ impl RowManager {
             new_row_pointer = old_page.insert(new_row)?;
         } else {
             new_row_pointer = RowManager::insert_row_internal(
-                &io_mut,
+                self.io_manager.clone(),
                 current_tran_id,
                 table.clone(),
                 new_user_data,
@@ -114,7 +115,7 @@ impl RowManager {
 
         old_page.update(old_row, row_pointer.count)?;
 
-        io_mut
+        self.io_manager
             .update_page(table, old_page.serialize(), row_pointer.page)
             .await?;
 
@@ -126,8 +127,9 @@ impl RowManager {
         table: Arc<Table>,
         row_pointer: ItemPointer,
     ) -> Result<(PageData, RowData), RowManagerError> {
-        let io = self.io_manager.read().await;
-        let page_bytes = io
+        //let io = self.io_manager.read().await;
+        let page_bytes = self
+            .io_manager
             .get_page(table.clone(), row_pointer.page)
             .await
             .ok_or_else(|| RowManagerError::NonExistentPage(row_pointer.page))?;
@@ -147,9 +149,9 @@ impl RowManager {
         table: Arc<Table>,
     ) -> impl Stream<Item = Result<RowData, RowManagerError>> {
         try_stream! {
-            let io_man = self.io_manager.read().await;
+            //let io_man = self.io_manager.read().await;
             let mut page_num = 0;
-            for await page_bytes in io_man.get_stream(table.clone()) {
+            for await page_bytes in self.io_manager.get_stream(table.clone()) {
                 let page = PageData::parse(table.clone(), page_num, page_bytes)?;
                 for await row in page.get_stream() {
                     yield row;
@@ -160,7 +162,7 @@ impl RowManager {
     }
 
     async fn insert_row_internal(
-        io_manager: &IOManager,
+        io_manager: IOManager,
         current_tran_id: TransactionId,
         table: Arc<Table>,
         user_data: Arc<SqlTuple>,
@@ -279,7 +281,7 @@ mod tests {
     #[test]
     fn test_row_manager_mass_insert() {
         let table = get_table();
-        let pm = Arc::new(RwLock::new(IOManager::new()));
+        let pm = IOManager::new();
         let rm = RowManager::new(pm);
 
         let tran_id = TransactionId::new(1);
@@ -310,7 +312,7 @@ mod tests {
     #[test]
     fn test_row_manager_crud() {
         let table = get_table();
-        let pm = Arc::new(RwLock::new(IOManager::new()));
+        let pm = IOManager::new();
         let rm = RowManager::new(pm);
 
         let tran_id = TransactionId::new(1);

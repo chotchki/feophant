@@ -11,9 +11,6 @@ macro_rules! aw {
 
 pub fn _create_engine() -> (TransactionManager, Engine) {
     let transaction_manager = TransactionManager::new();
-    let engine = Engine::new(
-        Arc::new(RwLock::new(IOManager::new())),
-        transaction_manager.clone(),
-    );
+    let engine = Engine::new(IOManager::new(), transaction_manager.clone());
     (transaction_manager, engine)
 }

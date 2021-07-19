@@ -45,7 +45,7 @@ pub struct Engine {
 }
 
 impl Engine {
-    pub fn new(io_manager: Arc<RwLock<IOManager>>, tran_manager: TransactionManager) -> Engine {
+    pub fn new(io_manager: IOManager, tran_manager: TransactionManager) -> Engine {
         let vis_row_man = VisibleRowManager::new(RowManager::new(io_manager), tran_manager);
         Engine {
             analyzer: Analyzer::new(vis_row_man.clone()),
@@ -145,10 +145,7 @@ mod tests {
         let select_test = "select bar from foo".to_string();
 
         let mut transaction_manager = TransactionManager::new();
-        let mut engine = Engine::new(
-            Arc::new(RwLock::new(IOManager::new())),
-            transaction_manager.clone(),
-        );
+        let mut engine = Engine::new(IOManager::new(), transaction_manager.clone());
 
         let tran = aw!(transaction_manager.start_trans())?;
         aw!(engine.process_query(tran, create_test))?;

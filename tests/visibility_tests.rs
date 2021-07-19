@@ -57,7 +57,7 @@ fn test_row_manager_visibility() -> Result<(), Box<dyn std::error::Error>> {
 
     let table = get_table();
     let mut tm = TransactionManager::new();
-    let pm = Arc::new(RwLock::new(IOManager::new()));
+    let pm = IOManager::new();
     let rm = RowManager::new(pm);
     let vm = VisibleRowManager::new(rm.clone(), tm.clone());
     let row = get_row("test".to_string());

@@ -204,7 +204,7 @@ mod tests {
 
     #[test]
     fn test_find_pg_class() {
-        let pm = Arc::new(RwLock::new(IOManager::new()));
+        let pm = IOManager::new();
         let tm = TransactionManager::new();
         let rm = RowManager::new(pm);
         let vm = VisibleRowManager::new(rm, tm);
@@ -218,7 +218,7 @@ mod tests {
 
     #[test]
     fn test_no_such_class() {
-        let pm = Arc::new(RwLock::new(IOManager::new()));
+        let pm = IOManager::new();
         let tm = TransactionManager::new();
         let rm = RowManager::new(pm);
         let vm = VisibleRowManager::new(rm, tm);
@@ -236,7 +236,7 @@ mod tests {
 
     #[test]
     fn test_def_lookup() -> Result<(), Box<dyn std::error::Error>> {
-        let pm = Arc::new(RwLock::new(IOManager::new()));
+        let pm = IOManager::new();
         let mut tm = TransactionManager::new();
         let rm = RowManager::new(pm.clone());
         let vm = VisibleRowManager::new(rm.clone(), tm.clone());

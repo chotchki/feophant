@@ -28,7 +28,7 @@ async fn main() {
     info!("Welcome to FeOphant!");
 
     //Start the services first
-    let io_manager = Arc::new(RwLock::new(IOManager::new()));
+    let io_manager = IOManager::new();
     let transaction_manager = TransactionManager::new();
     let engine = Engine::new(io_manager, transaction_manager.clone());
 
