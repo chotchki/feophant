@@ -1,5 +1,8 @@
 //!Wrapper type for a row in the database unattached to a table
-use std::sync::Arc;
+use std::{
+    ops::{Deref, DerefMut},
+    sync::Arc,
+};
 
 use crate::constants::BuiltinSqlTypes;
 use thiserror::Error;

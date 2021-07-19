@@ -1,7 +1,10 @@
 mod common;
 use std::sync::Arc;
 
-use feophantlib::{constants::BuiltinSqlTypes, engine::objects::SqlTuple};
+use feophantlib::{
+    constants::BuiltinSqlTypes,
+    engine::objects::{QueryResult, SqlTuple},
+};
 
 #[test]
 fn simple_select() -> Result<(), Box<dyn std::error::Error>> {
@@ -31,13 +34,21 @@ fn simple_select() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
-    let select_res = vec![SqlTuple(vec![
+    let select_columns = vec!["baz".to_string(), "bar".to_string(), "another".to_string()];
+
+    let select_row = vec![SqlTuple(vec![
         Some(BuiltinSqlTypes::Text("two".to_string())),
         Some(BuiltinSqlTypes::Text("three".to_string())),
         Some(BuiltinSqlTypes::Text("one".to_string())),
     ])];
 
-    assert_eq!(result, select_res);
+    assert_eq!(
+        result,
+        QueryResult {
+            columns: select_columns,
+            rows: select_row
+        }
+    );
 
     aw!(tm.commit_trans(tran))?;
 

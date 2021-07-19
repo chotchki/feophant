@@ -33,6 +33,9 @@ use thiserror::Error;
 use tokio::sync::RwLock;
 use tokio_stream::StreamExt;
 
+use crate::engine::objects::TargetEntry;
+
+use self::objects::QueryResult;
 use self::objects::SqlTuple;
 
 #[derive(Clone, Debug)]
@@ -54,19 +57,23 @@ impl Engine {
         &mut self,
         tran_id: TransactionId,
         query: String,
-    ) -> Result<Vec<SqlTuple>, EngineError> {
+    ) -> Result<QueryResult, EngineError> {
         //Parse it - I need to figure out if I should do statement splitting here
         let parse_tree = SqlParser::parse(&query)?;
 
         if Engine::should_bypass_planning(&parse_tree) {
-            return Ok(self.executor.execute_utility(tran_id, parse_tree).await?);
+            let output_rows = self.executor.execute_utility(tran_id, parse_tree).await?;
+            return Ok(QueryResult {
+                columns: vec![],
+                rows: output_rows,
+            });
         }
 
         //Analyze it
         let query_tree = self.analyzer.analyze(tran_id, parse_tree).await?;
 
         //Rewrite it - noop for right now
-        let rewrite_tree = Rewriter::rewrite(query_tree)?;
+        let rewrite_tree = Rewriter::rewrite(query_tree.clone())?;
 
         //Plan it
         let planned_stmt = Planner::plan(rewrite_tree)?;
@@ -80,7 +87,18 @@ impl Engine {
             result.push(value?);
         }
 
-        return Ok(result);
+        let output_columns = query_tree
+            .targets
+            .into_iter()
+            .map(|t| match t {
+                TargetEntry::Parameter(p) => p.name,
+            })
+            .collect();
+
+        return Ok(QueryResult {
+            columns: output_columns,
+            rows: result,
+        });
     }
 
     fn should_bypass_planning(parse_tree: &ParseTree) -> bool {

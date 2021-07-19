@@ -23,6 +23,9 @@ pub use planned_statement::Plan;
 pub use planned_statement::PlannedCommon;
 pub use planned_statement::PlannedStatement;
 
+mod query_result;
+pub use query_result::QueryResult;
+
 mod query_tree;
 pub use query_tree::CommandType;
 pub use query_tree::JoinType;

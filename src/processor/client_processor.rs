@@ -5,7 +5,7 @@ use super::super::engine::transactions::{TransactionManager, TransactionManagerE
 use super::super::engine::{Engine, EngineError};
 use super::ssl_and_gssapi_parser;
 use super::startup_parser;
-use crate::codec::NetworkFrame;
+use crate::codec::{NetworkFrame, NetworkFrameError};
 use crate::constants::{PgErrorCodes, PgErrorLevels};
 
 pub struct ClientProcessor {
@@ -58,32 +58,27 @@ impl ClientProcessor {
             let query_str = String::from_utf8(payload_buff.to_vec())?;
 
             let txid = self.transaction_manager.start_trans().await?;
+
+            //TODO this should not just return Err, I should transform to an error response instead
             let query_res = self.engine.process_query(txid, query_str).await?;
 
-            //Re-write it if needed
+            let mut frames = vec![];
+            if query_res.columns.len() > 0 {
+                frames.push(NetworkFrame::row_description(query_res.columns)?);
+            }
+            let results_rows = query_res.rows.len();
+            if results_rows > 0 {
+                frames.append(&mut NetworkFrame::data_rows(query_res.rows)?);
+            }
 
-            //---- Old ideas
-            //first query is "create table foo(bar u32);"
-            //Parse to the following commands
-            //Get XID
-            //Call to TransGen
-            //Does table already exist? -> Error
-            //Scan pg_class for table name
-            //Look up definition of pg_class (hardcoded)
-            //command::getDefinition(name) -> Result<PgTable, Err>
-            //Use that info to parse a page of data for rows
-            //Check each row to match on table name
-            //return row if found
-            //Add entry for table
-            //Look up definition of pg_class (hardcoded)
-            //Prepare new row entry
-            //Scan for a page with the empty space for the row
-            //Rewrite the page with the row
-            //Replace page with new row
-            //Add entry for column + type
-            //Do the same thing for the table type with pg_attribute
+            frames.push(NetworkFrame::command_complete(format!(
+                "SELECT {}",
+                results_rows
+            )));
 
-            //let commands:vec[Commands] = Parse the query
+            frames.push(NetworkFrame::ready_for_query());
+
+            return Ok(frames);
         }
 
         warn!(
@@ -104,6 +99,8 @@ pub enum ClientProcessorError {
     BadStartup(),
     #[error(transparent)]
     EngineError(#[from] EngineError),
+    #[error(transparent)]
+    NetworkFrameError(#[from] NetworkFrameError),
     #[error(transparent)]
     QueryNotUtf8(#[from] std::string::FromUtf8Error),
     #[error(transparent)]
