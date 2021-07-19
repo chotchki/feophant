@@ -50,7 +50,7 @@ Implement unique indexes. Inserts should fail on violations.
 
 **Path to 0.9**
 
-At this point I have enough infrastructure to start caring about transactions. Implement filtering of tuples based on visibility rules. (done)
+Implement where clauses, will likely need to have to start tracing columns from analyizing through to later stages.
 
 **Path to 0.10**
 
@@ -65,6 +65,26 @@ pgbench setup can run successfully, in memory
 Ensure data about table structures is thread safe in the face of excessive Arc usage.
 
 **Path to 0.13**
+
+Support a row with more than 4kb of text in it.
+
+**Path to 0.14**
+
+Implement sorting.
+
+**Path to 0.15**
+
+Implement column aliasing
+
+**Path to 0.16**
+
+Implement subselect.
+
+**Path to 0.17**
+
+Implement Updates.
+
+**Path to 0.18**
 
 Did some reading on how the buffer manager works and my implementation seems to be firmly in the right direction. Take that knowledge and implement persistence
 
