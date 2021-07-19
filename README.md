@@ -28,25 +28,13 @@ You can currently start the server, connect to it and have it throw tons of erro
 
 ## Current TODO List - Subject to constant change!
 
-**Path to 0.7**
-
-psql should support running the query and returning results
-
-Big complication was just found, postgres OIDs are embedded into the protocol. I might need to switch from uuid to 32-bit OIDs depending on how postgres handles communicating data types.
-
-Maybe not, looks like postgres is killing them off except for system tables. https://postgresql.verite.pro/blog/2019/04/24/oid-column.html
-
-Need to investigate how psql handles data types.
-
-I'm going to wire up simple query support into psql and see what happens with a query.
-
-Wired up and discovered I need to at least support a semi colon command terminator.
-
-Done
-
 **Path to 0.8**
 
-Implement unique indexes. Inserts should fail on violations.
+Add support for defining a primary key on a table. This implies the following functionality:
+* Index support through the stack down to the page level.
+* The concept of unique indexes.
+* Transactional support for indexes.
+* Failure of a statement on constraint violation. Unsure if I'll end up with a general constraint system from this.
 
 **Path to 0.9**
 
