@@ -11,8 +11,10 @@ use super::objects::ParseTree;
 use create::parse_create_table;
 use insert::parse_insert;
 use nom::branch::alt;
-use nom::combinator::{all_consuming, complete};
+use nom::bytes::complete::tag;
+use nom::combinator::{all_consuming, complete, opt};
 use nom::error::{convert_error, ContextError, ParseError, VerboseError};
+use nom::sequence::tuple;
 use nom::Finish;
 use nom::IResult;
 use thiserror::Error;
@@ -30,11 +32,11 @@ impl SqlParser {
     fn nom_parse<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
         input: &'a str,
     ) -> IResult<&'a str, ParseTree, E> {
-        complete(all_consuming(alt((
-            parse_create_table,
-            parse_insert,
-            parse_select,
-        ))))(input)
+        let (input, (result, _)) = complete(tuple((
+            alt((parse_create_table, parse_insert, parse_select)),
+            opt(tag(";")),
+        )))(input)?;
+        Ok((input, result))
     }
 }
 

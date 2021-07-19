@@ -23,7 +23,7 @@ fn simple_select() -> Result<(), Box<dyn std::error::Error>> {
     aw!(engine.process_query(tran, insert_test))?;
     aw!(tm.commit_trans(tran))?;
 
-    let select_test = "select baz, bar, another from foo".to_string();
+    let select_test = "select baz, bar, another from foo;".to_string();
     let tran = aw!(tm.start_trans())?;
     let result = aw!(engine.process_query(tran, select_test));
     let result = match result {
