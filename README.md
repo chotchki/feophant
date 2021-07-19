@@ -42,6 +42,8 @@ I'm going to wire up simple query support into psql and see what happens with a 
 
 Wired up and discovered I need to at least support a semi colon command terminator.
 
+Done
+
 **Path to 0.8**
 
 Implement unique indexes. Inserts should fail on violations.

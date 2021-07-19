@@ -32,6 +32,7 @@ impl SqlParser {
     fn nom_parse<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
         input: &'a str,
     ) -> IResult<&'a str, ParseTree, E> {
+        //TODO Had to remove all consuming since it was throwing EOF issues
         let (input, (result, _)) = complete(tuple((
             alt((parse_create_table, parse_insert, parse_select)),
             opt(tag(";")),

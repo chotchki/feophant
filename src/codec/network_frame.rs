@@ -99,16 +99,16 @@ impl NetworkFrame {
         message: String,
     ) -> NetworkFrame {
         let mut buffer = BytesMut::new();
-        buffer.put(&b"S"[..]); //Severity
+        buffer.put_u8(b'S'); //Severity
         buffer.put(severity.value());
-        buffer.put(&b"\0"[..]);
-        buffer.put(&b"M"[..]); //Code
+        buffer.put_u8(b'\0');
+        buffer.put_u8(b'M'); //Code
         buffer.put(message.as_bytes());
-        buffer.put(&b"\0"[..]);
-        buffer.put(&b"C"[..]); //Code
+        buffer.put_u8(b'\0');
+        buffer.put_u8(b'C'); //Code
         buffer.put(code.value());
-        buffer.put(&b"\0"[..]);
-        buffer.put(&b"\0"[..]);
+        buffer.put_u8(b'\0');
+        buffer.put_u8(b'\0');
 
         NetworkFrame::new(
             b'N', //Testing notifications

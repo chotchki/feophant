@@ -54,31 +54,21 @@ impl ClientProcessor {
         if frame.message_type == b'Q' {
             debug!("Got query {:?}", payload_buff);
 
-            //Convert to utf8
-            let query_str = String::from_utf8(payload_buff.to_vec())?;
+            let result = match self.process_single_query(payload_buff).await {
+                Ok(o) => o,
+                Err(e) => {
+                    return Ok(vec![
+                        NetworkFrame::error_response(
+                            PgErrorLevels::Error,
+                            PgErrorCodes::SystemError,
+                            e.to_string(),
+                        ),
+                        NetworkFrame::ready_for_query(),
+                    ]);
+                }
+            };
 
-            let txid = self.transaction_manager.start_trans().await?;
-
-            //TODO this should not just return Err, I should transform to an error response instead
-            let query_res = self.engine.process_query(txid, query_str).await?;
-
-            let mut frames = vec![];
-            if query_res.columns.len() > 0 {
-                frames.push(NetworkFrame::row_description(query_res.columns)?);
-            }
-            let results_rows = query_res.rows.len();
-            if results_rows > 0 {
-                frames.append(&mut NetworkFrame::data_rows(query_res.rows)?);
-            }
-
-            frames.push(NetworkFrame::command_complete(format!(
-                "SELECT {}",
-                results_rows
-            )));
-
-            frames.push(NetworkFrame::ready_for_query());
-
-            return Ok(frames);
+            return Ok(result);
         }
 
         warn!(
@@ -90,6 +80,45 @@ impl ClientProcessor {
             PgErrorCodes::SystemError,
             "Got an unimplemented message".to_string(),
         )])
+    }
+
+    async fn process_single_query(
+        &mut self,
+        payload_buff: &[u8],
+    ) -> Result<Vec<NetworkFrame>, ClientProcessorError> {
+        //Convert to utf8
+        let query_str = String::from_utf8(payload_buff.to_vec())?;
+
+        let txid = self.transaction_manager.start_trans().await?;
+
+        let query_res = match self.engine.process_query(txid, query_str).await {
+            Ok(o) => {
+                self.transaction_manager.commit_trans(txid).await?;
+                o
+            }
+            Err(e) => {
+                self.transaction_manager.abort_trans(txid).await?;
+                return Err(ClientProcessorError::EngineError(e));
+            }
+        };
+
+        let mut frames = vec![];
+        if query_res.columns.len() > 0 {
+            frames.push(NetworkFrame::row_description(query_res.columns)?);
+        }
+        let results_rows = query_res.rows.len();
+        if results_rows > 0 {
+            frames.append(&mut NetworkFrame::data_rows(query_res.rows)?);
+        }
+
+        frames.push(NetworkFrame::command_complete(format!(
+            "SELECT {}",
+            results_rows
+        )));
+
+        frames.push(NetworkFrame::ready_for_query());
+
+        return Ok(frames);
     }
 }
 
