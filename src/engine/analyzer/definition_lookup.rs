@@ -1,8 +1,6 @@
 //! This command will look up ONLY hardcoded table definitions first,
 //! should be able to fallback to reading new ones off disk
 
-use crate::constants::Nullable;
-
 use super::super::super::constants::{
     BuiltinSqlTypes, DeserializeTypes, SqlTypeError, TableDefinitions,
 };
@@ -10,6 +8,7 @@ use super::super::io::row_formats::{RowData, RowDataError};
 use super::super::io::{VisibleRowManager, VisibleRowManagerError};
 use super::super::objects::{Attribute, Table, TableError};
 use super::super::transactions::TransactionId;
+use crate::constants::Nullable;
 use std::convert::TryFrom;
 use std::num::TryFromIntError;
 use std::str::FromStr;
@@ -42,6 +41,7 @@ impl DefinitionLookup {
             }
         }
 
+        //TODO not happy with how many strings there are
         let tbl_row = self.get_table_row(tran_id, name).await?;
         let table_id = match tbl_row.get_column_not_null("id".to_string())? {
             BuiltinSqlTypes::Uuid(u) => u,
@@ -194,7 +194,6 @@ mod tests {
     use super::super::super::transactions::TransactionManager;
     use super::super::super::Engine;
     use super::*;
-    use tokio::sync::RwLock;
 
     macro_rules! aw {
         ($e:expr) => {

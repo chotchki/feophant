@@ -9,7 +9,6 @@ use super::common::{
     parse_expression, parse_sql_identifier, take_whitespace,
 };
 use nom::bytes::complete::tag_no_case;
-use nom::character::complete::alphanumeric1;
 use nom::combinator::{cut, opt};
 use nom::error::{ContextError, ParseError};
 use nom::multi::separated_list0;

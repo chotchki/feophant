@@ -27,16 +27,11 @@ pub use sql_parser::SqlParserError;
 pub mod transactions;
 use transactions::{TransactionId, TransactionManager};
 
-use std::ops::Deref;
-use std::sync::Arc;
-use thiserror::Error;
-use tokio::sync::RwLock;
-use tokio_stream::StreamExt;
-
-use crate::engine::objects::TargetEntry;
-
 use self::objects::QueryResult;
-use self::objects::SqlTuple;
+use crate::engine::objects::TargetEntry;
+use std::ops::Deref;
+use thiserror::Error;
+use tokio_stream::StreamExt;
 
 #[derive(Clone, Debug)]
 pub struct Engine {
@@ -130,7 +125,6 @@ mod tests {
     use super::io::IOManager;
     use super::transactions::TransactionManager;
     use super::*;
-    use tokio::sync::RwLock;
 
     macro_rules! aw {
         ($e:expr) => {
@@ -151,9 +145,8 @@ mod tests {
         aw!(engine.process_query(tran, create_test))?;
         aw!(transaction_manager.commit_trans(tran))?;
 
-        //Postgres equivalent
-        //assert_eq!(aw!(engine.process_query(tran, insert_test)).unwrap(), ());
-        //assert!(aw!(engine.process_query(tran, select_test)).is_ok());
+        aw!(engine.process_query(tran, insert_test))?;
+        aw!(engine.process_query(tran, select_test))?;
 
         Ok(())
     }

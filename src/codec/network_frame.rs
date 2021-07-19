@@ -1,4 +1,4 @@
-use bytes::{buf, Bytes};
+use bytes::Bytes;
 use bytes::{BufMut, BytesMut};
 use std::convert::TryFrom;
 use std::num::TryFromIntError;

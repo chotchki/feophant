@@ -1,9 +1,7 @@
 use nom::branch::alt;
-use nom::bytes::complete::{
-    escaped, escaped_transform, is_a, is_not, tag, tag_no_case, take_until,
-};
+use nom::bytes::complete::{escaped_transform, is_a, tag, tag_no_case};
 use nom::character::complete::{alphanumeric1, digit1, multispace0, multispace1, none_of};
-use nom::combinator::{cut, map, map_parser, recognize, value};
+use nom::combinator::{cut, map_parser, recognize};
 use nom::error::{ContextError, ParseError};
 use nom::multi::{many0, separated_list0, separated_list1};
 use nom::sequence::{delimited, tuple};

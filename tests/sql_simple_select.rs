@@ -1,5 +1,4 @@
 mod common;
-use std::sync::Arc;
 
 use feophantlib::{
     constants::BuiltinSqlTypes,

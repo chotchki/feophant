@@ -15,7 +15,7 @@ fn simple_insert() -> Result<(), Box<dyn std::error::Error>> {
         "insert into foo (another, baz, bar) values(null, 'two', 'three')".to_string();
     let tran = aw!(tm.start_trans())?;
     let result = aw!(engine.process_query(tran, insert_test));
-    let result = match result {
+    match result {
         Ok(o) => o,
         Err(e) => {
             println!("{} {:?}", e, e);

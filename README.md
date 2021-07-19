@@ -36,6 +36,8 @@ Add support for defining a primary key on a table. This implies the following fu
 * Transactional support for indexes.
 * Failure of a statement on constraint violation. Unsure if I'll end up with a general constraint system from this.
 
+Based on reading this really means implementing Btree indexes. They don't seem to be that bad to understand/implement.
+
 **Path to 0.9**
 
 Implement where clauses, will likely need to have to start tracing columns from analyizing through to later stages.

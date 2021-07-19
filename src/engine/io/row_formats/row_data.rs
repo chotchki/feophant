@@ -17,12 +17,18 @@ use std::mem;
 use std::sync::Arc;
 use thiserror::Error;
 
+///Holds information about a particular row in a table as well as metadata.
 #[derive(Clone, Debug, PartialEq)]
 pub struct RowData {
+    ///Table that the row belongs to
     table: Arc<Table>,
+    ///Lowest transaction this row is valid for (still need to check that transaction's status)
     pub min: TransactionId,
+    ///Max transaction this row is valid for OR None for still valid (still need to check max's status)
     pub max: Option<TransactionId>,
+    ///Page + Offset where this row is stored on disk
     pub item_pointer: ItemPointer,
+    ///Columns stored in this row
     pub user_data: Arc<SqlTuple>,
 }
 

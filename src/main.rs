@@ -10,9 +10,7 @@ use feophantlib::processor::ClientProcessor;
 use futures::sink::SinkExt;
 use futures::stream::StreamExt;
 use simplelog::{ColorChoice, CombinedLogger, Config, LevelFilter, TermLogger, TerminalMode};
-use std::sync::Arc;
 use tokio::net::TcpListener;
-use tokio::sync::RwLock;
 use tokio_util::codec::Framed;
 
 #[tokio::main]

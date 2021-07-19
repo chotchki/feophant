@@ -1,22 +1,17 @@
-//! The current goal of the row manager is to provide an interative interface over a table's pages.
-//!
-//! It will provide a raw scan over a table, insert and update. Update has been deferred until I figure out transactions.
-//!
-//! NO LOCKING or transaction control yet. I did implement it at the IO layer but its probably wrong.
-
-use crate::engine::objects::SqlTuple;
-
 use super::super::objects::Table;
 use super::super::transactions::TransactionId;
 use super::page_formats::{PageData, PageDataError, UInt12};
 use super::row_formats::{ItemPointer, RowData, RowDataError};
 use super::{IOManager, IOManagerError};
+use crate::engine::objects::SqlTuple;
 use async_stream::try_stream;
 use futures::stream::Stream;
 use std::sync::Arc;
 use thiserror::Error;
-use tokio::sync::RwLock;
 
+/// The row manager is a mapper between rows and pages on disk.
+///
+/// It operates at the lowest lever, no visibility checks are done.
 #[derive(Clone, Debug)]
 pub struct RowManager {
     io_manager: IOManager,
@@ -59,7 +54,6 @@ impl RowManager {
 
         page.update(row, row_pointer.count)?;
 
-        //let io_mut = self.io_manager.write().await;
         self.io_manager
             .update_page(table, page.serialize(), row_pointer.page)
             .await?;
@@ -94,8 +88,6 @@ impl RowManager {
         )?;
         let new_row_len = new_row.serialize().len();
 
-        //let io_mut = self.io_manager.write().await;
-
         //Prefer using the old page if possible
         let new_row_pointer;
         if old_page.can_fit(new_row_len) {
@@ -127,7 +119,6 @@ impl RowManager {
         table: Arc<Table>,
         row_pointer: ItemPointer,
     ) -> Result<(PageData, RowData), RowManagerError> {
-        //let io = self.io_manager.read().await;
         let page_bytes = self
             .io_manager
             .get_page(table.clone(), row_pointer.page)
@@ -149,7 +140,6 @@ impl RowManager {
         table: Arc<Table>,
     ) -> impl Stream<Item = Result<RowData, RowManagerError>> {
         try_stream! {
-            //let io_man = self.io_manager.read().await;
             let mut page_num = 0;
             for await page_bytes in self.io_manager.get_stream(table.clone()) {
                 let page = PageData::parse(table.clone(), page_num, page_bytes)?;
@@ -226,18 +216,15 @@ pub enum RowManagerError {
 
 #[cfg(test)]
 mod tests {
-    use crate::constants::BuiltinSqlTypes;
-    use crate::constants::Nullable;
-
-    // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::super::super::super::constants::DeserializeTypes;
     use super::super::super::objects::Attribute;
     use super::super::super::objects::Table;
     use super::*;
+    use crate::constants::BuiltinSqlTypes;
+    use crate::constants::Nullable;
     use futures::pin_mut;
     use futures::stream::StreamExt;
 
-    //Async testing help can be found here: https://blog.x5ff.xyz/blog/async-tests-tokio-rust/
     macro_rules! aw {
         ($e:expr) => {
             tokio_test::block_on($e)

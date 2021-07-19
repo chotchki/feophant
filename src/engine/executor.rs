@@ -13,9 +13,6 @@ use std::sync::Arc;
 use thiserror::Error;
 use uuid::Uuid;
 
-mod full_table_scan;
-pub use full_table_scan::FullTableScan;
-
 //TODO way too many clones / Arc flipping. Unsure if I could make use of references better
 
 #[derive(Clone, Debug)]

@@ -10,7 +10,6 @@ use futures::stream::StreamExt;
 use log::{debug, info};
 use simplelog::{ColorChoice, CombinedLogger, Config, LevelFilter, TermLogger, TerminalMode};
 use std::sync::Arc;
-use tokio::sync::RwLock;
 mod common;
 
 fn get_row(input: String) -> Arc<SqlTuple> {

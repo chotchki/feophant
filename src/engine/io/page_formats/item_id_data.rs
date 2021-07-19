@@ -6,7 +6,7 @@ use std::mem::size_of;
 use std::ops::Range;
 use thiserror::Error;
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ItemIdData {
     offset: UInt12,
     pub length: UInt12,
