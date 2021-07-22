@@ -10,6 +10,7 @@ use crate::engine::objects::SqlTuple;
 use super::super::super::super::constants::{BuiltinSqlTypes, DeserializeTypes, SqlTypeError};
 use super::super::super::objects::Table;
 use super::super::super::transactions::TransactionId;
+use super::null_mask::NullMaskError;
 use super::{InfoMask, ItemPointer, ItemPointerError, NullMask};
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::fmt;
@@ -194,8 +195,8 @@ impl RowData {
             ));
         }
 
-        let null_mask_raw = row_buffer.copy_to_bytes(columns_rounded);
-        Ok(NullMask::parse(&null_mask_raw, table.attributes.len()))
+        let mut null_mask_raw = row_buffer.copy_to_bytes(columns_rounded);
+        Ok(NullMask::parse(&mut null_mask_raw, table.attributes.len())?)
     }
 }
 
@@ -233,6 +234,8 @@ pub enum RowDataError {
     MissingInfoMaskData(usize, usize),
     #[error("Not enough null mask data need {0} got {1}")]
     MissingNullMaskData(usize, usize),
+    #[error(transparent)]
+    NullMaskError(#[from] NullMaskError),
     #[error("Unable to parse type {0}")]
     ColumnParseError(#[from] SqlTypeError),
     #[error(transparent)]

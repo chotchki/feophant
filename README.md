@@ -38,6 +38,15 @@ Add support for defining a primary key on a table. This implies the following fu
 
 Based on reading this really means implementing Btree indexes. They don't seem to be that bad to understand/implement.
 
+First and most important question, how should the index layers work?
+    Are they transactional? (I don't think so until I implement a visability map)
+    How should the low level layer function? 
+        Should I have an Index config struct I pass around or just a table + columns + unique or not + type
+        Index Config it is
+
+Index Manager -> for a given table
+IO Manager -> Handle Page Load / Store / Update
+
 **Path to 0.9**
 
 Implement where clauses, will likely need to have to start tracing columns from analyizing through to later stages.
@@ -53,6 +62,8 @@ pgbench setup can run successfully, in memory
 **Path to 0.12**
 
 Ensure data about table structures is thread safe in the face of excessive Arc usage.
+
+See where I can pass read only data by reference instead of uisng Arc everywhere
 
 **Path to 0.13**
 

@@ -1,8 +1,8 @@
 //! Implementation of the null bit flags to know if a column is null or not
 //! I'm not using a standard library because the bitvector library collides with nom
-use bytes::{BufMut, Bytes, BytesMut};
-
 use crate::engine::objects::SqlTuple;
+use bytes::{Buf, BufMut, Bytes, BytesMut};
+use thiserror::Error;
 
 pub struct NullMask {}
 
@@ -48,24 +48,41 @@ impl NullMask {
         buffer.freeze()
     }
 
-    pub fn parse(input: &Bytes, column_count: usize) -> Vec<bool> {
-        let mut buffer = vec![];
+    pub fn parse(buffer: &mut impl Buf, column_count: usize) -> Result<Vec<bool>, NullMaskError> {
+        let mut nulls = vec![];
 
-        for b in input {
-            let mut temp = *b;
+        if buffer.remaining() <= column_count / 8 {
+            return Err(NullMaskError::BufferTooShort(
+                buffer.remaining(),
+                column_count / 8,
+            ));
+        }
+
+        let mut remaining_columns = column_count;
+        while remaining_columns > 0 {
+            let mut temp = buffer.get_u8();
             for _ in 0..8 {
                 if temp & 0x80 > 0 {
-                    buffer.push(true);
+                    nulls.push(true);
                 } else {
-                    buffer.push(false);
+                    nulls.push(false);
                 }
                 temp <<= 1;
             }
+            remaining_columns = remaining_columns.saturating_sub(8);
         }
 
-        buffer.resize(column_count, false);
-        buffer
+        //This is needed since we encode more values than columns
+        nulls.resize(column_count, false);
+
+        Ok(nulls)
     }
+}
+
+#[derive(Debug, Error, PartialEq)]
+pub enum NullMaskError {
+    #[error("Buffer too short to parse found {0} bytes, need {1}")]
+    BufferTooShort(usize, usize),
 }
 
 #[cfg(test)]
@@ -122,37 +139,37 @@ mod tests {
     }
 
     #[test]
-    fn test_null_mask_parse() {
+    fn test_null_mask_parse() -> Result<(), Box<dyn std::error::Error>> {
         let test = vec![
             true, false, true, false, true, false, true, false, true, false,
         ];
 
-        let result = NullMask::parse(&Bytes::from_static(&hex!("aa 80")), 10);
+        let res = NullMask::parse(&mut Bytes::from_static(&hex!("aa 80")), 10)?;
 
-        assert_eq!(result, test);
+        assert_eq!(res, test);
+        Ok(())
     }
 
     #[test]
-    fn test_null_mask_parse_short() {
-        let test = vec![true, false, false, false, false, false, false, false, false];
-
-        let result = NullMask::parse(&Bytes::from_static(&hex!("80")), 9);
-
-        assert_eq!(result, test);
+    fn test_null_mask_parse_short() -> Result<(), Box<dyn std::error::Error>> {
+        let res = NullMask::parse(&mut Bytes::from_static(&hex!("80")), 9);
+        assert_eq!(res, Err(NullMaskError::BufferTooShort(1, 1)));
+        Ok(())
     }
 
     #[test]
-    fn test_null_mask_roundtrip() {
+    fn test_null_mask_roundtrip() -> Result<(), Box<dyn std::error::Error>> {
         let test = get_tuple();
 
         let end = vec![
             true, false, true, false, true, false, true, false, true, false, false, false,
         ];
 
-        let result = NullMask::serialize(&test);
+        let mut result = NullMask::serialize(&test);
         assert_eq!(Bytes::from_static(&hex!("aa 80")), result);
-        let parse = NullMask::parse(&result, 12);
+        let parse = NullMask::parse(&mut result, 12)?;
 
         assert_eq!(end, parse);
+        Ok(())
     }
 }

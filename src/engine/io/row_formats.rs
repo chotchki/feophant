@@ -7,6 +7,7 @@ pub use item_pointer::ItemPointerError;
 
 mod null_mask;
 pub use null_mask::NullMask;
+pub use null_mask::NullMaskError;
 
 mod row_data;
 pub use row_data::RowData;

@@ -1,9 +1,8 @@
 mod attribute;
 pub use attribute::Attribute;
 
-mod table;
-pub use table::Table;
-pub use table::TableError;
+mod index;
+pub use index::Index;
 
 mod parse_expression;
 pub use parse_expression::ParseExpression;
@@ -37,3 +36,7 @@ pub use query_tree::TargetEntry;
 mod sql_tuple;
 pub use sql_tuple::SqlTuple;
 pub use sql_tuple::SqlTupleError;
+
+mod table;
+pub use table::Table;
+pub use table::TableError;
