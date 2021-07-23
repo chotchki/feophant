@@ -18,11 +18,9 @@
 //! * sizeof<usize> bytes pointing to table page
 //! * 2 bytes pointing into count into page
 
-use bytes::{Buf, BufMut, Bytes, BytesMut};
-use std::mem::size_of;
-use std::{convert::TryFrom, num::TryFromIntError};
-use thiserror::Error;
-
+use crate::constants::SqlTypeError;
+use crate::engine::io::page_formats::ItemIdDataError;
+use crate::engine::io::row_formats::NullMaskError;
 use crate::{
     constants::BuiltinSqlTypes,
     engine::{
@@ -30,6 +28,10 @@ use crate::{
         objects::{Index, SqlTuple},
     },
 };
+use bytes::{Buf, BufMut, Bytes, BytesMut};
+use std::mem::size_of;
+use std::{convert::TryFrom, num::TryFromIntError};
+use thiserror::Error;
 
 #[derive(Clone, Debug)]
 pub enum BTreeNode {
@@ -62,53 +64,53 @@ pub enum NodeType {
 #[derive(Clone, Copy, Debug)]
 pub struct BTreePage(pub usize);
 
-impl BTreeBranch {
+impl BTreeNode {
     pub fn serialize(&self) -> Result<Bytes, BTreeError> {
         let mut buffer = BytesMut::new();
         buffer.put_u8(1);
 
-        match self.parent_node {
+        match self {
+            BTreeNode::Branch(b) => {
+                Self::write_node(&mut buffer, b.parent_node)?;
+                Self::write_node(&mut buffer, b.left_node)?;
+                Self::write_node(&mut buffer, b.right_node)?;
+
+                Self::write_count(&mut buffer, b.nodes.len());
+
+                for (key, pointer) in b.nodes.iter() {
+                    Self::write_sql_tuple(&mut buffer, key);
+
+                    let pointer_u64 = u64::try_from(pointer.0)?;
+                    buffer.put_uint_le(pointer_u64, size_of::<usize>());
+                }
+            }
+            BTreeNode::Leaf(l) => {
+                Self::write_node(&mut buffer, l.parent_node)?;
+                Self::write_node(&mut buffer, l.left_node)?;
+                Self::write_node(&mut buffer, l.right_node)?;
+
+                Self::write_count(&mut buffer, l.nodes.len());
+
+                for (key, item_id) in l.nodes.iter() {
+                    Self::write_sql_tuple(&mut buffer, key);
+
+                    buffer.put(item_id.serialize());
+                }
+            }
+        }
+
+        Ok(buffer.freeze())
+    }
+
+    fn write_node(buffer: &mut BytesMut, node: Option<BTreePage>) -> Result<(), BTreeError> {
+        match node {
             Some(pn) => {
                 let pn_u64 = u64::try_from(pn.0)?;
                 buffer.put_uint_le(pn_u64, size_of::<usize>())
             }
             None => buffer.put_uint_le(0, size_of::<usize>()),
         }
-        match self.left_node {
-            Some(ln) => {
-                let ln_u64 = u64::try_from(ln.0)?;
-                buffer.put_uint_le(ln_u64, size_of::<usize>())
-            }
-            None => buffer.put_uint_le(0, size_of::<usize>()),
-        }
-        match self.right_node {
-            Some(rn) => {
-                let rn_u64 = u64::try_from(rn.0)?;
-                buffer.put_uint_le(rn_u64, size_of::<usize>())
-            }
-            None => buffer.put_uint_le(0, size_of::<usize>()),
-        }
-
-        BTreeBranch::write_count(&mut buffer, self.nodes.len());
-
-        for (key, pointer) in self.nodes.iter() {
-            let nulls = NullMask::serialize(&key);
-            buffer.put(nulls);
-
-            for data in key.0.iter() {
-                if data.is_none() {
-                    continue;
-                }
-
-                let data_bytes = data.as_ref().unwrap().serialize();
-                buffer.extend_from_slice(&data_bytes);
-            }
-
-            let pointer_u64 = u64::try_from(pointer.0)?;
-            buffer.put_uint_le(pointer_u64, size_of::<usize>());
-        }
-
-        Ok(buffer.freeze())
+        Ok(())
     }
 
     fn write_count(buffer: &mut BytesMut, in_count: usize) {
@@ -124,7 +126,21 @@ impl BTreeBranch {
         }
     }
 
-    pub fn parse(index_def: &Index, buffer: &mut impl Buf) -> Result<BTreeNode, BTreeError> {
+    fn write_sql_tuple(buffer: &mut BytesMut, tuple: &SqlTuple) {
+        let nulls = NullMask::serialize(&tuple);
+        buffer.put(nulls);
+
+        for data in tuple.0.iter() {
+            if data.is_none() {
+                continue;
+            }
+
+            let data_bytes = data.as_ref().unwrap().serialize();
+            buffer.extend_from_slice(&data_bytes);
+        }
+    }
+
+    pub fn parse(buffer: &mut impl Buf, index_def: &Index) -> Result<BTreeNode, BTreeError> {
         if buffer.remaining() < size_of::<u8>() {
             return Err(BTreeError::MissingNodeTypeData(
                 size_of::<u8>(),
@@ -133,70 +149,53 @@ impl BTreeBranch {
         }
         let node_type = buffer.get_u8();
 
-        if buffer.remaining() < size_of::<usize>() {
-            return Err(BTreeError::MissingParentData(
-                size_of::<usize>(),
-                buffer.remaining(),
-            ));
-        }
-        let parent = buffer.get_uint_le(size_of::<usize>());
-        let mut parent_node = None;
-        if parent != 0 {
-            parent_node = Some(BTreePage(usize::try_from(parent)?));
-        }
+        let parent_node = Self::parse_page(buffer)?;
+        let left_node = Self::parse_page(buffer)?;
+        let right_node = Self::parse_page(buffer)?;
 
-        if buffer.remaining() < size_of::<usize>() {
-            return Err(BTreeError::MissingLeftData(
-                size_of::<usize>(),
-                buffer.remaining(),
-            ));
-        }
-        let left = buffer.get_uint_le(size_of::<usize>());
-        let mut left_node = None;
-        if left != 0 {
-            left_node = Some(BTreePage(usize::try_from(left)?));
-        }
-
-        if buffer.remaining() < size_of::<usize>() {
-            return Err(BTreeError::MissingRightData(
-                size_of::<usize>(),
-                buffer.remaining(),
-            ));
-        }
-        let right = buffer.get_uint_le(size_of::<usize>());
-        let mut right_node = None;
-        if right != 0 {
-            right_node = Some(BTreePage(usize::try_from(right)?));
-        }
-
-        return Err(BTreeError::Unknown());
-        /* if node_type == 0 {
-            return Ok(BTreeNode::Leaf(BTreeLeaf{
-                parent_node,
-                left_node,
-                right_node,
-                nodes: Vec<(SqlTuple, ItemIdData)>,
-            }));
-        } else {
-            let bucket_count = BTreeBranch::parse_count(buffer)?;
-            let buckets = Vec::with_capacity(bucket_count);
+        if node_type == 0 {
+            let bucket_count = Self::parse_count(buffer)?;
+            let mut buckets = Vec::with_capacity(bucket_count);
 
             for b in 0..bucket_count {
-                let nulls = NullMask::parse(buffer, index_def.columns.len())?;
-                let bucket =
-                for c in index_def.columns {
+                let bucket = Self::parse_sql_tuple(buffer, index_def)?;
 
-                }
+                let item_id = ItemIdData::parse(buffer)?;
+                buckets.push((bucket, item_id));
             }
 
-
-            return Ok(BTreeNode::Branch(BTreeBranch{
+            return Ok(BTreeNode::Leaf(BTreeLeaf {
                 parent_node,
                 left_node,
                 right_node,
-                nodes: Vec<(SqlTuple, BTreePage)>,
+                nodes: buckets,
             }));
-        }*/
+        } else {
+            let bucket_count = Self::parse_count(buffer)?;
+            let mut buckets = Vec::with_capacity(bucket_count);
+
+            for b in 0..bucket_count {
+                let bucket = Self::parse_sql_tuple(buffer, index_def)?;
+
+                if buffer.remaining() < size_of::<usize>() {
+                    return Err(BTreeError::MissingPointerData(
+                        size_of::<usize>(),
+                        buffer.remaining(),
+                    ));
+                }
+                let pointer = buffer.get_uint_le(size_of::<usize>());
+                let pointer = BTreePage(usize::try_from(pointer)?);
+
+                buckets.push((bucket, pointer));
+            }
+
+            return Ok(BTreeNode::Branch(BTreeBranch {
+                parent_node,
+                left_node,
+                right_node,
+                nodes: buckets,
+            }));
+        }
     }
 
     fn parse_count(buffer: &mut impl Buf) -> Result<usize, BTreeError> {
@@ -220,20 +219,58 @@ impl BTreeBranch {
 
         Ok(length)
     }
+
+    fn parse_page(buffer: &mut impl Buf) -> Result<Option<BTreePage>, BTreeError> {
+        if buffer.remaining() < size_of::<usize>() {
+            return Err(BTreeError::MissingParentData(
+                size_of::<usize>(),
+                buffer.remaining(),
+            ));
+        }
+        let value = buffer.get_uint_le(size_of::<usize>());
+        let mut node = None;
+        if value != 0 {
+            node = Some(BTreePage(usize::try_from(value)?));
+        }
+        Ok(node)
+    }
+
+    fn parse_sql_tuple(buffer: &mut impl Buf, index_def: &Index) -> Result<SqlTuple, BTreeError> {
+        let nulls = NullMask::parse(buffer, index_def.columns.len())?;
+        let mut bucket = vec![];
+        for c in 0..index_def.columns.len() {
+            if nulls[c] {
+                bucket.push(None);
+            } else {
+                let key = BuiltinSqlTypes::deserialize(index_def.columns[c].sql_type, buffer)?;
+                bucket.push(Some(key));
+            }
+        }
+
+        Ok(SqlTuple(bucket))
+    }
 }
 
 #[derive(Debug, Error)]
 pub enum BTreeError {
     #[error("Buffer too short to parse")]
     BufferTooShort(),
+    #[error(transparent)]
+    ItemIdDataError(#[from] ItemIdDataError),
     #[error("Missing Data for Left need {0}, have {1}")]
     MissingLeftData(usize, usize),
     #[error("Missing Data for Node Type need {0}, have {1}")]
     MissingNodeTypeData(usize, usize),
     #[error("Missing Data for Parent need {0}, have {1}")]
     MissingParentData(usize, usize),
+    #[error("Missing Data for Pointer need {0}, have {1}")]
+    MissingPointerData(usize, usize),
     #[error("Missing Data for Right need {0}, have {1}")]
     MissingRightData(usize, usize),
+    #[error(transparent)]
+    NullMaskError(#[from] NullMaskError),
+    #[error(transparent)]
+    SqlTypeError(#[from] SqlTypeError),
     #[error(transparent)]
     TryFromIntError(#[from] TryFromIntError),
     #[error("Not implemented")]

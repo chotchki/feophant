@@ -169,12 +169,12 @@ impl BuiltinSqlTypes {
         }
     }
 
-    pub fn parse(target_type: DeserializeTypes, buffer: String) -> Result<Self, SqlTypeError> {
+    pub fn parse(target_type: DeserializeTypes, buffer: &str) -> Result<Self, SqlTypeError> {
         match target_type {
             DeserializeTypes::Bool => Ok(BuiltinSqlTypes::Bool(buffer.parse::<bool>()?)),
             DeserializeTypes::Integer => Ok(BuiltinSqlTypes::Integer(buffer.parse::<u32>()?)),
             DeserializeTypes::Uuid => Ok(BuiltinSqlTypes::Uuid(uuid::Uuid::parse_str(&buffer)?)),
-            DeserializeTypes::Text => Ok(BuiltinSqlTypes::Text(buffer)),
+            DeserializeTypes::Text => Ok(BuiltinSqlTypes::Text(buffer.to_string())),
         }
     }
 }

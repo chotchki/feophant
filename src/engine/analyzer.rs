@@ -168,7 +168,7 @@ impl Analyzer {
                 Some(s2) => match s2 {
                     ParseExpression::String(s3) => {
                         tbl_cols.push(a.clone());
-                        val_cols.push(Some(BuiltinSqlTypes::parse(a.sql_type, s3)?));
+                        val_cols.push(Some(BuiltinSqlTypes::parse(a.sql_type, &s3)?));
                     }
                     ParseExpression::Null() => {
                         tbl_cols.push(a);
