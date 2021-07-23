@@ -120,8 +120,8 @@ impl PageData {
             let mut iid_slice = buffer.slice(iid_lower_offset..iid_upper_offset);
             let iid = ItemIdData::parse(&mut iid_slice)?;
 
-            let row_slice = buffer.slice(iid.get_range());
-            let row = RowData::parse(table.clone(), row_slice)?;
+            let mut row_slice = buffer.slice(iid.get_range());
+            let row = RowData::parse(table.clone(), &mut row_slice)?;
             item_ids.push(iid);
             rows.push(row);
         }

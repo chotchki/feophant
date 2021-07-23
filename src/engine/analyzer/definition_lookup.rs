@@ -43,11 +43,11 @@ impl DefinitionLookup {
 
         //TODO not happy with how many strings there are
         let tbl_row = self.get_table_row(tran_id, name).await?;
-        let table_id = match tbl_row.get_column_not_null("id".to_string())? {
+        let table_id = match tbl_row.get_column_not_null("id")? {
             BuiltinSqlTypes::Uuid(u) => u,
             _ => return Err(DefinitionLookupError::ColumnWrongType()),
         };
-        let table_name = match tbl_row.get_column_not_null("name".to_string())? {
+        let table_name = match tbl_row.get_column_not_null("name")? {
             BuiltinSqlTypes::Text(t) => t,
             _ => return Err(DefinitionLookupError::ColumnWrongType()),
         };
@@ -55,16 +55,16 @@ impl DefinitionLookup {
         let tbl_columns = self.get_table_columns(tran_id, table_id).await?;
         let mut tbl_attrs = vec![];
         for c in tbl_columns {
-            let c_name = match c.get_column_not_null("attname".to_string())? {
+            let c_name = match c.get_column_not_null("attname")? {
                 BuiltinSqlTypes::Text(t) => t,
                 _ => return Err(DefinitionLookupError::ColumnWrongType()),
             };
-            let c_type = match c.get_column_not_null("atttypid".to_string())? {
+            let c_type = match c.get_column_not_null("atttypid")? {
                 BuiltinSqlTypes::Text(t) => t,
                 _ => return Err(DefinitionLookupError::ColumnWrongType()),
             };
 
-            let c_null = match c.get_column_not_null("attnotnull".to_string())? {
+            let c_null = match c.get_column_not_null("attnotnull")? {
                 BuiltinSqlTypes::Bool(b) => Nullable::from(b),
                 _ => return Err(DefinitionLookupError::ColumnWrongType()),
             };
@@ -94,7 +94,7 @@ impl DefinitionLookup {
         pin!(row_stream);
         while let Some(row_res) = row_stream.next().await {
             let row = row_res?;
-            if row.get_column_not_null("name".to_string())? == BuiltinSqlTypes::Text(name.clone()) {
+            if row.get_column_not_null("name")? == BuiltinSqlTypes::Text(name.clone()) {
                 return Ok(row);
             }
         }
@@ -116,7 +116,7 @@ impl DefinitionLookup {
         pin!(row_stream);
         while let Some(row_res) = row_stream.next().await {
             let row = row_res?;
-            if row.get_column_not_null("attrelid".to_string())? == BuiltinSqlTypes::Uuid(attrelid) {
+            if row.get_column_not_null("attrelid")? == BuiltinSqlTypes::Uuid(attrelid) {
                 columns.push(row);
             }
         }

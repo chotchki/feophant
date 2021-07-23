@@ -96,7 +96,7 @@ impl BuiltinSqlTypes {
 
     pub fn deserialize(
         target_type: DeserializeTypes,
-        mut buffer: impl Buf,
+        buffer: &mut impl Buf,
     ) -> Result<Self, SqlTypeError> {
         match target_type {
             DeserializeTypes::Bool => {
@@ -257,8 +257,8 @@ mod tests {
 
     fn roundtrip(input: String) -> String {
         let stype = BuiltinSqlTypes::Text(input);
-        let serialized = stype.serialize();
-        let result = BuiltinSqlTypes::deserialize(DeserializeTypes::Text, serialized).unwrap();
+        let mut serialized = stype.serialize();
+        let result = BuiltinSqlTypes::deserialize(DeserializeTypes::Text, &mut serialized).unwrap();
         match result {
             BuiltinSqlTypes::Text(t) => t,
             _ => {

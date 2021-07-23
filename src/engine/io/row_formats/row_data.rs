@@ -74,27 +74,20 @@ impl RowData {
         })
     }
 
-    pub fn get_column(&self, name: String) -> Result<Option<BuiltinSqlTypes>, RowDataError> {
+    pub fn get_column(&self, name: &str) -> Result<Option<BuiltinSqlTypes>, RowDataError> {
         for i in 0..self.table.attributes.len() {
-            if self.table.attributes[i].name == name {
+            if self.table.attributes[i].name == *name {
                 return Ok(self.user_data.0[i].clone());
             }
         }
 
-        Err(RowDataError::ColumnDoesNotExist(name))
+        Err(RowDataError::ColumnDoesNotExist(name.to_string()))
     }
 
-    pub fn get_column_not_null(&self, name: String) -> Result<BuiltinSqlTypes, RowDataError> {
-        for i in 0..self.table.attributes.len() {
-            if self.table.attributes[i].name == name {
-                let data = self.user_data.0[i]
-                    .as_ref()
-                    .ok_or_else(|| RowDataError::UnexpectedNull(name))?;
-                return Ok(data.clone());
-            }
-        }
-
-        Err(RowDataError::ColumnDoesNotExist(name))
+    pub fn get_column_not_null(&self, name: &str) -> Result<BuiltinSqlTypes, RowDataError> {
+        Ok(self
+            .get_column(name)?
+            .ok_or_else(|| RowDataError::UnexpectedNull(name.to_string()))?)
     }
 
     pub fn serialize(&self) -> Bytes {
@@ -130,7 +123,7 @@ impl RowData {
         buffer.freeze()
     }
 
-    pub fn parse(table: Arc<Table>, mut row_buffer: impl Buf) -> Result<RowData, RowDataError> {
+    pub fn parse(table: Arc<Table>, row_buffer: &mut impl Buf) -> Result<RowData, RowDataError> {
         if row_buffer.remaining() < mem::size_of::<TransactionId>() {
             return Err(RowDataError::MissingMinData(
                 mem::size_of::<TransactionId>(),
@@ -151,9 +144,9 @@ impl RowData {
             _ => Some(TransactionId::new(max_temp)),
         };
 
-        let item_pointer = ItemPointer::parse(&mut row_buffer)?;
+        let item_pointer = ItemPointer::parse(row_buffer)?;
 
-        let null_mask = RowData::get_null_mask(table.clone(), &mut row_buffer)?;
+        let null_mask = RowData::get_null_mask(table.clone(), row_buffer)?;
 
         let mut user_data = SqlTuple(vec![]);
         for (column, mask) in table.attributes.iter().zip(null_mask.iter()) {
@@ -162,7 +155,7 @@ impl RowData {
             } else {
                 user_data.0.push(Some(BuiltinSqlTypes::deserialize(
                     column.sql_type,
-                    &mut row_buffer,
+                    row_buffer,
                 )?));
             }
         }
@@ -173,7 +166,7 @@ impl RowData {
     //Gets the null mask, if it doesn't exist it will return a vector of all not nulls
     fn get_null_mask(
         table: Arc<Table>,
-        mut row_buffer: impl Buf,
+        row_buffer: &mut impl Buf,
     ) -> Result<Vec<bool>, RowDataError> {
         if row_buffer.remaining() < mem::size_of::<InfoMask>() {
             return Err(RowDataError::MissingInfoMaskData(
@@ -281,8 +274,8 @@ mod tests {
         )
         .unwrap();
 
-        let test_serial = test.serialize();
-        let test_parse = RowData::parse(table, test_serial).unwrap();
+        let mut test_serial = test.serialize();
+        let test_parse = RowData::parse(table, &mut test_serial).unwrap();
         assert_eq!(test, test_parse);
     }
 
@@ -318,8 +311,8 @@ mod tests {
         )
         .unwrap();
 
-        let test_serial = test.serialize();
-        let test_parse = RowData::parse(table, test_serial).unwrap();
+        let mut test_serial = test.serialize();
+        let test_parse = RowData::parse(table, &mut test_serial).unwrap();
         assert_eq!(test, test_parse);
     }
 
@@ -346,8 +339,8 @@ mod tests {
         )
         .unwrap();
 
-        let test_serial = test.serialize();
-        let test_parse = RowData::parse(table, test_serial).unwrap();
+        let mut test_serial = test.serialize();
+        let test_parse = RowData::parse(table, &mut test_serial).unwrap();
         assert_eq!(test, test_parse);
     }
 
@@ -383,8 +376,8 @@ mod tests {
         )
         .unwrap();
 
-        let test_serial = test.serialize();
-        let test_parse = RowData::parse(table, test_serial).unwrap();
+        let mut test_serial = test.serialize();
+        let test_parse = RowData::parse(table, &mut test_serial).unwrap();
         assert_eq!(test, test_parse);
     }
 
@@ -420,9 +413,9 @@ mod tests {
         )
         .unwrap();
 
-        let test_serial = test.serialize();
+        let mut test_serial = test.serialize();
         println!("{:?}", test_serial.len());
-        let test_parse = RowData::parse(table, test_serial).unwrap();
+        let test_parse = RowData::parse(table, &mut test_serial).unwrap();
         assert_eq!(test, test_parse);
     }
 
@@ -463,13 +456,11 @@ mod tests {
             ])),
         ).unwrap();
 
-        let test_serial = test.serialize();
-        let test_parse = RowData::parse(table, test_serial).unwrap();
+        let mut test_serial = test.serialize();
+        let test_parse = RowData::parse(table, &mut test_serial).unwrap();
         assert_eq!(test, test_parse.clone());
 
-        let column_val = test_parse
-            .get_column_not_null("header".to_string())
-            .unwrap();
+        let column_val = test_parse.get_column_not_null("header").unwrap();
         assert_eq!(
             column_val,
             BuiltinSqlTypes::Text("this is a test".to_string())
