@@ -60,3 +60,19 @@ pub enum ItemPointerError {
     #[error(transparent)]
     U12ParseError(#[from] UInt12Error),
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_item_pointer_roundtrip() -> Result<(), Box<dyn std::error::Error>> {
+        let test = ItemPointer::new(1, UInt12::new(1).unwrap());
+
+        let mut test_serial = test.clone().serialize();
+        let test_reparse = ItemPointer::parse(&mut test_serial)?;
+
+        assert_eq!(test, test_reparse);
+        Ok(())
+    }
+}
