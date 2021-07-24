@@ -67,7 +67,7 @@ impl RowManager {
         table: Arc<Table>,
         row_pointer: ItemPointer,
         new_user_data: Arc<SqlTuple>,
-    ) -> Result<(), RowManagerError> {
+    ) -> Result<ItemPointer, RowManagerError> {
         //First get the current row so we have it for the update/delete
         let (mut old_page, mut old_row) = self.get(table.clone(), row_pointer).await?;
 
@@ -111,7 +111,7 @@ impl RowManager {
             .update_page(table, old_page.serialize(), row_pointer.page)
             .await?;
 
-        return Ok(());
+        return Ok(new_row_pointer);
     }
 
     pub async fn get(
@@ -266,7 +266,7 @@ mod tests {
     }
 
     #[test]
-    fn test_row_manager_mass_insert() {
+    fn test_row_manager_mass_insert() -> Result<(), Box<dyn std::error::Error>> {
         let table = get_table();
         let pm = IOManager::new();
         let rm = RowManager::new(pm);
@@ -294,10 +294,12 @@ mod tests {
         for row in result_rows {
             assert_eq!(row.user_data, sample_row);
         }
+
+        Ok(())
     }
 
     #[test]
-    fn test_row_manager_crud() {
+    fn test_row_manager_crud() -> Result<(), Box<dyn std::error::Error>> {
         let table = get_table();
         let pm = IOManager::new();
         let rm = RowManager::new(pm);
@@ -307,16 +309,32 @@ mod tests {
         let insert_pointer =
             aw!(rm
                 .clone()
-                .insert_row(tran_id, table.clone(), get_row("test".to_string())));
-        assert!(insert_pointer.is_ok());
+                .insert_row(tran_id, table.clone(), get_row("test".to_string())))?;
 
-        let insert_pointer = insert_pointer.unwrap();
+        let tran_id_2 = TransactionId::new(3);
 
-        let tran_id_2 = TransactionId::new(2);
+        let update_pointer = aw!(rm.clone().update_row(
+            tran_id_2,
+            table.clone(),
+            insert_pointer,
+            get_row("test2".to_string())
+        ))?;
 
-        let delete_res = aw!(rm
+        //Now let's make sure the update took
+        pin_mut!(rm);
+        let result_rows: Vec<RowData> = aw!(rm
             .clone()
-            .delete_row(tran_id_2, table.clone(), insert_pointer));
-        assert!(delete_res.is_ok());
+            .get_stream(table.clone())
+            .map(Result::unwrap)
+            .collect());
+        assert_eq!(result_rows.len(), 2);
+
+        let tran_id_3 = TransactionId::new(3);
+
+        aw!(rm
+            .clone()
+            .delete_row(tran_id_3, table.clone(), update_pointer))?;
+
+        Ok(())
     }
 }
