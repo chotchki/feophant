@@ -11,7 +11,7 @@ use thiserror::Error;
 
 /// The row manager is a mapper between rows and pages on disk.
 ///
-/// It operates at the lowest lever, no visibility checks are done.
+/// It operates at the lowest level, no visibility checks are done.
 #[derive(Clone, Debug)]
 pub struct RowManager {
     io_manager: IOManager,
@@ -28,7 +28,6 @@ impl RowManager {
         table: Arc<Table>,
         user_data: Arc<SqlTuple>,
     ) -> Result<ItemPointer, RowManagerError> {
-        //let io_mut = self.io_manager.write().await;
         RowManager::insert_row_internal(self.io_manager.clone(), current_tran_id, table, user_data)
             .await
     }
