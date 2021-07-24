@@ -53,12 +53,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_roundtrip() {
-        let test = ItemIdData::new(UInt12::new(1).unwrap(), UInt12::new(2).unwrap());
+    fn test_roundtrip() -> Result<(), Box<dyn std::error::Error>> {
+        let test = ItemIdData::new(UInt12::new(1)?, UInt12::new(2)?);
         let mut test_serial = test.serialize();
-        let test_rt = ItemIdData::parse(&mut test_serial).unwrap();
+        let test_rt = ItemIdData::parse(&mut test_serial)?;
 
-        let test_new = ItemIdData::new(UInt12::new(1).unwrap(), UInt12::new(2).unwrap());
+        let test_new = ItemIdData::new(UInt12::new(1)?, UInt12::new(2)?);
         assert_eq!(test_rt, test_new);
+
+        Ok(())
     }
 }

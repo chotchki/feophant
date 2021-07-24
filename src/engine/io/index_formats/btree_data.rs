@@ -358,14 +358,14 @@ mod tests {
             nodes: vec![
                 (
                     SqlTuple(vec![None, Some(BuiltinSqlTypes::Text("Test".to_string()))]),
-                    ItemIdData::new(UInt12::new(1).unwrap(), UInt12::new(2).unwrap()),
+                    ItemIdData::new(UInt12::new(1)?, UInt12::new(2)?),
                 ),
                 (
                     SqlTuple(vec![
                         Some(BuiltinSqlTypes::Integer(5)),
                         Some(BuiltinSqlTypes::Text("Test2".to_string())),
                     ]),
-                    ItemIdData::new(UInt12::new(3).unwrap(), UInt12::new(4).unwrap()),
+                    ItemIdData::new(UInt12::new(3)?, UInt12::new(4)?),
                 ),
             ],
         };
