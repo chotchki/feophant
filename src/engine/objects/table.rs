@@ -20,6 +20,8 @@ impl Table {
         }
     }
 
+    //TODO this new isn't really useable since the child attributes also need the link to the table
+    //Also writing unit tests are VERY painful, might need to disconnect in memory from on disk storage
     pub fn new(name: String, attributes: Vec<Attribute>) -> Table {
         Table::new_existing(Uuid::new_v4(), name, attributes)
     }
