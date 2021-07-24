@@ -115,6 +115,7 @@ impl BuiltinSqlTypes {
                 if buffer.remaining() < mem::size_of::<u32>() {
                     return Err(SqlTypeError::LengthTooShort(buffer.remaining()));
                 }
+
                 let dest = buffer.get_u32_le();
                 let value = BuiltinSqlTypes::Integer(dest);
 
@@ -253,6 +254,8 @@ pub enum SqlTypeError {
 
 #[cfg(test)]
 mod tests {
+    use std::convert::TryFrom;
+
     use super::*;
 
     fn roundtrip(input: String) -> String {
@@ -281,6 +284,30 @@ mod tests {
         let output = roundtrip(test.to_string());
 
         assert_eq!(output, test);
+    }
+
+    #[test]
+    fn test_integer_roundtrip() -> Result<(), Box<dyn std::error::Error>> {
+        let test = "5";
+        let parse_str = BuiltinSqlTypes::parse(DeserializeTypes::Integer, test)?;
+        let parse_res = match parse_str {
+            BuiltinSqlTypes::Integer(i) => {
+                assert_eq!(i, 5);
+                i
+            }
+            _ => panic!("Wrong type"),
+        };
+
+        let mut parse_serial = parse_str.serialize();
+        let reparse = BuiltinSqlTypes::deserialize(DeserializeTypes::Integer, &mut parse_serial)?;
+        match reparse {
+            BuiltinSqlTypes::Integer(i) => {
+                assert_eq!(i, 5)
+            }
+            _ => panic!("Wrong type"),
+        };
+
+        Ok(())
     }
 
     #[test]

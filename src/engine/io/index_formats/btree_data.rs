@@ -39,7 +39,7 @@ pub enum BTreeNode {
     Leaf(BTreeLeaf),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct BTreeBranch {
     pub parent_node: Option<BTreePage>,
     pub left_node: Option<BTreePage>,
@@ -47,7 +47,7 @@ pub struct BTreeBranch {
     pub nodes: Vec<(SqlTuple, BTreePage)>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct BTreeLeaf {
     pub parent_node: Option<BTreePage>,
     pub left_node: Option<BTreePage>,
@@ -55,53 +55,16 @@ pub struct BTreeLeaf {
     pub nodes: Vec<(SqlTuple, ItemIdData)>,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum NodeType {
     Node,
     Leaf,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct BTreePage(pub usize);
 
 impl BTreeNode {
-    pub fn serialize(&self) -> Result<Bytes, BTreeError> {
-        let mut buffer = BytesMut::new();
-        buffer.put_u8(1);
-
-        match self {
-            BTreeNode::Branch(b) => {
-                Self::write_node(&mut buffer, b.parent_node)?;
-                Self::write_node(&mut buffer, b.left_node)?;
-                Self::write_node(&mut buffer, b.right_node)?;
-
-                Self::write_count(&mut buffer, b.nodes.len());
-
-                for (key, pointer) in b.nodes.iter() {
-                    Self::write_sql_tuple(&mut buffer, key);
-
-                    let pointer_u64 = u64::try_from(pointer.0)?;
-                    buffer.put_uint_le(pointer_u64, size_of::<usize>());
-                }
-            }
-            BTreeNode::Leaf(l) => {
-                Self::write_node(&mut buffer, l.parent_node)?;
-                Self::write_node(&mut buffer, l.left_node)?;
-                Self::write_node(&mut buffer, l.right_node)?;
-
-                Self::write_count(&mut buffer, l.nodes.len());
-
-                for (key, item_id) in l.nodes.iter() {
-                    Self::write_sql_tuple(&mut buffer, key);
-
-                    buffer.put(item_id.serialize());
-                }
-            }
-        }
-
-        Ok(buffer.freeze())
-    }
-
     fn write_node(buffer: &mut BytesMut, node: Option<BTreePage>) -> Result<(), BTreeError> {
         match node {
             Some(pn) => {
@@ -127,7 +90,7 @@ impl BTreeNode {
     }
 
     fn write_sql_tuple(buffer: &mut BytesMut, tuple: &SqlTuple) {
-        let nulls = NullMask::serialize(&tuple);
+        let nulls = NullMask::serialize(&tuple, false);
         buffer.put(nulls);
 
         for data in tuple.0.iter() {
@@ -222,7 +185,7 @@ impl BTreeNode {
 
     fn parse_page(buffer: &mut impl Buf) -> Result<Option<BTreePage>, BTreeError> {
         if buffer.remaining() < size_of::<usize>() {
-            return Err(BTreeError::MissingParentData(
+            return Err(BTreeError::MissingPointerData(
                 size_of::<usize>(),
                 buffer.remaining(),
             ));
@@ -251,28 +214,170 @@ impl BTreeNode {
     }
 }
 
+impl BTreeBranch {
+    pub fn serialize(&self) -> Result<Bytes, BTreeError> {
+        let mut buffer = BytesMut::new();
+        buffer.put_u8(1);
+
+        BTreeNode::write_node(&mut buffer, self.parent_node)?;
+        BTreeNode::write_node(&mut buffer, self.left_node)?;
+        BTreeNode::write_node(&mut buffer, self.right_node)?;
+
+        BTreeNode::write_count(&mut buffer, self.nodes.len());
+
+        for (key, pointer) in self.nodes.iter() {
+            BTreeNode::write_sql_tuple(&mut buffer, key);
+
+            let pointer_u64 = u64::try_from(pointer.0)?;
+            buffer.put_uint_le(pointer_u64, size_of::<usize>());
+        }
+
+        Ok(buffer.freeze())
+    }
+}
+
+impl BTreeLeaf {
+    pub fn serialize(&self) -> Result<Bytes, BTreeError> {
+        let mut buffer = BytesMut::new();
+        buffer.put_u8(0);
+
+        BTreeNode::write_node(&mut buffer, self.parent_node)?;
+        BTreeNode::write_node(&mut buffer, self.left_node)?;
+        BTreeNode::write_node(&mut buffer, self.right_node)?;
+
+        BTreeNode::write_count(&mut buffer, self.nodes.len());
+
+        for (key, item_id) in self.nodes.iter() {
+            BTreeNode::write_sql_tuple(&mut buffer, key);
+
+            buffer.put(item_id.serialize());
+        }
+
+        Ok(buffer.freeze())
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum BTreeError {
     #[error("Buffer too short to parse")]
     BufferTooShort(),
     #[error(transparent)]
     ItemIdDataError(#[from] ItemIdDataError),
-    #[error("Missing Data for Left need {0}, have {1}")]
-    MissingLeftData(usize, usize),
     #[error("Missing Data for Node Type need {0}, have {1}")]
     MissingNodeTypeData(usize, usize),
-    #[error("Missing Data for Parent need {0}, have {1}")]
-    MissingParentData(usize, usize),
     #[error("Missing Data for Pointer need {0}, have {1}")]
     MissingPointerData(usize, usize),
-    #[error("Missing Data for Right need {0}, have {1}")]
-    MissingRightData(usize, usize),
     #[error(transparent)]
     NullMaskError(#[from] NullMaskError),
     #[error(transparent)]
     SqlTypeError(#[from] SqlTypeError),
     #[error(transparent)]
     TryFromIntError(#[from] TryFromIntError),
-    #[error("Not implemented")]
-    Unknown(),
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        constants::{DeserializeTypes, TableDefinitions},
+        engine::{
+            io::page_formats::UInt12,
+            objects::{Attribute, Table},
+        },
+    };
+    use uuid::Uuid;
+
+    use super::*;
+
+    fn get_index() -> Index {
+        let tbl_uuid = Uuid::new_v4();
+        let attrs = vec![
+            Attribute::new(
+                tbl_uuid,
+                "foo".to_string(),
+                DeserializeTypes::Integer,
+                crate::constants::Nullable::Null,
+            ),
+            Attribute::new(
+                tbl_uuid,
+                "bar".to_string(),
+                DeserializeTypes::Text,
+                crate::constants::Nullable::NotNull,
+            ),
+        ];
+
+        let tbl = Table::new_existing(tbl_uuid, "Test Table".to_string(), attrs);
+
+        Index {
+            id: Uuid::new_v4(),
+            pg_class_id: Uuid::new_v4(),
+            name: "TestIndex".to_string(),
+            table: TableDefinitions::VALUES[0].value(),
+            columns: tbl.attributes,
+            unique: true,
+        }
+    }
+
+    #[test]
+    fn test_btree_branch_roundtrip() -> Result<(), Box<dyn std::error::Error>> {
+        let test = BTreeBranch {
+            parent_node: None,
+            left_node: Some(BTreePage(1)),
+            right_node: Some(BTreePage(2)),
+            nodes: vec![
+                (
+                    SqlTuple(vec![None, Some(BuiltinSqlTypes::Text("Test".to_string()))]),
+                    BTreePage(3),
+                ),
+                (
+                    SqlTuple(vec![
+                        Some(BuiltinSqlTypes::Integer(5)),
+                        Some(BuiltinSqlTypes::Text("Test2".to_string())),
+                    ]),
+                    BTreePage(3),
+                ),
+            ],
+        };
+
+        let mut test_serial = test.clone().serialize()?;
+        let test_parse = BTreeNode::parse(&mut test_serial, &get_index())?;
+
+        match test_parse {
+            BTreeNode::Branch(b) => assert_eq!(test, b),
+            _ => assert!(false),
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_btree_leaf_roundtrip() -> Result<(), Box<dyn std::error::Error>> {
+        let test = BTreeLeaf {
+            parent_node: None,
+            left_node: Some(BTreePage(1)),
+            right_node: Some(BTreePage(2)),
+            nodes: vec![
+                (
+                    SqlTuple(vec![None, Some(BuiltinSqlTypes::Text("Test".to_string()))]),
+                    ItemIdData::new(UInt12::new(1).unwrap(), UInt12::new(2).unwrap()),
+                ),
+                (
+                    SqlTuple(vec![
+                        Some(BuiltinSqlTypes::Integer(5)),
+                        Some(BuiltinSqlTypes::Text("Test2".to_string())),
+                    ]),
+                    ItemIdData::new(UInt12::new(3).unwrap(), UInt12::new(4).unwrap()),
+                ),
+            ],
+        };
+
+        let mut test_serial = test.clone().serialize()?;
+        let test_parse = BTreeNode::parse(&mut test_serial, &get_index())?;
+
+        match test_parse {
+            BTreeNode::Leaf(l) => assert_eq!(test, l),
+            _ => assert!(false),
+        }
+
+        Ok(())
+    }
 }

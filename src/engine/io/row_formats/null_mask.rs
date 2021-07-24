@@ -7,7 +7,7 @@ use thiserror::Error;
 pub struct NullMask {}
 
 impl NullMask {
-    pub fn serialize(input: &SqlTuple) -> Bytes {
+    pub fn serialize(input: &SqlTuple, none_null_empty: bool) -> Bytes {
         if input.0.len() == 0 {
             return Bytes::new();
         }
@@ -42,7 +42,7 @@ impl NullMask {
             i += 1;
         }
 
-        if !any_null {
+        if !any_null && none_null_empty {
             return Bytes::new();
         }
         buffer.freeze()
@@ -111,7 +111,7 @@ mod tests {
     fn test_null_mask_serialize() {
         let test = get_tuple();
 
-        let result = NullMask::serialize(&test);
+        let result = NullMask::serialize(&test, true);
 
         assert_eq!(hex!("aa 80").to_vec(), result.to_vec());
     }
@@ -120,7 +120,7 @@ mod tests {
     fn test_null_mask_single() {
         let test = SqlTuple(vec![None]);
 
-        let result = NullMask::serialize(&test);
+        let result = NullMask::serialize(&test, true);
 
         assert_eq!(hex!("80").to_vec(), result.to_vec());
     }
@@ -133,7 +133,7 @@ mod tests {
             Some(BuiltinSqlTypes::Bool(true)),
         ]);
 
-        let result = NullMask::serialize(&test);
+        let result = NullMask::serialize(&test, true);
 
         assert_eq!(Bytes::new(), result);
     }
@@ -165,11 +165,29 @@ mod tests {
             true, false, true, false, true, false, true, false, true, false, false, false,
         ];
 
-        let mut result = NullMask::serialize(&test);
+        let mut result = NullMask::serialize(&test, true);
         assert_eq!(Bytes::from_static(&hex!("aa 80")), result);
         let parse = NullMask::parse(&mut result, 12)?;
 
         assert_eq!(end, parse);
+        Ok(())
+    }
+
+    #[test]
+    fn test_null_mask_preserve() -> Result<(), Box<dyn std::error::Error>> {
+        let all_null = SqlTuple(vec![
+            Some(BuiltinSqlTypes::Bool(true)),
+            Some(BuiltinSqlTypes::Bool(true)),
+        ]);
+
+        let no_preserve = Bytes::from_static(&[]);
+        let mut result = NullMask::serialize(&all_null, true);
+        assert_eq!(no_preserve, result);
+
+        let preserve = Bytes::from_static(&[0]);
+        let mut result = NullMask::serialize(&all_null, false);
+        assert_eq!(preserve, result);
+
         Ok(())
     }
 }

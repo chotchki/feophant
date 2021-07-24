@@ -108,7 +108,7 @@ impl RowData {
         }
         buffer.put_u8(mask.bits());
 
-        let nulls = NullMask::serialize(&self.user_data);
+        let nulls = NullMask::serialize(&self.user_data, true);
         buffer.put(nulls);
 
         for data in &self.user_data.0 {
