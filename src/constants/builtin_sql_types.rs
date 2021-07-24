@@ -256,6 +256,9 @@ pub enum SqlTypeError {
 mod tests {
     use std::convert::TryFrom;
 
+    use hex_literal::hex;
+    use uuid::Uuid;
+
     use super::*;
 
     fn roundtrip(input: String) -> String {
@@ -276,6 +279,27 @@ mod tests {
         let output = roundtrip(test.to_string());
 
         assert_eq!(output, test);
+    }
+
+    #[test]
+    fn test_builtin_display() {
+        let text = BuiltinSqlTypes::Bool(true);
+        assert_eq!(text.to_string(), "true");
+
+        let text = BuiltinSqlTypes::Integer(5);
+        assert_eq!(text.to_string(), "5");
+
+        let text = BuiltinSqlTypes::Text("FOOBAR".to_string());
+        assert_eq!(text.to_string(), "FOOBAR");
+
+        let text =
+            BuiltinSqlTypes::Uuid(Uuid::from_bytes(hex!("EE919E33D9054F4889537EBB6CC911EB")));
+        assert_eq!(text.to_string(), "ee919e33-d905-4f48-8953-7ebb6cc911eb");
+
+        assert_eq!(DeserializeTypes::Bool.to_string(), "Bool");
+        assert_eq!(DeserializeTypes::Integer.to_string(), "Integer");
+        assert_eq!(DeserializeTypes::Text.to_string(), "Text");
+        assert_eq!(DeserializeTypes::Uuid.to_string(), "Uuid");
     }
 
     #[test]
