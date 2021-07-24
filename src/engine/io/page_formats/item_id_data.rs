@@ -1,6 +1,6 @@
 //! Pointer type to indicate where an item is inside a page
 //! See here for doc: https://www.postgresql.org/docs/current/storage-page-layout.html
-use super::UInt12;
+use super::{UInt12, UInt12Error};
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::mem::size_of;
 use std::ops::Range;
@@ -31,13 +31,11 @@ impl ItemIdData {
     }
 
     pub fn parse(buffer: &mut impl Buf) -> Result<Self, ItemIdDataError> {
-        if buffer.remaining() < 4 {
+        if buffer.remaining() < size_of::<UInt12>() * 2 {
             return Err(ItemIdDataError::InsufficentData(buffer.remaining()));
         }
-        let offset =
-            UInt12::new(buffer.get_u16_le()).ok_or_else(ItemIdDataError::OffsetTooLarge)?;
-        let length =
-            UInt12::new(buffer.get_u16_le()).ok_or_else(ItemIdDataError::LengthTooLarge)?;
+        let offset = UInt12::new(buffer.get_u16_le())?;
+        let length = UInt12::new(buffer.get_u16_le())?;
         Ok(ItemIdData { offset, length })
     }
 }
@@ -46,10 +44,8 @@ impl ItemIdData {
 pub enum ItemIdDataError {
     #[error("Not enough data has {0} bytes")]
     InsufficentData(usize),
-    #[error("Offset is too large")]
-    OffsetTooLarge(),
-    #[error("Length is too large")]
-    LengthTooLarge(),
+    #[error(transparent)]
+    UInt12Error(#[from] UInt12Error),
 }
 
 #[cfg(test)]

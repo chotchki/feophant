@@ -24,11 +24,11 @@ impl UInt12 {
         val
     }
 
-    pub fn new(val: u16) -> Option<UInt12> {
+    pub fn new(val: u16) -> Result<UInt12, UInt12Error> {
         if UInt12::is_in_range(val) {
-            Some(UInt12(val))
+            Ok(UInt12(val))
         } else {
-            None
+            Err(UInt12Error::ValueTooLargeU16(val))
         }
     }
 
@@ -57,8 +57,7 @@ impl UInt12 {
 
         let raw_value = buffer.get_u16_le();
 
-        let value =
-            UInt12::new(raw_value).ok_or_else(|| UInt12Error::ValueTooLargeU16(raw_value))?;
+        let value = UInt12::new(raw_value)?;
 
         Ok(value)
     }
@@ -125,38 +124,46 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_normal() {
-        let test = UInt12::new(1).unwrap();
+    fn test_normal() -> Result<(), Box<dyn std::error::Error>> {
+        let test = UInt12::new(1)?;
 
         assert_eq!(test.to_u16(), 1);
+
+        Ok(())
     }
 
     #[test]
-    fn test_math() {
-        let mut test = UInt12::new(1).unwrap();
+    fn test_math() -> Result<(), Box<dyn std::error::Error>> {
+        let mut test = UInt12::new(1)?;
 
-        test += UInt12::new(1).unwrap();
-        test -= UInt12::new(1).unwrap();
+        test += UInt12::new(1)?;
+        test -= UInt12::new(1)?;
 
         assert_eq!(test.to_u16(), 1);
+
+        Ok(())
     }
 
     #[test]
-    fn test_subtraction() {
-        let left = UInt12::new(10).unwrap();
-        let right = UInt12::new(5).unwrap();
+    fn test_subtraction() -> Result<(), Box<dyn std::error::Error>> {
+        let left = UInt12::new(10)?;
+        let right = UInt12::new(5)?;
 
         let result = left - right;
 
         assert_eq!(result, right);
+
+        Ok(())
     }
 
     #[test]
-    fn test_usize() {
+    fn test_usize() -> Result<(), Box<dyn std::error::Error>> {
         let large: usize = 400;
-        let test = UInt12::try_from(large).unwrap();
+        let test = UInt12::try_from(large)?;
 
         assert_eq!(test.to_u16(), 400);
+
+        Ok(())
     }
 
     #[test]
