@@ -110,7 +110,7 @@ impl fmt::Display for UInt12 {
     }
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, PartialEq)]
 pub enum UInt12Error {
     #[error("Not enough data to parse, got {0}")]
     InsufficentData(usize),

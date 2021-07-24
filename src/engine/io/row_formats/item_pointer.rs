@@ -4,8 +4,10 @@
 //! We will be treating this a little different since our size will be based on usize
 use super::super::page_formats::{UInt12, UInt12Error};
 use bytes::{Buf, BufMut, Bytes, BytesMut};
+use std::convert::TryFrom;
 use std::fmt;
-use std::mem;
+use std::mem::size_of;
+use std::num::TryFromIntError;
 use thiserror::Error;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -20,7 +22,7 @@ impl ItemPointer {
     }
 
     pub fn serialize(&self) -> Bytes {
-        let mut buffer = BytesMut::with_capacity(mem::size_of::<ItemPointer>());
+        let mut buffer = BytesMut::with_capacity(size_of::<ItemPointer>());
 
         buffer.put_slice(&self.page.to_le_bytes());
         buffer.put(self.count.serialize());
@@ -29,16 +31,15 @@ impl ItemPointer {
     }
 
     pub fn parse(buffer: &mut impl Buf) -> Result<Self, ItemPointerError> {
-        if buffer.remaining() < mem::size_of::<usize>() {
+        if buffer.remaining() < size_of::<usize>() {
             return Err(ItemPointerError::BufferTooShort(
-                mem::size_of::<usize>(),
+                size_of::<usize>(),
                 buffer.remaining(),
             ));
         }
 
-        let mut raw_page = [0; mem::size_of::<usize>()];
-        buffer.copy_to_slice(&mut raw_page);
-        let page = usize::from_le_bytes(raw_page);
+        let value = buffer.get_uint_le(size_of::<usize>());
+        let page = usize::try_from(value)?;
 
         let count = UInt12::parse(buffer)?;
         Ok(ItemPointer::new(page, count))
@@ -53,16 +54,20 @@ impl fmt::Display for ItemPointer {
     }
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, PartialEq)]
 pub enum ItemPointerError {
     #[error("Not enough space to parse usize need {0} got {1}")]
     BufferTooShort(usize, usize),
     #[error(transparent)]
-    U12ParseError(#[from] UInt12Error),
+    TryFromIntError(#[from] TryFromIntError),
+    #[error(transparent)]
+    UInt12Error(#[from] UInt12Error),
 }
 
 #[cfg(test)]
 mod tests {
+    use std::mem::size_of;
+
     use super::*;
 
     #[test]
@@ -73,6 +78,26 @@ mod tests {
         let test_reparse = ItemPointer::parse(&mut test_serial)?;
 
         assert_eq!(test, test_reparse);
+        Ok(())
+    }
+
+    #[test]
+    fn test_item_pointer_error_conditions() -> Result<(), Box<dyn std::error::Error>> {
+        let parse = ItemPointer::parse(&mut Bytes::new());
+
+        assert_eq!(
+            Err(ItemPointerError::BufferTooShort(size_of::<usize>(), 0)),
+            parse
+        );
+
+        let parse = ItemPointer::parse(&mut Bytes::from_static(&[0, 0, 0, 0, 0, 0, 0, 0, 1]));
+
+        assert_eq!(
+            Err(ItemPointerError::UInt12Error(UInt12Error::InsufficentData(
+                1
+            ))),
+            parse
+        );
         Ok(())
     }
 }
