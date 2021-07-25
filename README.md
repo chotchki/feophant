@@ -47,6 +47,10 @@ First and most important question, how should the index layers work?
 Index Manager -> for a given table
 IO Manager -> Handle Page Load / Store / Update
 
+Implemented the formats but I think I need to add locking to the I/O manager.
+    At a minimum I need to support a get for update, update and release lock.
+    I'm not sure I understand how this should work :(. I think need to commit to another layer.
+
 **Path to 0.9**
 
 Implement where clauses, will likely need to have to start tracing columns from analyizing through to later stages.
