@@ -51,6 +51,8 @@ Implemented the formats but I think I need to add locking to the I/O manager.
     At a minimum I need to support a get for update, update and release lock.
     I'm not sure I understand how this should work :(. I think need to commit to another layer.
 
+Back to indexes for now
+
 **Path to 0.9**
 
 Implement where clauses, will likely need to have to start tracing columns from analyizing through to later stages.
