@@ -12,6 +12,18 @@
 				"isDefault": true
 			},
 			"label": "Rust: cargo build - feophant"
+		},
+		{
+			"type": "cargo",
+			"command": "test",
+			"problemMatcher": [
+				"$rustc"
+			],
+			"group": {
+				"kind": "test",
+				"isDefault": true
+			},
+			"label": "Rust: cargo test - feophant"
 		}
 	]
 }
