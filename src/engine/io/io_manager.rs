@@ -1,6 +1,7 @@
 //! Eventually this will handle reading / writing pages from disk but for now, hashmap + vector!
 //!
 //! Was stupid with the implementation, should have supported an append api only since vector only works that way
+use super::page_formats::{UInt12, UInt12Error};
 use async_stream::stream;
 use bytes::Bytes;
 use futures::stream::Stream;
@@ -11,9 +12,6 @@ use std::vec::Vec;
 use thiserror::Error;
 use tokio::sync::RwLock;
 use uuid::Uuid;
-
-use super::super::objects::Table;
-use super::page_formats::{UInt12, UInt12Error};
 
 #[derive(Clone, Debug)]
 pub struct IOManager {

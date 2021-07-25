@@ -60,6 +60,8 @@ Back to indexes for now. I need to make a decision on how to handle them hitting
 
 I'll have to switch IOManager to use uuid instead of Table as a key. Upside, I'm basically already doing that. (done)
 
+I'm chewing on splitting the in-memory table/column definitions from the on-disk view. In particular I could remove the circular dependancy I have right now.
+
 **Path to 0.9**
 
 Implement where clauses, will likely need to have to start tracing columns from analyizing through to later stages.
