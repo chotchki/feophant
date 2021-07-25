@@ -5,6 +5,7 @@ use async_stream::stream;
 use bytes::Bytes;
 use futures::stream::Stream;
 use std::collections::HashMap;
+use std::convert::TryFrom;
 use std::sync::Arc;
 use std::vec::Vec;
 use thiserror::Error;
@@ -12,6 +13,7 @@ use tokio::sync::RwLock;
 use uuid::Uuid;
 
 use super::super::objects::Table;
+use super::page_formats::{UInt12, UInt12Error};
 
 #[derive(Clone, Debug)]
 pub struct IOManager {
@@ -62,14 +64,24 @@ impl IOManager {
         }
     }
 
-    pub async fn add_page(&self, table: Arc<Table>, page: Bytes) {
+    pub async fn add_page(&self, table: Arc<Table>, page: Bytes) -> Result<usize, IOManagerError> {
+        let size = UInt12::try_from(page.len() - 1)?;
+        if size != UInt12::max() {
+            return Err(IOManagerError::InvalidPageSize(page.len()));
+        }
+
         let mut write_lock = self.data.write().await;
 
         match write_lock.get_mut(&table.id) {
-            Some(v) => v.push(page),
+            Some(v) => {
+                let offset = v.len();
+                v.push(page);
+                return Ok(offset);
+            }
             None => {
                 let vec_holder = vec![page];
                 write_lock.insert(table.id, vec_holder);
+                return Ok(0);
             }
         }
     }
@@ -80,6 +92,11 @@ impl IOManager {
         page: Bytes,
         offset: usize,
     ) -> Result<(), IOManagerError> {
+        let size = UInt12::try_from(page.len() - 1)?;
+        if size != UInt12::max() {
+            return Err(IOManagerError::InvalidPageSize(page.len()));
+        }
+
         let mut write_lock = self.data.write().await;
 
         let value = write_lock.get_mut(&table.id);
@@ -92,6 +109,7 @@ impl IOManager {
             return Err(IOManagerError::InvalidPage(offset));
         }
         existing_value[offset] = page;
+
         Ok(())
     }
 }
@@ -102,6 +120,10 @@ pub enum IOManagerError {
     NoSuchTable(String),
     #[error("Invalid Page number {0}")]
     InvalidPage(usize),
+    #[error("Invalid Page size of {0}")]
+    InvalidPageSize(usize),
+    #[error(transparent)]
+    UInt12Error(#[from] UInt12Error),
 }
 
 #[cfg(test)]
@@ -120,7 +142,7 @@ mod tests {
 
     fn get_bytes(data: u8) -> Bytes {
         let mut buf = BytesMut::with_capacity(4096);
-        for _ in 0..4095 {
+        for _ in 0..=4095 {
             buf.put_u8(data);
         }
         buf.freeze()
