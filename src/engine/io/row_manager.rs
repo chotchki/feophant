@@ -54,7 +54,7 @@ impl RowManager {
         page.update(row, row_pointer.count)?;
 
         self.io_manager
-            .update_page(table, page.serialize(), row_pointer.page)
+            .update_page(&table.id, page.serialize(), row_pointer.page)
             .await?;
         Ok(())
     }
@@ -107,7 +107,7 @@ impl RowManager {
         old_page.update(old_row, row_pointer.count)?;
 
         self.io_manager
-            .update_page(table, old_page.serialize(), row_pointer.page)
+            .update_page(&table.id, old_page.serialize(), row_pointer.page)
             .await?;
 
         return Ok(new_row_pointer);
@@ -120,10 +120,10 @@ impl RowManager {
     ) -> Result<(PageData, RowData), RowManagerError> {
         let page_bytes = self
             .io_manager
-            .get_page(table.clone(), row_pointer.page)
+            .get_page(&table.id, row_pointer.page)
             .await
             .ok_or_else(|| RowManagerError::NonExistentPage(row_pointer.page))?;
-        let page = PageData::parse(table.clone(), row_pointer.page, page_bytes)?;
+        let page = PageData::parse(table, row_pointer.page, page_bytes)?;
 
         let row = page
             .get_row(row_pointer.count)
@@ -140,7 +140,7 @@ impl RowManager {
     ) -> impl Stream<Item = Result<RowData, RowManagerError>> {
         try_stream! {
             let mut page_num = 0;
-            for await page_bytes in self.io_manager.get_stream(table.clone()) {
+            for await page_bytes in self.io_manager.get_stream(table.id) {
                 let page = PageData::parse(table.clone(), page_num, page_bytes)?;
                 for await row in page.get_stream() {
                     yield row;
@@ -168,7 +168,7 @@ impl RowManager {
 
         let mut page_num = 0;
         loop {
-            let page_bytes = io_manager.get_page(table.clone(), page_num).await;
+            let page_bytes = io_manager.get_page(&table.id, page_num).await;
             match page_bytes {
                 Some(p) => {
                     let mut page = PageData::parse(table.clone(), page_num, p)?;
@@ -176,7 +176,7 @@ impl RowManager {
                         let new_row_pointer = page.insert(row)?;
                         let new_page_bytes = page.serialize();
                         io_manager
-                            .update_page(table, new_page_bytes, page_num)
+                            .update_page(&table.id, new_page_bytes, page_num)
                             .await?;
                         return Ok(new_row_pointer);
                     } else {
@@ -187,7 +187,7 @@ impl RowManager {
                 None => {
                     let mut new_page = PageData::new(page_num);
                     let new_row_pointer = new_page.insert(row)?; //TODO Will NOT handle overly large rows
-                    io_manager.add_page(table, new_page.serialize()).await;
+                    io_manager.add_page(&table.id, new_page.serialize()).await?;
                     return Ok(new_row_pointer);
                 }
             }

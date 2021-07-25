@@ -51,7 +51,14 @@ Implemented the formats but I think I need to add locking to the I/O manager.
     At a minimum I need to support a get for update, update and release lock.
     I'm not sure I understand how this should work :(. I think need to commit to another layer.
 
-Back to indexes for now
+Implemented stronger page checking to make sure we don't store something that won't work on the file system.
+
+Back to indexes for now. I need to make a decision on how to handle them hitting the file system.
+    Postgres uses a series of OIDs to map onto disk.
+
+    I've been using uuids, I think I'm going to continue that. That would also solve the postgres fork approach.
+
+I'll have to switch IOManager to use uuid instead of Table as a key. Upside, I'm basically already doing that. (done)
 
 **Path to 0.9**
 

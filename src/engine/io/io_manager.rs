@@ -30,28 +30,28 @@ impl IOManager {
     //Extracted the actual logic into its own method so I could implement stream
     async fn get_page_int(
         d: Arc<RwLock<HashMap<Uuid, Vec<Bytes>>>>,
-        table: Arc<Table>,
+        resource_key: &Uuid,
         offset: usize,
     ) -> Option<Bytes> {
         let read_lock = d.read().await;
 
-        let value = read_lock.get(&table.id)?;
+        let value = read_lock.get(resource_key)?;
 
         let page = value.get(offset)?;
         let copy = page.slice(0..page.len());
         Some(copy)
     }
 
-    pub async fn get_page(&self, table: Arc<Table>, offset: usize) -> Option<Bytes> {
-        IOManager::get_page_int(self.data.clone(), table, offset).await
+    pub async fn get_page(&self, resource_key: &Uuid, offset: usize) -> Option<Bytes> {
+        IOManager::get_page_int(self.data.clone(), resource_key, offset).await
     }
 
-    pub fn get_stream(&self, table: Arc<Table>) -> impl Stream<Item = Bytes> {
+    pub fn get_stream(&self, resource_key: Uuid) -> impl Stream<Item = Bytes> {
         let data = self.data.clone();
         stream! {
             let mut page_num = 0;
             loop {
-                match IOManager::get_page_int(data.clone(), table.clone(), page_num).await {
+                match IOManager::get_page_int(data.clone(), &resource_key, page_num).await {
                     Some(p) => {
                         yield p;
                     },
@@ -64,7 +64,11 @@ impl IOManager {
         }
     }
 
-    pub async fn add_page(&self, table: Arc<Table>, page: Bytes) -> Result<usize, IOManagerError> {
+    pub async fn add_page(
+        &self,
+        resource_key: &Uuid,
+        page: Bytes,
+    ) -> Result<usize, IOManagerError> {
         let size = UInt12::try_from(page.len() - 1)?;
         if size != UInt12::max() {
             return Err(IOManagerError::InvalidPageSize(page.len()));
@@ -72,7 +76,7 @@ impl IOManager {
 
         let mut write_lock = self.data.write().await;
 
-        match write_lock.get_mut(&table.id) {
+        match write_lock.get_mut(resource_key) {
             Some(v) => {
                 let offset = v.len();
                 v.push(page);
@@ -80,7 +84,7 @@ impl IOManager {
             }
             None => {
                 let vec_holder = vec![page];
-                write_lock.insert(table.id, vec_holder);
+                write_lock.insert(*resource_key, vec_holder);
                 return Ok(0);
             }
         }
@@ -88,7 +92,7 @@ impl IOManager {
 
     pub async fn update_page(
         &self,
-        table: Arc<Table>,
+        resource_key: &Uuid,
         page: Bytes,
         offset: usize,
     ) -> Result<(), IOManagerError> {
@@ -99,9 +103,9 @@ impl IOManager {
 
         let mut write_lock = self.data.write().await;
 
-        let value = write_lock.get_mut(&table.id);
+        let value = write_lock.get_mut(resource_key);
         if value.is_none() {
-            return Err(IOManagerError::NoSuchTable(table.name.clone()));
+            return Err(IOManagerError::NoSuchResource(*resource_key));
         }
 
         let existing_value = value.unwrap();
@@ -116,8 +120,8 @@ impl IOManager {
 
 #[derive(Debug, Error)]
 pub enum IOManagerError {
-    #[error("No such table {0}")]
-    NoSuchTable(String),
+    #[error("No such resource {0}")]
+    NoSuchResource(Uuid),
     #[error("Invalid Page number {0}")]
     InvalidPage(usize),
     #[error("Invalid Page size of {0}")]
@@ -155,8 +159,8 @@ mod tests {
         let pm = IOManager::new();
         let table = Arc::new(Table::new("test".to_string(), Vec::new()));
 
-        aw!(pm.add_page(table.clone(), buf_frozen.clone()));
-        let check = aw!(pm.get_page(table, 0)).unwrap();
+        aw!(pm.add_page(&table.id, buf_frozen.clone()));
+        let check = aw!(pm.get_page(&table.id, 0)).unwrap();
         assert_eq!(check, buf_frozen.clone());
     }
 
@@ -168,13 +172,13 @@ mod tests {
         let pm = IOManager::new();
         let table = Arc::new(Table::new("test".to_string(), Vec::new()));
 
-        aw!(pm.add_page(table.clone(), buf_1.clone()));
-        aw!(pm.add_page(table.clone(), buf_1.clone()));
-        let check_1 = aw!(pm.get_page(table.clone(), 1)).unwrap();
+        aw!(pm.add_page(&table.id, buf_1.clone()));
+        aw!(pm.add_page(&table.id, buf_1.clone()));
+        let check_1 = aw!(pm.get_page(&table.id, 1)).unwrap();
         assert_eq!(buf_1.clone(), check_1.clone());
 
-        aw!(pm.update_page(table.clone(), buf_2.clone(), 1));
-        let check_2 = aw!(pm.get_page(table, 1)).unwrap();
+        aw!(pm.update_page(&table.id, buf_2.clone(), 1));
+        let check_2 = aw!(pm.get_page(&table.id, 1)).unwrap();
         assert_eq!(buf_2.clone(), check_2.clone());
         assert_ne!(buf_1.clone(), check_2.clone());
     }
