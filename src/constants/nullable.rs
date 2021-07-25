@@ -36,3 +36,28 @@ impl fmt::Display for Nullable {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_nullable_display() -> Result<(), Box<dyn std::error::Error>> {
+        assert_eq!(Nullable::NotNull.to_string(), "NotNull".to_string());
+        assert_eq!(Nullable::Null.to_string(), "Null".to_string());
+        Ok(())
+    }
+
+    #[test]
+    fn test_nullable_from() -> Result<(), Box<dyn std::error::Error>> {
+        assert_eq!(Nullable::from(false), Nullable::NotNull);
+        assert_eq!(Nullable::from(true), Nullable::Null);
+
+        assert_eq!(Nullable::from(0), Nullable::Null);
+        for u in 1..u8::MAX {
+            assert_eq!(Nullable::from(u), Nullable::NotNull);
+        }
+
+        Ok(())
+    }
+}
