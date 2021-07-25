@@ -181,11 +181,11 @@ mod tests {
         ]);
 
         let no_preserve = Bytes::from_static(&[]);
-        let mut result = NullMask::serialize(&all_null, true);
+        let result = NullMask::serialize(&all_null, true);
         assert_eq!(no_preserve, result);
 
         let preserve = Bytes::from_static(&[0]);
-        let mut result = NullMask::serialize(&all_null, false);
+        let result = NullMask::serialize(&all_null, false);
         assert_eq!(preserve, result);
 
         Ok(())
