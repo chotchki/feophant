@@ -114,9 +114,9 @@ impl PageData {
         let mut rows: Vec<RowData> = Vec::with_capacity(page_header.get_item_count());
         for i in 0..page_header.get_item_count() {
             let iid_lower_offset =
-                mem::size_of::<PageHeader>() + (mem::size_of::<ItemIdData>() * i);
+                mem::size_of::<PageHeader>() + (ItemIdData::serialize_size() * i);
             let iid_upper_offset =
-                mem::size_of::<PageHeader>() + (mem::size_of::<ItemIdData>() * (i + 1));
+                mem::size_of::<PageHeader>() + (ItemIdData::serialize_size() * (i + 1));
             let mut iid_slice = buffer.slice(iid_lower_offset..iid_upper_offset);
             let iid = ItemIdData::parse(&mut iid_slice)?;
 

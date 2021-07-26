@@ -1,5 +1,8 @@
 mod index_formats;
 
+mod index_manager;
+pub use index_manager::IndexManager;
+
 mod io_manager;
 pub use io_manager::IOManager;
 pub use io_manager::IOManagerError;

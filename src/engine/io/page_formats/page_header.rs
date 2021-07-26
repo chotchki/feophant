@@ -22,7 +22,7 @@ impl PageHeader {
 
     pub fn get_item_count(&self) -> usize {
         let lower: usize = self.pd_lower.to_u16().into();
-        (lower - size_of::<PageHeader>()) / size_of::<ItemIdData>()
+        (lower - size_of::<PageHeader>()) / ItemIdData::serialize_size()
     }
 
     pub fn get_free_space(&self) -> usize {
@@ -34,7 +34,7 @@ impl PageHeader {
     }
 
     pub fn can_fit(&self, row_size: usize) -> bool {
-        let needed = row_size + size_of::<ItemIdData>();
+        let needed = row_size + ItemIdData::serialize_size();
         let have = self.get_free_space();
         have >= needed
     }
@@ -46,7 +46,7 @@ impl PageHeader {
 
         let row_u12 = UInt12::try_from(row_size)?;
 
-        self.pd_lower += UInt12::try_from(size_of::<ItemIdData>())?;
+        self.pd_lower += UInt12::try_from(ItemIdData::serialize_size())?;
         self.pd_upper -= row_u12;
 
         //Need to increment the offset by 1 since the pointer is now pointing a free space
@@ -121,7 +121,7 @@ mod tests {
 
         let remain_free = (UInt12::max().to_u16() as usize) + 1 //Initial
             - size_of::<PageHeader>() //Header
-            - (size_of::<ItemIdData>() * 2) //Two items
+            - (ItemIdData::serialize_size() * 2) //Two items
             - 10; //Their data
         assert_eq!(test.get_free_space(), remain_free)
     }
@@ -132,7 +132,7 @@ mod tests {
 
         let needed = (UInt12::max().to_u16() as usize) + 1
             - size_of::<PageHeader>()
-            - size_of::<ItemIdData>();
+            - ItemIdData::serialize_size();
         test.add_item(needed).unwrap(); //Should be maxed out
 
         assert_eq!(test.get_item_count(), 1); //Should have an item

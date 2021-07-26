@@ -4,7 +4,12 @@
 //!     read root
 //!         search through buckets,
 
+use super::page_formats::ItemIdData;
+use super::IOManager;
+use crate::engine::objects::{Index, SqlTuple};
+
 //TODO Support something other than btrees
+//TODO Support searching on a non primary column
 
 #[derive(Clone, Debug)]
 pub struct IndexManager {
@@ -16,7 +21,7 @@ impl IndexManager {
         IndexManager { io_manager }
     }
 
-    fn add(index: Index, key: Vec<BuiltInTypes>, item_ptr: ItemIdData) {}
+    fn add(index: Index, key: SqlTuple, item_ptr: ItemIdData) {}
 }
 
 #[cfg(test)]
@@ -24,14 +29,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_net_frames_poorly() {
-        NetworkFrame::authentication_ok();
-        NetworkFrame::ready_for_query();
-        NetworkFrame::error_response(
-            PgErrorLevels::Error,
-            PgErrorCodes::SystemError,
-            "test".to_string(),
-        );
-        assert!(true);
+    fn test_example() -> Result<(), Box<dyn std::error::Error>> {
+        Ok(())
     }
 }
