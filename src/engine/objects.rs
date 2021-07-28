@@ -40,3 +40,5 @@ pub use sql_tuple::SqlTupleError;
 mod table;
 pub use table::Table;
 pub use table::TableError;
+
+mod types;

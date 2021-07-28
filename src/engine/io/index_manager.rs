@@ -4,6 +4,8 @@
 //!     read root
 //!         search through buckets,
 
+use uuid::Uuid;
+
 use super::page_formats::ItemIdData;
 use super::IOManager;
 use crate::engine::objects::{Index, SqlTuple};
@@ -21,7 +23,7 @@ impl IndexManager {
         IndexManager { io_manager }
     }
 
-    fn add(index: Index, key: SqlTuple, item_ptr: ItemIdData) {}
+    fn add(index: Uuid, key: SqlTuple, item_ptr: ItemIdData) {}
 }
 
 #[cfg(test)]

@@ -28,6 +28,76 @@ You can currently start the server, connect to it and have it throw tons of erro
 
 ## Current TODO List - Subject to constant change!
 
+**Path to 0.7.1**
+
+Have another change to chew on, and its an even bigger refactoring. I should move types out of the constants package AND make it a trait.
+
+Why? I have a couple reoccuring issues:
+* Organization Problems
+* * I don't like that its in the constants namespace, will probably fix this first.
+* * Due to enums and types not being unified I have a zero byte mapper type that's mixed in the same file. I need to break that out.
+* Design problems
+* * I need to be able to determine what the serialized size of a tuple is. I cannot do that without actually doing the serialization.
+* * Right now there is not a way to define custom composite types. This is important because there is not a way to support user defined types right now.
+* * I have no way to support array types either.
+* * Need a better way to track definition of column+type for a view into a table.
+
+I'm thinking about the following design to fix this:
+
+enum SqlType {
+    Base(Option<BaseSqlTypes>),
+    Composite(Vec<Option<BaseSqlTypes>>),
+    Array(Vec<Vec<Option<BaseSqlTypes>>>)
+}
+
+enum SqlTypeMapper {
+    Base,
+    Composite,
+    Array
+}
+
+enum BaseSqlTypes {
+    Bool(bool),
+    Integer(int4),
+    Text(String),
+}
+
+enum BaseSqlTypesMapper {
+    Bool,
+    Integer,
+    Text
+}
+
+This would enable me to support the full scale of postgres types not too inefficently. I'm not happy with how I'm defining the Composite vs array types, I'm debating if there is too much overhead OR honestly the array type is probable okay.
+
+I need to chew on storing data, passing it around vs tagging it.
+
+Did some drawing, I think I need to split storing data vs interpreting it.
+
+//Used to define the type but NOT store it
+enum SqlTypeDefinition {
+    Base(BaseSqlTypesMapper),
+    Composite(Vec<(String, Arc<SqlType>)>),
+    Array(Vec<Arc<SqlType>>)
+}
+
+//Used to parse/store the data, NOT able to understand it without a matching SqlTypeDefinition
+struct SqlTuple(Vec<Option<BaseSqlTypes>>)
+
+enum BaseSqlTypes {
+    Bool(bool),
+    Integer(int4),
+    Text(String),
+}
+
+enum BaseSqlTypesMapper {
+    Bool,
+    Integer,
+    Text
+}
+
+Types have been rewritten, committing so I can break everything and go back still.
+
 **Path to 0.8**
 
 Add support for defining a primary key on a table. This implies the following functionality:
@@ -64,43 +134,47 @@ I'm chewing on splitting the in-memory table/column definitions from the on-disk
 
 **Path to 0.9**
 
-Implement where clauses, will likely need to have to start tracing columns from analyizing through to later stages.
+Implement support for running a fuzzer against the code base to ensure we are keeping the code at a high quality.
 
 **Path to 0.10**
 
-Implement delete for tuples
+Implement where clauses, will likely need to have to start tracing columns from analyizing through to later stages.
 
 **Path to 0.11**
 
-pgbench setup can run successfully, in memory
+Implement delete for tuples
 
 **Path to 0.12**
+
+pgbench setup can run successfully, in memory
+
+**Path to 0.13**
 
 Ensure data about table structures is thread safe in the face of excessive Arc usage.
 
 See where I can pass read only data by reference instead of uisng Arc everywhere
 
-**Path to 0.13**
+**Path to 0.14**
 
 Support a row with more than 4kb of text in it.
 
-**Path to 0.14**
+**Path to 0.15**
 
 Implement sorting.
 
-**Path to 0.15**
+**Path to 0.16**
 
 Implement column aliasing
 
-**Path to 0.16**
+**Path to 0.17**
 
 Implement subselect.
 
-**Path to 0.17**
+**Path to 0.18**
 
 Implement Updates.
 
-**Path to 0.18**
+**Path to 0.19**
 
 Did some reading on how the buffer manager works and my implementation seems to be firmly in the right direction. Take that knowledge and implement persistence
 
@@ -122,6 +196,10 @@ This is stuff that I should get to but aren't vital to getting to a minimal viab
 * * We should either add state to the codec or change how it parses to produce chunked requests. That means that when the 2GB offer is reached the server can react and terminate before we accept too much data. Its a little more nuanced than that, 2GB input might be okay but we should make decisions based on users and roles.
 * There is an extension that removes the need to lock tables to repack / vaccum. Figure out how it works!
 * * https://github.com/reorg/pg_repack
+* Investigate if the zheap table format would be better to implement.
+** Until I get past a WAL implementation and planner costs I don't think its worth it.
+** Since I extended the size of transaction IDs, I probably have a larger issue on my hands than normal postgres.
+*** Reading into the zheap approach I'm thinking that I might have some space saving options availible for me. In particular if a tuple is frozen so its always availible I could remove the xmin/xmax and pack more into the page. Need more thinking however my approach of questioning the storage efficency of each part of data seems to be worth it.
 
 ## Postgres Divergance
 

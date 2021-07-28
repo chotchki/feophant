@@ -215,6 +215,9 @@ impl BTreeNode {
 }
 
 impl BTreeBranch {
+    //Am worried that this will be VERY expensive
+    //pub fn can_fit(key_size: SqlTuple) -> bool {}
+
     pub fn serialize(&self) -> Result<Bytes, BTreeError> {
         let mut buffer = BytesMut::new();
         buffer.put_u8(1);
@@ -237,6 +240,8 @@ impl BTreeBranch {
 }
 
 impl BTreeLeaf {
+    //pub fn can_fit(key_size: SqlTuple) -> bool {}
+
     pub fn serialize(&self) -> Result<Bytes, BTreeError> {
         let mut buffer = BytesMut::new();
         buffer.put_u8(0);
