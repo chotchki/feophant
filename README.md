@@ -106,22 +106,20 @@ I am losing my mental model of how to do complex types AND arrays. Need to re-vi
 
 New version:
 <pre>
-                                                                                                                                               null
-
                                                                                                       
-                                                                                                                   
-                Table                   Table                    Table                     Table                Uuid 
+
+                Table                   Table                    Table                     Table                Uuid
 ┌────────────┐    +     ┌────────────┐    +     ┌─────────────┐    +     ┌──────────────┐    +     ┌──────────┐   +   ┌──────────┐
-│            │ SqlTuple │            │ SqlTuple │             │ SqlTuple │              │ RowData │          │ Page│         │
-│  Trigger   │ ───────► │  Security  │───────► │  Constraint │───────► │  VisibleRow│ ───────► │  Row│────► │  I/O│
-│            │          │            │          │            │          │             │          │          │      │          │
+│            │ SqlTuple │            │ SqlTuple │             │ SqlTuple │              │ RowData  │          │ Page  │         │
+│  Trigger   │ ───────► │  Security  │ ───────► │  Constraint │ ───────► │  Visible Row │ ───────► │  Row     │ ────► │  I/O     │
+│            │          │            │          │             │          │              │          │          │       │          │
 │  Manager   │ ◄─────── │  Manager   │ ◄─────── │  Manager    │ ◄─────── │  Manager     │ ◄─────── │  Manager │ ◄──── │  Manager │
-│            │ SqlTuple │            │ SqlTuple │             │ SqlTuple │              │ RowData │          │ Uuid  │         │
+│            │ SqlTuple │            │ SqlTuple │             │ SqlTuple │              │ RowData  │          │ Uuid  │          │
 └────────────┘    +     └────────────┘    +     └─────────────┘    +     └──────────────┘    +     └──────────┘   +   └──────────┘
                 Type                    Type           ▲         Type           ▲          Type                 Page
                                                        │                        │
 
-                                                     Null                   Transaction   
+                                                     Null                   Transaction
                                                      Unique                 Manager
                                                      Custom
 </pre>
