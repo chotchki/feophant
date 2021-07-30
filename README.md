@@ -122,6 +122,8 @@ New version:
                                                      Custom
 </pre>
 
+[comment]: # Diagram made in AsciiFlow!
+
 **Path to 0.8**
 
 Add support for defining a primary key on a table. This implies the following functionality:
