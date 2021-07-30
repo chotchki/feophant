@@ -98,6 +98,34 @@ enum BaseSqlTypesMapper {
 
 Types have been rewritten, committing so I can break everything and go back still.
 
+I am partially through the process and am realizing I need a layer above visable row management to handle constraints (starting with null). I'm going to do this at time of rowdata creation (minus foreign keys).
+
+I am restructuring the in memory view of tables/columns to disconnect from on disk.
+
+I am losing my mental model of how to do complex types AND arrays. Need to re-visit when I've slept.
+
+New version:
+<pre>
+                                                                                                                                               null
+
+                                                                                                      
+                                                                                                                   
+                Table                   Table                    Table                     Table                Uuid 
++------------+    +     +------------+    +     +-------------+    +     +--------------+    +     +----------+   +   +----------+
+|            | SqlTuple |            | SqlTuple |             | SqlTuple |              | RowData |          | Page|         |
+|  Trigger   | -------> |  Security  |-------> |  Constraint |-------> |  VisibleRow| -------> |  Row|----> |  I/O|
+|            |          |            |          |            |          |             |          |          |      |          |
+|  Manager   | <------- |  Manager   | <------- |  Manager    | <------- |  Manager     | <------- |  Manager | <---- |  Manager |
+|            | SqlTuple |            | SqlTuple |             | SqlTuple |              | RowData |          | Uuid  |         |
++------------+    +     +------------+    +     +-------------+    +     +--------------+    +     +----------+   +   +----------+
+                Type                    Type           ^         Type           ^          Type                 Page
+                                                       |                        |
+
+                                                     Null                   Transaction   
+                                                     Unique                 Manager
+                                                     Custom
+</pre>
+
 **Path to 0.8**
 
 Add support for defining a primary key on a table. This implies the following functionality:
