@@ -122,7 +122,7 @@ New version:
                                                      Custom
 </pre>
 
-[comment]: # Diagram made in AsciiFlow!
+[comment]: # (Diagram made in AsciiFlow!)
 
 **Path to 0.8**
 
