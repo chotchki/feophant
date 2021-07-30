@@ -106,11 +106,9 @@ I am losing my mental model of how to do complex types AND arrays. Need to re-vi
 
 New version:
 <pre>
-                                                                                                      
-
                 Table                   Table                    Table                     Table                Uuid
 ┌────────────┐    +     ┌────────────┐    +     ┌─────────────┐    +     ┌──────────────┐    +     ┌──────────┐   +   ┌──────────┐
-│            │ SqlTuple │            │ SqlTuple │             │ SqlTuple │              │ RowData  │          │ Page  │         │
+│            │ SqlTuple │            │ SqlTuple │             │ SqlTuple │              │ RowData  │          │ Page  │          │
 │  Trigger   │ ───────► │  Security  │ ───────► │  Constraint │ ───────► │  Visible Row │ ───────► │  Row     │ ────► │  I/O     │
 │            │          │            │          │             │          │              │          │          │       │          │
 │  Manager   │ ◄─────── │  Manager   │ ◄─────── │  Manager    │ ◄─────── │  Manager     │ ◄─────── │  Manager │ ◄──── │  Manager │
