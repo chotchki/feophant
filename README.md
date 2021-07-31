@@ -126,6 +126,8 @@ New version:
 
 Need to get this restructure completed and stop letting the code base be broken.
 
+Almost done, added the ability to efficiently calculate on disk size WITHOUT serializing. Removed multiple clones and serializations. 
+
 **Path to 0.8**
 
 Add support for defining a primary key on a table. This implies the following functionality:
