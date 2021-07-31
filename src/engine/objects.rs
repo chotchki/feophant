@@ -41,4 +41,4 @@ mod table;
 pub use table::Table;
 pub use table::TableError;
 
-mod types;
+pub mod types;

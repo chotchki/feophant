@@ -1,3 +1,11 @@
+mod constraint_manager;
+pub use constraint_manager::ConstraintManager;
+
+mod encoded_size;
+pub use encoded_size::ConstEncodedSize;
+pub use encoded_size::EncodedSize;
+pub use encoded_size::SelfEncodedSize;
+
 mod index_formats;
 
 mod index_manager;
