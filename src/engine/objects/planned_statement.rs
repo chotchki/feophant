@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use super::{Attribute, SqlTuple, Table};
+use super::{types::SqlTypeDefinition, Attribute, SqlTuple, Table};
 
 pub struct PlannedStatement {
     pub common: PlannedCommon,
@@ -30,8 +30,8 @@ pub struct CartesianJoin {
 }
 
 pub struct FullTableScan {
-    pub columns: Vec<Attribute>,
-    pub table: Arc<Table>,
+    pub src_table: Arc<Table>,
+    pub target_type: Arc<SqlTypeDefinition>,
 }
 
 pub struct ModifyTablePlan {

@@ -2,7 +2,10 @@ use feophantlib::{
     constants::{BuiltinSqlTypes, DeserializeTypes, Nullable},
     engine::{
         io::{row_formats::RowData, IOManager, RowManager, VisibleRowManager},
-        objects::{Attribute, SqlTuple, Table},
+        objects::{
+            types::{BaseSqlTypes, BaseSqlTypesMapper},
+            Attribute, SqlTuple, Table,
+        },
         transactions::TransactionManager,
     },
 };
@@ -12,34 +15,35 @@ use simplelog::{ColorChoice, CombinedLogger, Config, LevelFilter, TermLogger, Te
 use std::sync::Arc;
 mod common;
 
-fn get_row(input: String) -> Arc<SqlTuple> {
-    Arc::new(SqlTuple(vec![
-        Some(BuiltinSqlTypes::Text(input)),
+fn get_row(input: String) -> SqlTuple {
+    SqlTuple(vec![
+        Some(BaseSqlTypes::Text(input)),
         None,
-        Some(BuiltinSqlTypes::Text("blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah".to_string())),
-    ]))
+        Some(BaseSqlTypes::Text("blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah".to_string())),
+    ])
 }
 fn get_table() -> Arc<Table> {
     Arc::new(Table::new(
+        uuid::Uuid::new_v4(),
         "test_table".to_string(),
         vec![
             Attribute::new(
-                uuid::Uuid::new_v4(),
                 "header".to_string(),
-                DeserializeTypes::Text,
+                BaseSqlTypesMapper::Text,
                 Nullable::NotNull,
+                None,
             ),
             Attribute::new(
-                uuid::Uuid::new_v4(),
                 "id".to_string(),
-                DeserializeTypes::Uuid,
+                BaseSqlTypesMapper::Uuid,
                 Nullable::Null,
+                None,
             ),
             Attribute::new(
-                uuid::Uuid::new_v4(),
                 "header3".to_string(),
-                DeserializeTypes::Text,
+                BaseSqlTypesMapper::Text,
                 Nullable::NotNull,
+                None,
             ),
         ],
     ))

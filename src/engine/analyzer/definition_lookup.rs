@@ -1,14 +1,16 @@
 //! This command will look up ONLY hardcoded table definitions first,
 //! should be able to fallback to reading new ones off disk
 
-use super::super::super::constants::{
-    BuiltinSqlTypes, DeserializeTypes, SqlTypeError, TableDefinitions,
-};
+use super::super::super::constants::TableDefinitions;
 use super::super::io::row_formats::{RowData, RowDataError};
 use super::super::io::{VisibleRowManager, VisibleRowManagerError};
-use super::super::objects::{Attribute, Table, TableError};
+use super::super::objects::{
+    types::{BaseSqlTypes, BaseSqlTypesMapper},
+    Attribute, Table, TableError,
+};
 use super::super::transactions::TransactionId;
 use crate::constants::Nullable;
+use crate::engine::objects::types::BaseSqlTypesError;
 use std::convert::TryFrom;
 use std::num::TryFromIntError;
 use std::str::FromStr;
@@ -44,11 +46,11 @@ impl DefinitionLookup {
         //TODO not happy with how many strings there are
         let tbl_row = self.get_table_row(tran_id, name).await?;
         let table_id = match tbl_row.get_column_not_null("id")? {
-            BuiltinSqlTypes::Uuid(u) => u,
+            BaseSqlTypes::Uuid(u) => u,
             _ => return Err(DefinitionLookupError::ColumnWrongType()),
         };
         let table_name = match tbl_row.get_column_not_null("name")? {
-            BuiltinSqlTypes::Text(t) => t,
+            BaseSqlTypes::Text(t) => t,
             _ => return Err(DefinitionLookupError::ColumnWrongType()),
         };
 
@@ -56,31 +58,28 @@ impl DefinitionLookup {
         let mut tbl_attrs = vec![];
         for c in tbl_columns {
             let c_name = match c.get_column_not_null("attname")? {
-                BuiltinSqlTypes::Text(t) => t,
+                BaseSqlTypes::Text(t) => t,
                 _ => return Err(DefinitionLookupError::ColumnWrongType()),
             };
             let c_type = match c.get_column_not_null("atttypid")? {
-                BuiltinSqlTypes::Text(t) => t,
+                BaseSqlTypes::Text(t) => t,
                 _ => return Err(DefinitionLookupError::ColumnWrongType()),
             };
 
             let c_null = match c.get_column_not_null("attnotnull")? {
-                BuiltinSqlTypes::Bool(b) => Nullable::from(b),
+                BaseSqlTypes::Bool(b) => Nullable::from(b),
                 _ => return Err(DefinitionLookupError::ColumnWrongType()),
             };
 
             tbl_attrs.push(Attribute::new(
-                //TODO: Oops didn't store the column's id
-                table_id,
                 c_name,
-                DeserializeTypes::from_str(&c_type)?,
+                BaseSqlTypesMapper::from_str(&c_type)?,
                 c_null,
+                None, //Todo encode the column length
             ));
         }
 
-        Ok(Arc::new(Table::new_existing(
-            table_id, table_name, tbl_attrs,
-        )))
+        Ok(Arc::new(Table::new(table_id, table_name, tbl_attrs)))
     }
 
     async fn get_table_row(
@@ -94,7 +93,7 @@ impl DefinitionLookup {
         pin!(row_stream);
         while let Some(row_res) = row_stream.next().await {
             let row = row_res?;
-            if row.get_column_not_null("name")? == BuiltinSqlTypes::Text(name.clone()) {
+            if row.get_column_not_null("name")? == BaseSqlTypes::Text(name.clone()) {
                 return Ok(row);
             }
         }
@@ -116,7 +115,7 @@ impl DefinitionLookup {
         pin!(row_stream);
         while let Some(row_res) = row_stream.next().await {
             let row = row_res?;
-            if row.get_column_not_null("attrelid")? == BuiltinSqlTypes::Uuid(attrelid) {
+            if row.get_column_not_null("attrelid")? == BaseSqlTypes::Uuid(attrelid) {
                 columns.push(row);
             }
         }
@@ -140,7 +139,7 @@ impl DefinitionLookup {
                 .as_ref()
                 .ok_or_else(|| DefinitionLookupError::ColumnNull(col_offset))?;
             match not_null_value {
-                BuiltinSqlTypes::Integer(i) => column_tuples.push((i, c.clone())),
+                BaseSqlTypes::Integer(i) => column_tuples.push((i, c.clone())),
                 _ => return Err(DefinitionLookupError::ColumnWrongType()),
             }
         }
@@ -169,6 +168,8 @@ pub enum DefinitionLookupError {
     NoColumnsFound(),
     #[error("Column index does not exist {0}")]
     WrongColumnIndex(usize),
+    #[error(transparent)]
+    BaseSqlTypesError(#[from] BaseSqlTypesError),
     #[error("Column empty on index {0}")]
     ColumnNull(usize),
     #[error("Column wrong type")]
@@ -179,8 +180,6 @@ pub enum DefinitionLookupError {
     RowDataError(#[from] RowDataError),
     #[error(transparent)]
     VisibleRowManagerError(#[from] VisibleRowManagerError),
-    #[error(transparent)]
-    SqlTypeError(#[from] SqlTypeError),
     #[error(transparent)]
     TableError(#[from] TableError),
     #[error(transparent)]

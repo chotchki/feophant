@@ -4,9 +4,10 @@ mod definition_lookup;
 use definition_lookup::{DefinitionLookup, DefinitionLookupError};
 
 use crate::constants::{BuiltinSqlTypes, Nullable, SqlTypeError};
-use crate::engine::objects::{JoinType, SqlTuple, TargetEntry};
+use crate::engine::objects::{JoinType, SqlTuple};
 
 use super::io::VisibleRowManager;
+use super::objects::types::{BaseSqlTypes, BaseSqlTypesError, SqlTypeDefinition};
 use super::objects::{
     Attribute, CommandType, ParseExpression, ParseTree, QueryTree, RangeRelation,
     RangeRelationTable, RawInsertCommand, RawSelectCommand, Table,
@@ -54,13 +55,13 @@ impl Analyzer {
             .get_definition(tran_id, raw_insert.table_name)
             .await?;
 
-        let (tbl_cols, val_cols) = Analyzer::validate_columns(
+        let (output_type, val_cols) = Analyzer::validate_columns(
             definition.clone(),
             raw_insert.provided_columns,
             raw_insert.provided_values,
         )?;
 
-        let anon_tbl = RangeRelation::AnonymousTable(Arc::new(vec![SqlTuple(val_cols)]));
+        let anon_tbl = RangeRelation::AnonymousTable(Arc::new(vec![val_cols]));
         let target_tbl = RangeRelation::Table(RangeRelationTable {
             alias: None,
             table: definition.clone(),
@@ -70,10 +71,7 @@ impl Analyzer {
         Ok(QueryTree {
             command_type: CommandType::Insert,
             //Insert columns will be the target
-            targets: tbl_cols
-                .into_iter()
-                .map(|d| TargetEntry::Parameter(d))
-                .collect(),
+            targets: Arc::new(output_type),
             range_tables: vec![target_tbl.clone(), anon_tbl.clone()],
             joins: vec![((JoinType::Inner, target_tbl, anon_tbl))],
         })
@@ -91,7 +89,7 @@ impl Analyzer {
         'outer: for rcol in raw_select.columns {
             for c in definition.attributes.as_slice() {
                 if rcol == c.name {
-                    targets.push(TargetEntry::Parameter(c.clone()));
+                    targets.push((c.name.clone(), c.sql_type.clone()));
                     continue 'outer;
                 }
             }
@@ -101,7 +99,7 @@ impl Analyzer {
         //We should be good to build the query tree if we got here
         Ok(QueryTree {
             command_type: CommandType::Select,
-            targets,
+            targets: Arc::new(SqlTypeDefinition(targets)),
             range_tables: vec![RangeRelation::Table(RangeRelationTable {
                 table: definition,
                 alias: None,
@@ -115,7 +113,7 @@ impl Analyzer {
         table: Arc<Table>,
         provided_columns: Option<Vec<String>>,
         provided_values: Vec<ParseExpression>,
-    ) -> Result<(Vec<Attribute>, Vec<Option<BuiltinSqlTypes>>), AnalyzerError> {
+    ) -> Result<(SqlTypeDefinition, SqlTuple), AnalyzerError> {
         let columns = match provided_columns {
             Some(pc) => {
                 //Can't assume we got the columns in order so we'll have to reorder to match the table
@@ -160,28 +158,28 @@ impl Analyzer {
 
     fn convert_into_types(
         provided: Vec<(Attribute, Option<ParseExpression>)>,
-    ) -> Result<(Vec<Attribute>, Vec<Option<BuiltinSqlTypes>>), AnalyzerError> {
+    ) -> Result<(SqlTypeDefinition, SqlTuple), AnalyzerError> {
         let mut tbl_cols = vec![];
         let mut val_cols = vec![];
         for (a, s) in provided {
             match s {
                 Some(s2) => match s2 {
                     ParseExpression::String(s3) => {
-                        tbl_cols.push(a.clone());
-                        val_cols.push(Some(BuiltinSqlTypes::parse(a.sql_type, &s3)?));
+                        tbl_cols.push((a.name, a.sql_type.clone()));
+                        val_cols.push(Some(BaseSqlTypes::parse(a.sql_type, &s3)?));
                     }
                     ParseExpression::Null() => {
-                        tbl_cols.push(a);
+                        tbl_cols.push((a.name, a.sql_type));
                         val_cols.push(None);
                     }
                 },
                 None => {
-                    tbl_cols.push(a);
+                    tbl_cols.push((a.name, a.sql_type));
                     val_cols.push(None);
                 }
             }
         }
-        Ok((tbl_cols, val_cols))
+        Ok((SqlTypeDefinition(tbl_cols), SqlTuple(val_cols)))
     }
 }
 
@@ -190,7 +188,7 @@ pub enum AnalyzerError {
     #[error(transparent)]
     DefinitionLookupError(#[from] DefinitionLookupError),
     #[error(transparent)]
-    SqlTypeError(#[from] SqlTypeError),
+    BaseSqlTypesError(#[from] BaseSqlTypesError),
     #[error("Provided columns {0:?} does not match the underlying table columns {1:?}")]
     ColumnVsColumnMismatch(Vec<String>, Vec<String>),
     #[error("Provided value count {0} does not match the underlying table column count {1}")]

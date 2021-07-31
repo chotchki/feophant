@@ -2,7 +2,7 @@ use super::super::objects::Table;
 use super::super::transactions::TransactionId;
 use super::page_formats::{PageData, PageDataError, UInt12};
 use super::row_formats::{ItemPointer, RowData, RowDataError};
-use super::{IOManager, IOManagerError};
+use super::{EncodedSize, IOManager, IOManagerError};
 use crate::engine::objects::SqlTuple;
 use async_stream::try_stream;
 use futures::stream::Stream;
@@ -26,7 +26,7 @@ impl RowManager {
         self,
         current_tran_id: TransactionId,
         table: Arc<Table>,
-        user_data: Arc<SqlTuple>,
+        user_data: SqlTuple,
     ) -> Result<ItemPointer, RowManagerError> {
         RowManager::insert_row_internal(self.io_manager.clone(), current_tran_id, table, user_data)
             .await
@@ -65,7 +65,7 @@ impl RowManager {
         current_tran_id: TransactionId,
         table: Arc<Table>,
         row_pointer: ItemPointer,
-        new_user_data: Arc<SqlTuple>,
+        new_user_data: SqlTuple,
     ) -> Result<ItemPointer, RowManagerError> {
         //First get the current row so we have it for the update/delete
         let (mut old_page, mut old_row) = self.get(table.clone(), row_pointer).await?;
@@ -77,20 +77,12 @@ impl RowManager {
             ));
         }
 
-        //Serialize with a dummy pointer so we can evaluate space needed for the new row
-        let new_row = RowData::new(
-            table.clone(),
-            current_tran_id,
-            None,
-            ItemPointer::new(0, UInt12::new(0).unwrap()),
-            new_user_data.clone(),
-        )?;
-        let new_row_len = new_row.serialize().len();
+        let new_row_len = RowData::encoded_size(&new_user_data);
 
         //Prefer using the old page if possible
         let new_row_pointer;
         if old_page.can_fit(new_row_len) {
-            new_row_pointer = old_page.insert(new_row)?;
+            new_row_pointer = old_page.insert(current_tran_id, &table, new_user_data)?;
         } else {
             new_row_pointer = RowManager::insert_row_internal(
                 self.io_manager.clone(),
@@ -103,7 +95,6 @@ impl RowManager {
 
         old_row.max = Some(current_tran_id);
         old_row.item_pointer = new_row_pointer;
-
         old_page.update(old_row, row_pointer.count)?;
 
         self.io_manager
@@ -154,26 +145,16 @@ impl RowManager {
         io_manager: IOManager,
         current_tran_id: TransactionId,
         table: Arc<Table>,
-        user_data: Arc<SqlTuple>,
+        user_data: SqlTuple,
     ) -> Result<ItemPointer, RowManagerError> {
-        //Serialize with a dummy pointer so we can evaluate space needed
-        let row = RowData::new(
-            table.clone(),
-            current_tran_id,
-            None,
-            ItemPointer::new(0, UInt12::new(0).unwrap()),
-            user_data,
-        )?;
-        let row_len = row.serialize().len();
-
         let mut page_num = 0;
         loop {
             let page_bytes = io_manager.get_page(&table.id, page_num).await;
             match page_bytes {
                 Some(p) => {
                     let mut page = PageData::parse(table.clone(), page_num, p)?;
-                    if page.can_fit(row_len) {
-                        let new_row_pointer = page.insert(row)?;
+                    if page.can_fit(RowData::encoded_size(&user_data)) {
+                        let new_row_pointer = page.insert(current_tran_id, &table, user_data)?;
                         let new_page_bytes = page.serialize();
                         io_manager
                             .update_page(&table.id, new_page_bytes, page_num)
@@ -186,7 +167,7 @@ impl RowManager {
                 }
                 None => {
                     let mut new_page = PageData::new(page_num);
-                    let new_row_pointer = new_page.insert(row)?; //TODO Will NOT handle overly large rows
+                    let new_row_pointer = new_page.insert(current_tran_id, &table, user_data)?; //TODO Will NOT handle overly large rows
                     io_manager.add_page(&table.id, new_page.serialize()).await?;
                     return Ok(new_row_pointer);
                 }
@@ -221,6 +202,8 @@ mod tests {
     use super::*;
     use crate::constants::BuiltinSqlTypes;
     use crate::constants::Nullable;
+    use crate::engine::objects::types::BaseSqlTypes;
+    use crate::engine::objects::types::BaseSqlTypesMapper;
     use futures::pin_mut;
     use futures::stream::StreamExt;
 
@@ -232,36 +215,37 @@ mod tests {
 
     fn get_table() -> Arc<Table> {
         Arc::new(Table::new(
+            uuid::Uuid::new_v4(),
             "test_table".to_string(),
             vec![
                 Attribute::new(
-                    uuid::Uuid::new_v4(),
                     "header".to_string(),
-                    DeserializeTypes::Text,
+                    BaseSqlTypesMapper::Text,
                     Nullable::NotNull,
+                    None,
                 ),
                 Attribute::new(
-                    uuid::Uuid::new_v4(),
                     "id".to_string(),
-                    DeserializeTypes::Uuid,
+                    BaseSqlTypesMapper::Uuid,
                     Nullable::Null,
+                    None,
                 ),
                 Attribute::new(
-                    uuid::Uuid::new_v4(),
                     "header3".to_string(),
-                    DeserializeTypes::Text,
+                    BaseSqlTypesMapper::Text,
                     Nullable::NotNull,
+                    None,
                 ),
             ],
         ))
     }
 
-    fn get_row(input: String) -> Arc<SqlTuple> {
-        Arc::new(SqlTuple(vec![
-                Some(BuiltinSqlTypes::Text(input)),
+    fn get_row(input: String) -> SqlTuple {
+        SqlTuple(vec![
+                Some(BaseSqlTypes::Text(input)),
                 None,
-                Some(BuiltinSqlTypes::Text("blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah".to_string())),
-            ]))
+                Some(BaseSqlTypes::Text("blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah".to_string())),
+            ])
     }
 
     #[test]

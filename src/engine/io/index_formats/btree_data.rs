@@ -21,6 +21,7 @@
 use crate::constants::SqlTypeError;
 use crate::engine::io::page_formats::ItemIdDataError;
 use crate::engine::io::row_formats::NullMaskError;
+use crate::engine::objects::types::{BaseSqlTypes, BaseSqlTypesError};
 use crate::{
     constants::BuiltinSqlTypes,
     engine::{
@@ -94,12 +95,10 @@ impl BTreeNode {
         buffer.put(nulls);
 
         for data in tuple.0.iter() {
-            if data.is_none() {
-                continue;
+            match data {
+                Some(d) => d.serialize(buffer),
+                None => {}
             }
-
-            let data_bytes = data.as_ref().unwrap().serialize();
-            buffer.extend_from_slice(&data_bytes);
         }
     }
 
@@ -205,7 +204,7 @@ impl BTreeNode {
             if nulls[c] {
                 bucket.push(None);
             } else {
-                let key = BuiltinSqlTypes::deserialize(index_def.columns[c].sql_type, buffer)?;
+                let key = BaseSqlTypes::deserialize(&index_def.columns[c].sql_type, buffer)?;
                 bucket.push(Some(key));
             }
         }
@@ -264,6 +263,8 @@ impl BTreeLeaf {
 
 #[derive(Debug, Error)]
 pub enum BTreeError {
+    #[error(transparent)]
+    BaseSqlTypesError(#[from] BaseSqlTypesError),
     #[error("Buffer too short to parse")]
     BufferTooShort(),
     #[error(transparent)]
@@ -275,18 +276,16 @@ pub enum BTreeError {
     #[error(transparent)]
     NullMaskError(#[from] NullMaskError),
     #[error(transparent)]
-    SqlTypeError(#[from] SqlTypeError),
-    #[error(transparent)]
     TryFromIntError(#[from] TryFromIntError),
 }
 
 #[cfg(test)]
 mod tests {
     use crate::{
-        constants::{DeserializeTypes, TableDefinitions},
+        constants::{DeserializeTypes, Nullable, TableDefinitions},
         engine::{
             io::page_formats::UInt12,
-            objects::{Attribute, Table},
+            objects::{types::BaseSqlTypesMapper, Attribute, Table},
         },
     };
     use uuid::Uuid;
@@ -297,20 +296,20 @@ mod tests {
         let tbl_uuid = Uuid::new_v4();
         let attrs = vec![
             Attribute::new(
-                tbl_uuid,
                 "foo".to_string(),
-                DeserializeTypes::Integer,
-                crate::constants::Nullable::Null,
+                BaseSqlTypesMapper::Integer,
+                Nullable::Null,
+                None,
             ),
             Attribute::new(
-                tbl_uuid,
                 "bar".to_string(),
-                DeserializeTypes::Text,
-                crate::constants::Nullable::NotNull,
+                BaseSqlTypesMapper::Text,
+                Nullable::NotNull,
+                None,
             ),
         ];
 
-        let tbl = Table::new_existing(tbl_uuid, "Test Table".to_string(), attrs);
+        let tbl = Table::new(tbl_uuid, "Test Table".to_string(), attrs);
 
         Index {
             id: Uuid::new_v4(),
@@ -330,13 +329,13 @@ mod tests {
             right_node: Some(BTreePage(2)),
             nodes: vec![
                 (
-                    SqlTuple(vec![None, Some(BuiltinSqlTypes::Text("Test".to_string()))]),
+                    SqlTuple(vec![None, Some(BaseSqlTypes::Text("Test".to_string()))]),
                     BTreePage(3),
                 ),
                 (
                     SqlTuple(vec![
-                        Some(BuiltinSqlTypes::Integer(5)),
-                        Some(BuiltinSqlTypes::Text("Test2".to_string())),
+                        Some(BaseSqlTypes::Integer(5)),
+                        Some(BaseSqlTypes::Text("Test2".to_string())),
                     ]),
                     BTreePage(3),
                 ),
@@ -362,13 +361,13 @@ mod tests {
             right_node: Some(BTreePage(2)),
             nodes: vec![
                 (
-                    SqlTuple(vec![None, Some(BuiltinSqlTypes::Text("Test".to_string()))]),
+                    SqlTuple(vec![None, Some(BaseSqlTypes::Text("Test".to_string()))]),
                     ItemIdData::new(UInt12::new(1)?, UInt12::new(2)?),
                 ),
                 (
                     SqlTuple(vec![
-                        Some(BuiltinSqlTypes::Integer(5)),
-                        Some(BuiltinSqlTypes::Text("Test2".to_string())),
+                        Some(BaseSqlTypes::Integer(5)),
+                        Some(BaseSqlTypes::Text("Test2".to_string())),
                     ]),
                     ItemIdData::new(UInt12::new(3)?, UInt12::new(4)?),
                 ),

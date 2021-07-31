@@ -1,5 +1,6 @@
 //! Is the result of the parse tree post validation
 //! See here: https://www.postgresql.org/docs/current/querytree.html
+use super::types::SqlTypeDefinition;
 use super::Attribute;
 use super::SqlTuple;
 use super::Table;
@@ -16,7 +17,7 @@ pub struct QueryTree {
     pub command_type: CommandType,
 
     //the target list of columns to be affected
-    pub targets: Vec<TargetEntry>,
+    pub targets: Arc<SqlTypeDefinition>,
 
     //These are tables being used as inputs for the query.
     //They could be a table, view, static data, or even a sub query.
@@ -59,10 +60,10 @@ pub struct RangeRelationTable {
 //constant value, a variable pointing to a column of one of the
 //relations in the range table, a parameter, or an expression tree
 //made of function calls, constants, variables, operators, etc.
-#[derive(Clone, Debug)]
-pub enum TargetEntry {
-    Parameter(Attribute),
-}
+//#[derive(Clone, Debug)]
+//pub enum TargetEntry {
+//    Parameter(Attribute),
+//}
 
 #[derive(Clone, Debug)]
 pub enum WhereEntry {}

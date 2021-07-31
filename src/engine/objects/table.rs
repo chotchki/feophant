@@ -1,6 +1,8 @@
 //! Postgres doc: https://www.postgresql.org/docs/current/catalog-pg-class.html
 
-use super::Attribute;
+use std::sync::Arc;
+
+use super::{types::SqlTypeDefinition, Attribute};
 use thiserror::Error;
 use uuid::Uuid;
 
@@ -9,23 +11,27 @@ pub struct Table {
     pub id: Uuid,
     pub name: String,
     pub attributes: Vec<Attribute>,
+    pub sql_type: Arc<SqlTypeDefinition>,
 }
 
 impl Table {
-    pub fn new_existing(id: Uuid, name: String, attributes: Vec<Attribute>) -> Table {
+    pub fn new(id: Uuid, name: String, attributes: Vec<Attribute>) -> Table {
+        let sql_type = SqlTypeDefinition(
+            attributes
+                .iter()
+                .map(|a| (a.name.clone(), a.sql_type.clone()))
+                .collect(),
+        );
+
         Table {
             id,
             name,
             attributes,
+            sql_type: Arc::new(sql_type),
         }
     }
 
-    //TODO this new isn't really useable since the child attributes also need the link to the table
-    //Also writing unit tests are VERY painful, might need to disconnect in memory from on disk storage
-    pub fn new(name: String, attributes: Vec<Attribute>) -> Table {
-        Table::new_existing(Uuid::new_v4(), name, attributes)
-    }
-
+    //TODO might not be need any more with the type
     pub fn get_column_index(&self, name: String) -> Result<usize, TableError> {
         for i in 0..self.attributes.len() {
             if self.attributes[i].name == name {

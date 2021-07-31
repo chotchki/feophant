@@ -1,7 +1,9 @@
+use crate::engine::objects::types::BaseSqlTypes;
 use crate::engine::objects::SqlTuple;
 
 use super::super::constants::{BuiltinSqlTypes, TableDefinitions};
 use super::io::{VisibleRowManager, VisibleRowManagerError};
+use super::objects::types::SqlTypeDefinition;
 use super::objects::{Attribute, ParseTree, Plan, PlannedStatement, SqlTupleError, Table};
 use super::transactions::TransactionId;
 use async_stream::try_stream;
@@ -43,7 +45,7 @@ impl Executor {
                 self.cartesian_join(tran_id, cp.left.clone(), cp.right.clone())
             }
             Plan::FullTableScan(fts) => {
-                self.full_table_scan(tran_id, fts.table.clone(), fts.columns.clone())
+                self.full_table_scan(tran_id, fts.src_table.clone(), fts.target_type.clone())
             }
             Plan::ModifyTable(mt) => {
                 self.modify_table(tran_id, mt.table.clone(), mt.source.clone())
@@ -75,17 +77,17 @@ impl Executor {
     fn full_table_scan(
         self,
         tran_id: TransactionId,
-        table: Arc<Table>,
-        columns: Vec<Attribute>,
+        src_table: Arc<Table>,
+        target_type: Arc<SqlTypeDefinition>,
     ) -> Pin<Box<impl Stream<Item = Result<SqlTuple, ExecutorError>>>> {
         let s = try_stream! {
             let vis = self.vis_row_man.clone();
 
-            for await row in vis.get_stream(tran_id, table.clone()) {
+            for await row in vis.get_stream(tran_id, src_table.clone()) {
                 let data = row?.user_data.clone();
 
                 //Need to rewrite to the column / order needed
-                let requested_row = data.filter_map(&table, &columns)?;
+                let requested_row = data.filter_map(&src_table.sql_type, &target_type)?;
 
                 yield requested_row;
             }
@@ -105,7 +107,7 @@ impl Executor {
             for await val in self.execute_plans(tran_id, source) {
                 let unwrapped_val = val?;
                 vis.clone()
-                    .insert_row(tran_id, table.clone(), Arc::new(unwrapped_val.clone()))
+                    .insert_row(tran_id, table.clone(), unwrapped_val.clone())
                     .await?;
                 yield unwrapped_val;
             }
@@ -140,10 +142,10 @@ impl Executor {
 
         let table_id = Uuid::new_v4();
         let pg_class = TableDefinitions::PgClass.value();
-        let table_row = Arc::new(SqlTuple(vec![
-            Some(BuiltinSqlTypes::Uuid(table_id)),
-            Some(BuiltinSqlTypes::Text(create_table.table_name.clone())),
-        ]));
+        let table_row = SqlTuple(vec![
+            Some(BaseSqlTypes::Uuid(table_id)),
+            Some(BaseSqlTypes::Text(create_table.table_name.clone())),
+        ]);
 
         rm.insert_row(tran_id, pg_class, table_row).await?;
 
@@ -151,18 +153,18 @@ impl Executor {
         for i in 0..create_table.provided_columns.len() {
             let rm = self.vis_row_man.clone();
             let i_u32 = u32::try_from(i).map_err(ExecutorError::ConversionError)?;
-            let table_row = Arc::new(SqlTuple(vec![
-                Some(BuiltinSqlTypes::Uuid(table_id)),
-                Some(BuiltinSqlTypes::Text(
+            let table_row = SqlTuple(vec![
+                Some(BaseSqlTypes::Uuid(table_id)),
+                Some(BaseSqlTypes::Text(
                     create_table.provided_columns[i].name.clone(),
                 )),
-                Some(BuiltinSqlTypes::Text(
+                Some(BaseSqlTypes::Text(
                     //TODO we did not validate that it is a real type
                     create_table.provided_columns[i].sql_type.clone(),
                 )),
-                Some(BuiltinSqlTypes::Integer(i_u32)),
-                Some(BuiltinSqlTypes::Bool(create_table.provided_columns[i].null)),
-            ]));
+                Some(BaseSqlTypes::Integer(i_u32)),
+                Some(BaseSqlTypes::Bool(create_table.provided_columns[i].null)),
+            ]);
             rm.clone()
                 .insert_row(tran_id, pg_attribute.clone(), table_row)
                 .await?;

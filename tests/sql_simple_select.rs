@@ -2,7 +2,7 @@ mod common;
 
 use feophantlib::{
     constants::BuiltinSqlTypes,
-    engine::objects::{QueryResult, SqlTuple},
+    engine::objects::{types::BaseSqlTypes, QueryResult, SqlTuple},
 };
 
 #[test]
@@ -36,9 +36,9 @@ fn simple_select() -> Result<(), Box<dyn std::error::Error>> {
     let select_columns = vec!["baz".to_string(), "bar".to_string(), "another".to_string()];
 
     let select_row = vec![SqlTuple(vec![
-        Some(BuiltinSqlTypes::Text("two".to_string())),
-        Some(BuiltinSqlTypes::Text("three".to_string())),
-        Some(BuiltinSqlTypes::Text("one".to_string())),
+        Some(BaseSqlTypes::Text("two".to_string())),
+        Some(BaseSqlTypes::Text("three".to_string())),
+        Some(BaseSqlTypes::Text("one".to_string())),
     ])];
 
     assert_eq!(

@@ -1,3 +1,7 @@
+use crate::engine::io::EncodedSize;
+use crate::engine::objects::SqlTuple;
+use crate::engine::transactions::TransactionId;
+
 use super::super::super::objects::Table;
 use super::super::row_formats::{ItemPointer, RowData, RowDataError};
 use super::{ItemIdData, ItemIdDataError, PageHeader, PageHeaderError, UInt12, UInt12Error};
@@ -32,13 +36,21 @@ impl PageData {
         self.page_header.can_fit(row_data_size)
     }
 
-    //TODO debating if this should be row_data or bytes
-    pub fn insert(&mut self, mut row_data: RowData) -> Result<ItemPointer, PageDataError> {
-        //Insert rewrites the row's location, update will not
+    pub fn insert(
+        &mut self,
+        current_tran_id: TransactionId,
+        table: &Arc<Table>,
+        user_data: SqlTuple,
+    ) -> Result<ItemPointer, PageDataError> {
         let item_pointer = ItemPointer::new(self.page, UInt12::try_from(self.rows.len())?);
-        row_data.item_pointer = item_pointer;
-
-        let row_data_len = row_data.serialize().len();
+        let row_data_len = RowData::encoded_size(&user_data);
+        let row_data = RowData::new(
+            table.sql_type.clone(),
+            current_tran_id,
+            None,
+            item_pointer,
+            user_data,
+        );
 
         let item_data = self.page_header.add_item(row_data_len)?;
         self.item_ids.push(item_data);
@@ -158,8 +170,10 @@ mod tests {
     use crate::constants::Nullable;
     use crate::engine::objects::SqlTuple;
 
-    use super::super::super::super::super::constants::{BuiltinSqlTypes, DeserializeTypes};
-    use super::super::super::super::objects::{Attribute, Table};
+    use super::super::super::super::objects::{
+        types::{BaseSqlTypes, BaseSqlTypesMapper},
+        Attribute, Table,
+    };
     use super::super::super::super::transactions::TransactionId;
     use super::*;
     use futures::pin_mut;
@@ -178,86 +192,89 @@ mod tests {
 
     fn get_table() -> Arc<Table> {
         Arc::new(Table::new(
+            uuid::Uuid::new_v4(),
             "test_table".to_string(),
             vec![
                 Attribute::new(
-                    uuid::Uuid::new_v4(),
                     "header".to_string(),
-                    DeserializeTypes::Text,
+                    BaseSqlTypesMapper::Text,
                     Nullable::NotNull,
+                    None,
                 ),
                 Attribute::new(
-                    uuid::Uuid::new_v4(),
                     "id".to_string(),
-                    DeserializeTypes::Uuid,
+                    BaseSqlTypesMapper::Uuid,
                     Nullable::Null,
+                    None,
                 ),
                 Attribute::new(
-                    uuid::Uuid::new_v4(),
                     "header3".to_string(),
-                    DeserializeTypes::Text,
+                    BaseSqlTypesMapper::Text,
                     Nullable::NotNull,
+                    None,
                 ),
             ],
         ))
     }
 
     #[test]
-    fn test_page_data_roundtrip() {
+    fn test_page_data_roundtrip() -> Result<(), Box<dyn std::error::Error>> {
         let table = get_table();
 
-        let rows = vec!(RowData::new(table.clone(),
+        let rows = vec!(RowData::new(table.sql_type.clone(),
             TransactionId::new(0xDEADBEEF),
             None,
             get_item_pointer(0),
-            Arc::new(SqlTuple(vec![
-                Some(BuiltinSqlTypes::Text("this is a test".to_string())),
+            SqlTuple(vec![
+                Some(BaseSqlTypes::Text("this is a test".to_string())),
                 None,
-                Some(BuiltinSqlTypes::Text("blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah".to_string())),
-            ])),
-        ).unwrap());
+                Some(BaseSqlTypes::Text("blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah".to_string())),
+            ]),
+        ));
 
-        let mut pg = PageData::new(0);
+        let mut pd = PageData::new(0);
         for r in rows.clone() {
-            assert!(pg.insert(r.clone()).is_ok());
+            assert!(pd.insert(r.min, &table, r.user_data).is_ok());
         }
-        let serial = pg.serialize();
+        let serial = pd.serialize();
         let pg_parsed = PageData::parse(table.clone(), 0, serial).unwrap();
 
         pin_mut!(pg_parsed);
         let result_rows: Vec<RowData> = aw!(pg_parsed.get_stream().collect());
         assert_eq!(rows, result_rows);
+
+        Ok(())
     }
 
     #[test]
     fn test_page_data_roundtrip_two_rows() {
         let table = get_table();
 
-        let rows = vec!(RowData::new(table.clone(),
+        let rows = vec!(RowData::new(table.sql_type.clone(),
             TransactionId::new(0xDEADBEEF),
             None,
             get_item_pointer(0),
-            Arc::new(SqlTuple(vec![
-                Some(BuiltinSqlTypes::Text("this is a test".to_string())),
+            SqlTuple(vec![
+                Some(BaseSqlTypes::Text("this is a test".to_string())),
                 None,
-                Some(BuiltinSqlTypes::Text("blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah".to_string())),
-            ])),
-        ).unwrap(), RowData::new(table.clone(),
+                Some(BaseSqlTypes::Text("blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah".to_string())),
+            ]),
+        ), RowData::new(table.sql_type.clone(),
         TransactionId::new(0xDEADBEEF),
         None,
         get_item_pointer(1),
-        Arc::new(SqlTuple(vec![
-            Some(BuiltinSqlTypes::Text("this also a test".to_string())),
+        SqlTuple(vec![
+            Some(BaseSqlTypes::Text("this also a test".to_string())),
             None,
-            Some(BuiltinSqlTypes::Text("it would help if I didn't mix and match types".to_string())),
-        ])),
-        ).unwrap());
+            Some(BaseSqlTypes::Text("it would help if I didn't mix and match types".to_string())),
+        ]),
+        ));
 
-        let mut pg = PageData::new(0);
+        let mut pd = PageData::new(0);
         for r in rows.clone() {
-            assert!(pg.insert(r.clone()).is_ok());
+            assert!(pd.insert(r.min, &table, r.user_data).is_ok());
         }
-        let serial = pg.serialize();
+        let serial = pd.serialize();
         let pg_parsed = PageData::parse(table.clone(), 0, serial).unwrap();
 
         pin_mut!(pg_parsed);
@@ -269,29 +286,29 @@ mod tests {
     fn test_page_data_update() {
         let table = get_table();
 
-        let mut row = RowData::new(table.clone(),
+        let mut row = RowData::new(table.sql_type.clone(),
             TransactionId::new(0xDEADBEEF),
             None,
             get_item_pointer(0),
-            Arc::new(SqlTuple(vec![
-                Some(BuiltinSqlTypes::Text("this is a test".to_string())),
+            SqlTuple(vec![
+                Some(BaseSqlTypes::Text("this is a test".to_string())),
                 None,
-                Some(BuiltinSqlTypes::Text("blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah".to_string())),
-            ])),
-        ).unwrap();
+                Some(BaseSqlTypes::Text("blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah".to_string())),
+            ]),
+        );
 
-        let mut pg = PageData::new(0);
-        let rip = pg.insert(row.clone());
+        let mut pd = PageData::new(0);
+        let rip = pd.insert(row.min, &table, row.user_data.clone());
         assert!(rip.is_ok());
 
         let ip = rip.unwrap();
 
         row.item_pointer = get_item_pointer(1);
 
-        assert!(pg.update(row.clone(), ip.count).is_ok());
+        assert!(pd.update(row.clone(), ip.count).is_ok());
 
-        pin_mut!(pg);
-        let result_rows: Vec<RowData> = aw!(pg.get_stream().collect());
+        pin_mut!(pd);
+        let result_rows: Vec<RowData> = aw!(pd.get_stream().collect());
         assert_eq!(row, result_rows[0]);
     }
 }

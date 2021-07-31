@@ -1,6 +1,8 @@
 //! Implementation of the null bit flags to know if a column is null or not
 //! I'm not using a standard library because the bitvector library collides with nom
-use crate::engine::objects::SqlTuple;
+use std::sync::Arc;
+
+use crate::engine::{io::EncodedSize, objects::SqlTuple};
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use thiserror::Error;
 
@@ -79,6 +81,13 @@ impl NullMask {
     }
 }
 
+impl EncodedSize<&SqlTuple> for NullMask {
+    fn encoded_size(input: &SqlTuple) -> usize {
+        //Discussion here: https://github.com/rust-lang/rfcs/issues/2844
+        (input.len() + 8 - 1) / 8
+    }
+}
+
 #[derive(Debug, Error, PartialEq)]
 pub enum NullMaskError {
     #[error("Buffer too short to parse found {0} bytes, need {1}")]
@@ -87,7 +96,7 @@ pub enum NullMaskError {
 
 #[cfg(test)]
 mod tests {
-    use crate::constants::BuiltinSqlTypes;
+    use crate::engine::objects::types::BaseSqlTypes;
 
     use super::*;
     use hex_literal::hex;
@@ -95,15 +104,15 @@ mod tests {
     fn get_tuple() -> SqlTuple {
         SqlTuple(vec![
             None,
-            Some(BuiltinSqlTypes::Bool(true)),
+            Some(BaseSqlTypes::Bool(true)),
             None,
-            Some(BuiltinSqlTypes::Bool(true)),
+            Some(BaseSqlTypes::Bool(true)),
             None,
-            Some(BuiltinSqlTypes::Bool(true)),
+            Some(BaseSqlTypes::Bool(true)),
             None,
-            Some(BuiltinSqlTypes::Bool(true)),
+            Some(BaseSqlTypes::Bool(true)),
             None,
-            Some(BuiltinSqlTypes::Bool(true)),
+            Some(BaseSqlTypes::Bool(true)),
         ])
     }
 
@@ -128,9 +137,9 @@ mod tests {
     #[test]
     fn test_null_mask_all_false() {
         let test = SqlTuple(vec![
-            Some(BuiltinSqlTypes::Bool(true)),
-            Some(BuiltinSqlTypes::Bool(true)),
-            Some(BuiltinSqlTypes::Bool(true)),
+            Some(BaseSqlTypes::Bool(true)),
+            Some(BaseSqlTypes::Bool(true)),
+            Some(BaseSqlTypes::Bool(true)),
         ]);
 
         let result = NullMask::serialize(&test, true);
@@ -176,8 +185,8 @@ mod tests {
     #[test]
     fn test_null_mask_preserve() -> Result<(), Box<dyn std::error::Error>> {
         let all_null = SqlTuple(vec![
-            Some(BuiltinSqlTypes::Bool(true)),
-            Some(BuiltinSqlTypes::Bool(true)),
+            Some(BaseSqlTypes::Bool(true)),
+            Some(BaseSqlTypes::Bool(true)),
         ]);
 
         let no_preserve = Bytes::from_static(&[]);

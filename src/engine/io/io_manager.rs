@@ -155,7 +155,7 @@ mod tests {
         let buf_frozen = get_bytes(1);
 
         let pm = IOManager::new();
-        let table = Arc::new(Table::new("test".to_string(), Vec::new()));
+        let table = Arc::new(Table::new(Uuid::new_v4(), "test".to_string(), Vec::new()));
 
         aw!(pm.add_page(&table.id, buf_frozen.clone()));
         let check = aw!(pm.get_page(&table.id, 0)).unwrap();
@@ -168,7 +168,7 @@ mod tests {
         let buf_2 = get_bytes(2);
 
         let pm = IOManager::new();
-        let table = Arc::new(Table::new("test".to_string(), Vec::new()));
+        let table = Arc::new(Table::new(Uuid::new_v4(), "test".to_string(), Vec::new()));
 
         aw!(pm.add_page(&table.id, buf_1.clone()));
         aw!(pm.add_page(&table.id, buf_1.clone()));

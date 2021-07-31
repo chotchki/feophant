@@ -28,7 +28,6 @@ pub mod transactions;
 use transactions::{TransactionId, TransactionManager};
 
 use self::objects::QueryResult;
-use crate::engine::objects::TargetEntry;
 use std::ops::Deref;
 use thiserror::Error;
 use tokio_stream::StreamExt;
@@ -82,13 +81,7 @@ impl Engine {
             result.push(value?);
         }
 
-        let output_columns = query_tree
-            .targets
-            .into_iter()
-            .map(|t| match t {
-                TargetEntry::Parameter(p) => p.name,
-            })
-            .collect();
+        let output_columns = query_tree.targets.iter().map(|t| t.0.clone()).collect();
 
         return Ok(QueryResult {
             columns: output_columns,

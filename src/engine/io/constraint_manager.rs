@@ -37,7 +37,7 @@ impl ConstraintManager {
         self,
         current_tran_id: TransactionId,
         table: Arc<Table>,
-        user_data: Arc<SqlTuple>,
+        user_data: SqlTuple,
     ) -> Result<ItemPointer, ConstraintManagerError> {
         if table.attributes.len() != user_data.0.len() {
             return Err(ConstraintManagerError::TableRowSizeMismatch(

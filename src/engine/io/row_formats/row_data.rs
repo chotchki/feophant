@@ -1,28 +1,26 @@
 //! Encodes / decodes a row into a byte array based on the supplied specification
 //! Format from here: https://www.postgresql.org/docs/current/storage-page-layout.html
 //! As always I'm only implementing what I need and will extend once I need more
-//!
-//! TODO Need to chew on if I should split the meta data and user data between two types
-//!
-use crate::constants::Nullable;
+use crate::engine::io::{ConstEncodedSize, EncodedSize, SelfEncodedSize};
+use crate::engine::objects::types::{BaseSqlTypes, BaseSqlTypesError, SqlTypeDefinition};
 use crate::engine::objects::SqlTuple;
 
-use super::super::super::super::constants::{BuiltinSqlTypes, DeserializeTypes, SqlTypeError};
+use super::super::super::super::constants::{BuiltinSqlTypes, DeserializeTypes};
 use super::super::super::objects::Table;
 use super::super::super::transactions::TransactionId;
 use super::null_mask::NullMaskError;
 use super::{InfoMask, ItemPointer, ItemPointerError, NullMask};
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::fmt;
-use std::mem;
+use std::mem::size_of;
 use std::sync::Arc;
 use thiserror::Error;
 
-///Holds information about a particular row in a table as well as metadata.
+/// Holds information about a particular row in a table as well as metadata.
 #[derive(Clone, Debug, PartialEq)]
 pub struct RowData {
-    ///Table that the row belongs to
-    table: Arc<Table>,
+    ///Type that defines the row
+    pub sql_type: Arc<SqlTypeDefinition>,
     ///Lowest transaction this row is valid for (still need to check that transaction's status)
     pub min: TransactionId,
     ///Max transaction this row is valid for OR None for still valid (still need to check max's status)
@@ -30,53 +28,29 @@ pub struct RowData {
     ///Page + Offset where this row is stored on disk
     pub item_pointer: ItemPointer,
     ///Columns stored in this row
-    pub user_data: Arc<SqlTuple>,
+    pub user_data: SqlTuple,
 }
 
 impl RowData {
     pub fn new(
-        table: Arc<Table>,
+        sql_type: Arc<SqlTypeDefinition>,
         min: TransactionId,
         max: Option<TransactionId>,
         item_pointer: ItemPointer,
-        user_data: Arc<SqlTuple>,
-    ) -> Result<RowData, RowDataError> {
-        if table.attributes.len() != user_data.0.len() {
-            return Err(RowDataError::TableRowSizeMismatch(
-                table.attributes.len(),
-                user_data.0.len(),
-            ));
-        }
-        for (data, column) in user_data.0.iter().zip(table.attributes.clone()) {
-            match data {
-                Some(d) => {
-                    if !d.type_matches(column.sql_type) {
-                        return Err(RowDataError::TableRowTypeMismatch(
-                            d.clone(),
-                            column.sql_type,
-                        ));
-                    }
-                }
-                None => {
-                    if column.nullable != Nullable::Null {
-                        return Err(RowDataError::UnexpectedNull(column.name));
-                    }
-                }
-            }
-        }
-
-        Ok(RowData {
-            table,
+        user_data: SqlTuple,
+    ) -> RowData {
+        RowData {
+            sql_type,
             min,
             max,
             item_pointer,
             user_data,
-        })
+        }
     }
 
-    pub fn get_column(&self, name: &str) -> Result<Option<BuiltinSqlTypes>, RowDataError> {
-        for i in 0..self.table.attributes.len() {
-            if self.table.attributes[i].name == *name {
+    pub fn get_column(&self, name: &str) -> Result<Option<BaseSqlTypes>, RowDataError> {
+        for i in 0..self.sql_type.len() {
+            if self.sql_type[i].0 == *name {
                 return Ok(self.user_data.0[i].clone());
             }
         }
@@ -84,7 +58,7 @@ impl RowData {
         Err(RowDataError::ColumnDoesNotExist(name.to_string()))
     }
 
-    pub fn get_column_not_null(&self, name: &str) -> Result<BuiltinSqlTypes, RowDataError> {
+    pub fn get_column_not_null(&self, name: &str) -> Result<BaseSqlTypes, RowDataError> {
         Ok(self
             .get_column(name)?
             .ok_or_else(|| RowDataError::UnexpectedNull(name.to_string()))?)
@@ -112,29 +86,27 @@ impl RowData {
         buffer.put(nulls);
 
         for data in &self.user_data.0 {
-            if data.is_none() {
-                continue;
+            match data {
+                Some(d) => d.serialize(&mut buffer),
+                None => {}
             }
-
-            let data_bytes = data.as_ref().unwrap().serialize();
-            buffer.extend_from_slice(&data_bytes);
         }
 
         buffer.freeze()
     }
 
     pub fn parse(table: Arc<Table>, row_buffer: &mut impl Buf) -> Result<RowData, RowDataError> {
-        if row_buffer.remaining() < mem::size_of::<TransactionId>() {
+        if row_buffer.remaining() < size_of::<TransactionId>() {
             return Err(RowDataError::MissingMinData(
-                mem::size_of::<TransactionId>(),
+                size_of::<TransactionId>(),
                 row_buffer.remaining(),
             ));
         }
         let min = TransactionId::new(row_buffer.get_u64_le());
 
-        if row_buffer.remaining() < mem::size_of::<TransactionId>() {
+        if row_buffer.remaining() < size_of::<TransactionId>() {
             return Err(RowDataError::MissingMaxData(
-                mem::size_of::<TransactionId>(),
+                size_of::<TransactionId>(),
                 row_buffer.remaining(),
             ));
         }
@@ -153,14 +125,20 @@ impl RowData {
             if *mask {
                 user_data.0.push(None);
             } else {
-                user_data.0.push(Some(BuiltinSqlTypes::deserialize(
-                    column.sql_type,
+                user_data.0.push(Some(BaseSqlTypes::deserialize(
+                    &column.sql_type,
                     row_buffer,
                 )?));
             }
         }
 
-        RowData::new(table, min, max, item_pointer, Arc::new(user_data))
+        Ok(RowData::new(
+            table.sql_type.clone(),
+            min,
+            max,
+            item_pointer,
+            user_data,
+        ))
     }
 
     //Gets the null mask, if it doesn't exist it will return a vector of all not nulls
@@ -168,9 +146,9 @@ impl RowData {
         table: Arc<Table>,
         row_buffer: &mut impl Buf,
     ) -> Result<Vec<bool>, RowDataError> {
-        if row_buffer.remaining() < mem::size_of::<InfoMask>() {
+        if row_buffer.remaining() < size_of::<InfoMask>() {
             return Err(RowDataError::MissingInfoMaskData(
-                mem::size_of::<TransactionId>(),
+                size_of::<TransactionId>(),
                 row_buffer.remaining(),
             ));
         }
@@ -196,7 +174,7 @@ impl RowData {
 impl fmt::Display for RowData {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "RowData\n")?;
-        write!(f, "\tTable: {}\n", self.table.name)?;
+        write!(f, "\tType: {}\n", self.sql_type)?;
         write!(f, "\tMin Tran: {}\n", self.min)?;
         match self.max {
             Some(m) => write!(f, "\tMax Tran: {}\n", m),
@@ -213,8 +191,24 @@ impl fmt::Display for RowData {
     }
 }
 
+impl EncodedSize<&SqlTuple> for RowData {
+    fn encoded_size(input: &SqlTuple) -> usize {
+        size_of::<u64>() + //Min
+        size_of::<u64>() + //Max
+        ItemPointer::encoded_size() +
+        InfoMask::encoded_size() +
+        NullMask::encoded_size(input);
+        input.iter().fold(0, |acc, col| match col {
+            Some(col_s) => acc + col_s.encoded_size(),
+            None => acc,
+        })
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum RowDataError {
+    #[error(transparent)]
+    BaseSqlTypes(#[from] BaseSqlTypesError),
     #[error("Table definition length {0} does not match columns passed {1}")]
     TableRowSizeMismatch(usize, usize),
     #[error("Table definition type {0} does not match column passed {1}")]
@@ -229,8 +223,6 @@ pub enum RowDataError {
     MissingNullMaskData(usize, usize),
     #[error(transparent)]
     NullMaskError(#[from] NullMaskError),
-    #[error("Unable to parse type {0}")]
-    ColumnParseError(#[from] SqlTypeError),
     #[error(transparent)]
     ItemPointerError(#[from] ItemPointerError),
     #[error("Column named {0} does not exist")]
@@ -242,6 +234,7 @@ pub enum RowDataError {
 #[cfg(test)]
 mod tests {
     use crate::constants::Nullable;
+    use crate::engine::objects::types::BaseSqlTypesMapper;
 
     use super::super::super::super::objects::Attribute;
     use super::super::super::page_formats::UInt12;
@@ -252,218 +245,221 @@ mod tests {
     }
 
     #[test]
-    fn test_row_data_single_text() {
+    fn test_row_data_single_text() -> Result<(), Box<dyn std::error::Error>> {
         let table = Arc::new(Table::new(
+            uuid::Uuid::new_v4(),
             "test_table".to_string(),
             vec![Attribute::new(
-                uuid::Uuid::new_v4(),
                 "header".to_string(),
-                DeserializeTypes::Text,
+                BaseSqlTypesMapper::Text,
                 Nullable::NotNull,
-            )],
-        ));
-
-        let test = RowData::new(
-            table.clone(),
-            TransactionId::new(1),
-            None,
-            get_item_pointer(),
-            Arc::new(SqlTuple(vec![Some(BuiltinSqlTypes::Text(
-                "this is a test".to_string(),
-            ))])),
-        )
-        .unwrap();
-
-        let mut test_serial = test.serialize();
-        let test_parse = RowData::parse(table, &mut test_serial).unwrap();
-        assert_eq!(test, test_parse);
-    }
-
-    #[test]
-    fn test_row_data_double_text() {
-        let table = Arc::new(Table::new(
-            "test_table".to_string(),
-            vec![
-                Attribute::new(
-                    uuid::Uuid::new_v4(),
-                    "header".to_string(),
-                    DeserializeTypes::Text,
-                    Nullable::NotNull,
-                ),
-                Attribute::new(
-                    uuid::Uuid::new_v4(),
-                    "header2".to_string(),
-                    DeserializeTypes::Text,
-                    Nullable::NotNull,
-                ),
-            ],
-        ));
-
-        let test = RowData::new(
-            table.clone(),
-            TransactionId::new(1),
-            None,
-            get_item_pointer(),
-            Arc::new(SqlTuple(vec![
-                Some(BuiltinSqlTypes::Text("this is a test".to_string())),
-                Some(BuiltinSqlTypes::Text("this is not a test".to_string())),
-            ])),
-        )
-        .unwrap();
-
-        let mut test_serial = test.serialize();
-        let test_parse = RowData::parse(table, &mut test_serial).unwrap();
-        assert_eq!(test, test_parse);
-    }
-
-    #[test]
-    fn test_row_uuid_roundtrip() {
-        let table = Arc::new(Table::new(
-            "test_table".to_string(),
-            vec![Attribute::new(
-                uuid::Uuid::new_v4(),
-                "header".to_string(),
-                DeserializeTypes::Uuid,
-                Nullable::NotNull,
-            )],
-        ));
-
-        let test = RowData::new(
-            table.clone(),
-            TransactionId::new(1),
-            None,
-            get_item_pointer(),
-            Arc::new(SqlTuple(vec![Some(BuiltinSqlTypes::Uuid(
-                uuid::Uuid::new_v4(),
-            ))])),
-        )
-        .unwrap();
-
-        let mut test_serial = test.serialize();
-        let test_parse = RowData::parse(table, &mut test_serial).unwrap();
-        assert_eq!(test, test_parse);
-    }
-
-    #[test]
-    fn test_row_uuid_double_roundtrip() {
-        let table = Arc::new(Table::new(
-            "test_table".to_string(),
-            vec![
-                Attribute::new(
-                    uuid::Uuid::new_v4(),
-                    "header".to_string(),
-                    DeserializeTypes::Uuid,
-                    Nullable::NotNull,
-                ),
-                Attribute::new(
-                    uuid::Uuid::new_v4(),
-                    "header2".to_string(),
-                    DeserializeTypes::Uuid,
-                    Nullable::NotNull,
-                ),
-            ],
-        ));
-
-        let test = RowData::new(
-            table.clone(),
-            TransactionId::new(1),
-            None,
-            get_item_pointer(),
-            Arc::new(SqlTuple(vec![
-                Some(BuiltinSqlTypes::Uuid(uuid::Uuid::new_v4())),
-                Some(BuiltinSqlTypes::Uuid(uuid::Uuid::new_v4())),
-            ])),
-        )
-        .unwrap();
-
-        let mut test_serial = test.serialize();
-        let test_parse = RowData::parse(table, &mut test_serial).unwrap();
-        assert_eq!(test, test_parse);
-    }
-
-    #[test]
-    fn test_row_uuid_double_opt_roundtrip() {
-        let table = Arc::new(Table::new(
-            "test_table".to_string(),
-            vec![
-                Attribute::new(
-                    uuid::Uuid::new_v4(),
-                    "header".to_string(),
-                    DeserializeTypes::Uuid,
-                    Nullable::NotNull,
-                ),
-                Attribute::new(
-                    uuid::Uuid::new_v4(),
-                    "header2".to_string(),
-                    DeserializeTypes::Uuid,
-                    Nullable::Null,
-                ),
-            ],
-        ));
-
-        let test = RowData::new(
-            table.clone(),
-            TransactionId::new(1),
-            None,
-            get_item_pointer(),
-            Arc::new(SqlTuple(vec![
-                Some(BuiltinSqlTypes::Uuid(uuid::Uuid::new_v4())),
                 None,
-            ])),
-        )
-        .unwrap();
+            )],
+        ));
+
+        let test = RowData::new(
+            table.sql_type.clone(),
+            TransactionId::new(1),
+            None,
+            get_item_pointer(),
+            SqlTuple(vec![Some(BaseSqlTypes::Text("this is a test".to_string()))]),
+        );
+
+        let mut test_serial = test.serialize();
+        let test_parse = RowData::parse(table, &mut test_serial)?;
+        assert_eq!(test, test_parse);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_row_data_double_text() -> Result<(), Box<dyn std::error::Error>> {
+        let table = Arc::new(Table::new(
+            uuid::Uuid::new_v4(),
+            "test_table".to_string(),
+            vec![
+                Attribute::new(
+                    "header".to_string(),
+                    BaseSqlTypesMapper::Text,
+                    Nullable::NotNull,
+                    None,
+                ),
+                Attribute::new(
+                    "header2".to_string(),
+                    BaseSqlTypesMapper::Text,
+                    Nullable::NotNull,
+                    None,
+                ),
+            ],
+        ));
+
+        let test = RowData::new(
+            table.sql_type.clone(),
+            TransactionId::new(1),
+            None,
+            get_item_pointer(),
+            SqlTuple(vec![
+                Some(BaseSqlTypes::Text("this is a test".to_string())),
+                Some(BaseSqlTypes::Text("this is not a test".to_string())),
+            ]),
+        );
+
+        let mut test_serial = test.serialize();
+        let test_parse = RowData::parse(table, &mut test_serial)?;
+        assert_eq!(test, test_parse);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_row_uuid_roundtrip() -> Result<(), Box<dyn std::error::Error>> {
+        let table = Arc::new(Table::new(
+            uuid::Uuid::new_v4(),
+            "test_table".to_string(),
+            vec![Attribute::new(
+                "header".to_string(),
+                BaseSqlTypesMapper::Uuid,
+                Nullable::NotNull,
+                None,
+            )],
+        ));
+
+        let test = RowData::new(
+            table.sql_type.clone(),
+            TransactionId::new(1),
+            None,
+            get_item_pointer(),
+            SqlTuple(vec![Some(BaseSqlTypes::Uuid(uuid::Uuid::new_v4()))]),
+        );
+
+        let mut test_serial = test.serialize();
+        let test_parse = RowData::parse(table, &mut test_serial)?;
+        assert_eq!(test, test_parse);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_row_uuid_double_roundtrip() -> Result<(), Box<dyn std::error::Error>> {
+        let table = Arc::new(Table::new(
+            uuid::Uuid::new_v4(),
+            "test_table".to_string(),
+            vec![
+                Attribute::new(
+                    "header".to_string(),
+                    BaseSqlTypesMapper::Uuid,
+                    Nullable::NotNull,
+                    None,
+                ),
+                Attribute::new(
+                    "header2".to_string(),
+                    BaseSqlTypesMapper::Uuid,
+                    Nullable::NotNull,
+                    None,
+                ),
+            ],
+        ));
+
+        let test = RowData::new(
+            table.sql_type.clone(),
+            TransactionId::new(1),
+            None,
+            get_item_pointer(),
+            SqlTuple(vec![
+                Some(BaseSqlTypes::Uuid(uuid::Uuid::new_v4())),
+                Some(BaseSqlTypes::Uuid(uuid::Uuid::new_v4())),
+            ]),
+        );
+
+        let mut test_serial = test.serialize();
+        let test_parse = RowData::parse(table, &mut test_serial)?;
+        assert_eq!(test, test_parse);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_row_uuid_double_opt_roundtrip() -> Result<(), Box<dyn std::error::Error>> {
+        let table = Arc::new(Table::new(
+            uuid::Uuid::new_v4(),
+            "test_table".to_string(),
+            vec![
+                Attribute::new(
+                    "header".to_string(),
+                    BaseSqlTypesMapper::Uuid,
+                    Nullable::NotNull,
+                    None,
+                ),
+                Attribute::new(
+                    "header2".to_string(),
+                    BaseSqlTypesMapper::Uuid,
+                    Nullable::Null,
+                    None,
+                ),
+            ],
+        ));
+
+        let test = RowData::new(
+            table.sql_type.clone(),
+            TransactionId::new(1),
+            None,
+            get_item_pointer(),
+            SqlTuple(vec![Some(BaseSqlTypes::Uuid(uuid::Uuid::new_v4())), None]),
+        );
 
         let mut test_serial = test.serialize();
         println!("{:?}", test_serial.len());
-        let test_parse = RowData::parse(table, &mut test_serial).unwrap();
+        let test_parse = RowData::parse(table, &mut test_serial)?;
         assert_eq!(test, test_parse);
+
+        Ok(())
     }
 
     #[test]
-    fn test_row_complex_data_roundtrip() {
+    fn test_row_complex_data_roundtrip() -> Result<(), Box<dyn std::error::Error>> {
         let table = Arc::new(Table::new(
+            uuid::Uuid::new_v4(),
             "test_table".to_string(),
             vec![
                 Attribute::new(
-                    uuid::Uuid::new_v4(),
                     "header".to_string(),
-                    DeserializeTypes::Text,
+                    BaseSqlTypesMapper::Text,
                     Nullable::NotNull,
+                    None,
                 ),
                 Attribute::new(
-                    uuid::Uuid::new_v4(),
                     "id".to_string(),
-                    DeserializeTypes::Uuid,
+                    BaseSqlTypesMapper::Uuid,
                     Nullable::Null,
+                    None,
                 ),
                 Attribute::new(
-                    uuid::Uuid::new_v4(),
                     "header3".to_string(),
-                    DeserializeTypes::Text,
+                    BaseSqlTypesMapper::Text,
                     Nullable::NotNull,
+                    None,
                 ),
             ],
         ));
 
-        let test = RowData::new(table.clone(),
+        let test = RowData::new(table.sql_type.clone(),
             TransactionId::new(1),
             None,
             get_item_pointer(),
-            Arc::new(SqlTuple(vec![
-                Some(BuiltinSqlTypes::Text("this is a test".to_string())),
+            SqlTuple(vec![
+                Some(BaseSqlTypes::Text("this is a test".to_string())),
                 None,
-                Some(BuiltinSqlTypes::Text("blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah".to_string())),
-            ])),
-        ).unwrap();
+                Some(BaseSqlTypes::Text("blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah".to_string())),
+            ]),
+        );
 
         let mut test_serial = test.serialize();
-        let test_parse = RowData::parse(table, &mut test_serial).unwrap();
+        let test_parse = RowData::parse(table, &mut test_serial)?;
         assert_eq!(test, test_parse.clone());
 
-        let column_val = test_parse.get_column_not_null("header").unwrap();
-        assert_eq!(
-            column_val,
-            BuiltinSqlTypes::Text("this is a test".to_string())
-        );
+        let column_val = test_parse.get_column_not_null("header")?;
+        assert_eq!(column_val, BaseSqlTypes::Text("this is a test".to_string()));
+
+        Ok(())
     }
 }

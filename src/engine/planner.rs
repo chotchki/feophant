@@ -3,7 +3,7 @@ use super::objects::{
     CommandType, JoinType, ModifyTablePlan, Plan, PlannedCommon, PlannedStatement, QueryTree,
     RangeRelation,
 };
-use crate::engine::objects::{FullTableScan, TargetEntry};
+use crate::engine::objects::FullTableScan;
 use std::sync::Arc;
 use thiserror::Error;
 
@@ -51,20 +51,20 @@ impl Planner {
     fn plan_select(query_tree: QueryTree) -> Result<PlannedStatement, PlannerError> {
         //TODO I'm ignoring joins at the moment
 
-        let mut targets = vec![];
-        for t in query_tree.targets {
-            match t {
-                TargetEntry::Parameter(p) => targets.push(p),
-            }
-        }
+        //let mut targets = vec![];
+        //for t in query_tree.targets {
+        //    match t {
+        //        TargetEntry::Parameter(p) => targets.push(p),
+        //    }
+        //}
 
         let mut unjoined = vec![];
         for rr in query_tree.range_tables {
             match rr {
                 RangeRelation::Table(rrt) => {
                     unjoined.push(Arc::new(Plan::FullTableScan(FullTableScan {
-                        columns: targets.clone(), //TODO I know not every table needs every column
-                        table: rrt.table,
+                        src_table: rrt.table,
+                        target_type: query_tree.targets.clone(), //TODO I know not every table needs every column
                     })));
                 }
                 RangeRelation::AnonymousTable(anon_tbl) => {
