@@ -1,20 +1,31 @@
-use crate::engine::io::{encode_size, expected_encoded_size, parse_size, SizeError};
+use crate::engine::io::{
+    encode_size, expected_encoded_size, parse_size, SelfEncodedSize, SizeError,
+};
 use bytes::{Buf, BufMut, BytesMut};
+use nom::{
+    error::{convert_error, ParseError, VerboseError},
+    tag_no_case, Err, Finish,
+};
 use std::{
     fmt::{self, Display, Formatter},
     mem::size_of,
     num::ParseIntError,
-    str::ParseBoolError,
+    str::{FromStr, ParseBoolError},
     string::FromUtf8Error,
+    sync::Arc,
 };
 use thiserror::Error;
 use uuid::Uuid;
 
+use super::parse_type;
+
 #[derive(Clone, Debug, PartialEq, PartialOrd)]
 pub enum BaseSqlTypes {
+    //TODO consider making it an Arc since I don't mutate just copy
     Array(Vec<BaseSqlTypes>),
     Bool(bool),
     Integer(u32),
+    //TODO consider making it an Arc since I don't mutate just copy
     Text(String),
     Uuid(uuid::Uuid),
 }
@@ -23,8 +34,8 @@ pub enum BaseSqlTypes {
 ///
 /// This will exist until this RFC is fixed: https://github.com/rust-lang/rfcs/pull/2593
 #[derive(Clone, Debug, PartialEq)]
-pub enum BaseSqlTypesMapper<'a> {
-    Array(&'a BaseSqlTypesMapper<'a>),
+pub enum BaseSqlTypesMapper {
+    Array(Arc<BaseSqlTypesMapper>),
     Bool,
     Integer,
     Text,
@@ -101,20 +112,10 @@ impl BaseSqlTypes {
         }
     }
 
-    /// Provides the expected size of the serialized form so repeated serialization
-    /// is not needed to find space.
-    pub fn expected_encoded_size(&self) -> usize {
-        match self {
-            Self::Array(ref a) => a.iter().fold(0, |acc, x| acc + x.expected_encoded_size()),
-            Self::Bool(_) => size_of::<bool>(),
-            Self::Integer(_) => size_of::<u32>(),
-            Self::Uuid(_) => size_of::<Uuid>(),
-            Self::Text(ref t) => expected_encoded_size(t.len()) + t.len(),
-        }
-    }
-
     pub fn parse(target_type: BaseSqlTypesMapper, buffer: &str) -> Result<Self, BaseSqlTypesError> {
         match target_type {
+            //TODO Need to fix this to support array literal parsing
+            //See here: https://www.postgresql.org/docs/current/arrays.html
             BaseSqlTypesMapper::Array(a) => todo!("Bed time, need to fix!"),
             BaseSqlTypesMapper::Bool => Ok(BaseSqlTypes::Bool(buffer.parse::<bool>()?)),
             BaseSqlTypesMapper::Integer => Ok(BaseSqlTypes::Integer(buffer.parse::<u32>()?)),
@@ -153,7 +154,7 @@ impl BaseSqlTypes {
 
     /// Used to map if we have the types linked up right.
     /// We can't check for the array subtypes to be right
-    pub fn type_matches(self, right: BaseSqlTypesMapper) -> bool {
+    pub fn type_matches(&self, right: &BaseSqlTypesMapper) -> bool {
         match (self, right) {
             (Self::Array(a), BaseSqlTypesMapper::Array(b)) => true,
             (Self::Bool(_), BaseSqlTypesMapper::Bool) => true,
@@ -187,12 +188,16 @@ impl Display for BaseSqlTypes {
     }
 }
 
-impl<'a> Display for BaseSqlTypesMapper<'a> {
+impl Display for BaseSqlTypesMapper {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            BaseSqlTypesMapper::Array(a) => {
-                write!(f, "Array of {}", **a)
-            }
+            BaseSqlTypesMapper::Array(ref a) => match a.as_ref() {
+                BaseSqlTypesMapper::Array(ref aa) => write!(f, "Array({})", **a),
+                BaseSqlTypesMapper::Bool => write!(f, "Array(Bool)"),
+                BaseSqlTypesMapper::Integer => write!(f, "Array(Integer)"),
+                BaseSqlTypesMapper::Uuid => write!(f, "Array(Uuid)"),
+                BaseSqlTypesMapper::Text => write!(f, "Array(Text)"),
+            },
             BaseSqlTypesMapper::Bool => {
                 write!(f, "Bool")
             }
@@ -209,6 +214,30 @@ impl<'a> Display for BaseSqlTypesMapper<'a> {
     }
 }
 
+impl FromStr for BaseSqlTypesMapper {
+    type Err = BaseSqlTypesError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match parse_type::<VerboseError<&str>>(s).finish() {
+            Ok((_, sql_type)) => Ok(sql_type),
+            Err(e) => Err(BaseSqlTypesError::ParseError(convert_error(s, e))),
+        }
+    }
+}
+
+impl SelfEncodedSize for BaseSqlTypes {
+    /// Provides the expected size of the serialized form so repeated serialization
+    /// is not needed to find space.
+    fn encoded_size(&self) -> usize {
+        match self {
+            Self::Array(ref a) => a.iter().fold(0, |acc, x| acc + x.encoded_size()),
+            Self::Bool(_) => size_of::<bool>(),
+            Self::Integer(_) => size_of::<u32>(),
+            Self::Uuid(_) => size_of::<Uuid>(),
+            Self::Text(ref t) => expected_encoded_size(t.len()) + t.len(),
+        }
+    }
+}
+
 #[derive(Error, Debug)]
 pub enum BaseSqlTypesError {
     #[error(transparent)]
@@ -219,8 +248,12 @@ pub enum BaseSqlTypesError {
     InvalidBool(#[from] ParseBoolError),
     #[error(transparent)]
     InvalidInt(#[from] ParseIntError),
+    #[error("Invalid type {0}")]
+    InvalidType(String),
     #[error(transparent)]
     InvalidUuid(#[from] uuid::Error),
+    #[error("SQL Parse Error {0}")]
+    ParseError(String),
     #[error(transparent)]
     SizeError(#[from] SizeError),
 }
@@ -234,7 +267,7 @@ mod tests {
 
     fn roundtrip(input: String) -> String {
         let stype = BaseSqlTypes::Text(input);
-        let mut buffer = BytesMut::with_capacity(stype.expected_encoded_size());
+        let mut buffer = BytesMut::with_capacity(stype.encoded_size());
         stype.serialize(&mut buffer);
         let mut fbuff = buffer.freeze();
         let result = BaseSqlTypes::deserialize(&BaseSqlTypesMapper::Text, &mut fbuff).unwrap();
@@ -294,7 +327,7 @@ mod tests {
             _ => panic!("Wrong type"),
         };
 
-        let mut buffer = BytesMut::with_capacity(parse_str.expected_encoded_size());
+        let mut buffer = BytesMut::with_capacity(parse_str.encoded_size());
         parse_str.serialize(&mut &mut buffer);
         let mut parse_serial = buffer.freeze();
         let reparse = BaseSqlTypes::deserialize(&BaseSqlTypesMapper::Integer, &mut parse_serial)?;
@@ -311,24 +344,26 @@ mod tests {
     #[test]
     //Used to map if we have the types linked up right
     pub fn test_type_matches() {
-        assert!(BaseSqlTypes::Bool(true).type_matches(BaseSqlTypesMapper::Bool));
-        assert!(!BaseSqlTypes::Bool(true).type_matches(BaseSqlTypesMapper::Integer));
-        assert!(!BaseSqlTypes::Bool(true).type_matches(BaseSqlTypesMapper::Uuid));
-        assert!(!BaseSqlTypes::Bool(true).type_matches(BaseSqlTypesMapper::Text));
+        assert!(BaseSqlTypes::Bool(true).type_matches(&BaseSqlTypesMapper::Bool));
+        assert!(!BaseSqlTypes::Bool(true).type_matches(&BaseSqlTypesMapper::Integer));
+        assert!(!BaseSqlTypes::Bool(true).type_matches(&BaseSqlTypesMapper::Uuid));
+        assert!(!BaseSqlTypes::Bool(true).type_matches(&BaseSqlTypesMapper::Text));
 
-        assert!(!BaseSqlTypes::Integer(0).type_matches(BaseSqlTypesMapper::Bool));
-        assert!(BaseSqlTypes::Integer(0).type_matches(BaseSqlTypesMapper::Integer));
-        assert!(!BaseSqlTypes::Integer(0).type_matches(BaseSqlTypesMapper::Uuid));
-        assert!(!BaseSqlTypes::Integer(0).type_matches(BaseSqlTypesMapper::Text));
+        assert!(!BaseSqlTypes::Integer(0).type_matches(&BaseSqlTypesMapper::Bool));
+        assert!(BaseSqlTypes::Integer(0).type_matches(&BaseSqlTypesMapper::Integer));
+        assert!(!BaseSqlTypes::Integer(0).type_matches(&BaseSqlTypesMapper::Uuid));
+        assert!(!BaseSqlTypes::Integer(0).type_matches(&BaseSqlTypesMapper::Text));
 
-        assert!(!BaseSqlTypes::Uuid(uuid::Uuid::new_v4()).type_matches(BaseSqlTypesMapper::Bool));
-        assert!(!BaseSqlTypes::Uuid(uuid::Uuid::new_v4()).type_matches(BaseSqlTypesMapper::Integer));
-        assert!(BaseSqlTypes::Uuid(uuid::Uuid::new_v4()).type_matches(BaseSqlTypesMapper::Uuid));
-        assert!(!BaseSqlTypes::Uuid(uuid::Uuid::new_v4()).type_matches(BaseSqlTypesMapper::Text));
+        assert!(!BaseSqlTypes::Uuid(uuid::Uuid::new_v4()).type_matches(&BaseSqlTypesMapper::Bool));
+        assert!(
+            !BaseSqlTypes::Uuid(uuid::Uuid::new_v4()).type_matches(&BaseSqlTypesMapper::Integer)
+        );
+        assert!(BaseSqlTypes::Uuid(uuid::Uuid::new_v4()).type_matches(&BaseSqlTypesMapper::Uuid));
+        assert!(!BaseSqlTypes::Uuid(uuid::Uuid::new_v4()).type_matches(&BaseSqlTypesMapper::Text));
 
-        assert!(!BaseSqlTypes::Text("foo".to_string()).type_matches(BaseSqlTypesMapper::Bool));
-        assert!(!BaseSqlTypes::Text("foo".to_string()).type_matches(BaseSqlTypesMapper::Integer));
-        assert!(!BaseSqlTypes::Text("foo".to_string()).type_matches(BaseSqlTypesMapper::Uuid));
-        assert!(BaseSqlTypes::Text("foo".to_string()).type_matches(BaseSqlTypesMapper::Text));
+        assert!(!BaseSqlTypes::Text("foo".to_string()).type_matches(&BaseSqlTypesMapper::Bool));
+        assert!(!BaseSqlTypes::Text("foo".to_string()).type_matches(&BaseSqlTypesMapper::Integer));
+        assert!(!BaseSqlTypes::Text("foo".to_string()).type_matches(&BaseSqlTypesMapper::Uuid));
+        assert!(BaseSqlTypes::Text("foo".to_string()).type_matches(&BaseSqlTypesMapper::Text));
     }
 }
