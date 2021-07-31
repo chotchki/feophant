@@ -124,6 +124,8 @@ New version:
 
 [comment]: # (Diagram made in AsciiFlow!)
 
+Need to get this restructure completed and stop letting the code base be broken.
+
 **Path to 0.8**
 
 Add support for defining a primary key on a table. This implies the following functionality:
@@ -237,6 +239,8 @@ Its kinda pointless to blindly reproduce what has already been done so I'm makin
 * Want to avoid vaccuum for transaction wrap around. Will try 64-bit transaction IDs but might go to 128-bit.
 * * I can avoid the need to freeze Transaction IDs however the hint bits will need scanning to ensure that they are updated.
 * Replacing OIDs with UUIDv4s.
+
+* I think I've figured out what the core divergeance from Postgres that I'm interested in. I love Postgres's transactional DDLs but version controlling a schema is awful. What if I make the database server a library and your schema is code? You supply a new binary that runs as the database server and if you need to change it you just deploy the binary instead? Then the compiler can optimize out anything you don't need to run the system in your use case. The hardest part is dealing with schema changes that affect your on disk format.
 
 
 ### Rust Notes
