@@ -3,8 +3,11 @@ use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::convert::TryFrom;
 use std::fmt;
 use std::mem;
+use std::mem::size_of;
 use std::ops::{Add, AddAssign, Sub, SubAssign};
 use thiserror::Error;
+
+use crate::engine::io::ConstEncodedSize;
 
 const PAGE_SIZE: u16 = 4096;
 
@@ -106,6 +109,12 @@ impl TryFrom<usize> for UInt12 {
 impl fmt::Display for UInt12 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.0)
+    }
+}
+
+impl ConstEncodedSize for UInt12 {
+    fn encoded_size() -> usize {
+        size_of::<u16>()
     }
 }
 

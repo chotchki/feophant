@@ -2,6 +2,9 @@
 //! Details here: https://www.postgresql.org/docs/current/storage-page-layout.html look at t_ctid
 //!
 //! We will be treating this a little different since our size will be based on usize
+
+use crate::engine::io::ConstEncodedSize;
+
 use super::super::page_formats::{UInt12, UInt12Error};
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::convert::TryFrom;
@@ -51,6 +54,12 @@ impl fmt::Display for ItemPointer {
         write!(f, "\tItemPointer\n")?;
         write!(f, "\tPage: {}\n", self.page)?;
         write!(f, "\tCount: {}\n", self.count)
+    }
+}
+
+impl ConstEncodedSize for ItemPointer {
+    fn encoded_size() -> usize {
+        size_of::<usize>() + UInt12::encoded_size()
     }
 }
 
