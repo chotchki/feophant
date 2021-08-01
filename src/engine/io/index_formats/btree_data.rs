@@ -20,6 +20,7 @@
 
 use crate::engine::io::page_formats::ItemIdDataError;
 use crate::engine::io::row_formats::NullMaskError;
+use crate::engine::io::{encode_size, parse_size, SizeError};
 use crate::engine::objects::types::{BaseSqlTypes, BaseSqlTypesError};
 use crate::engine::{
     io::{page_formats::ItemIdData, row_formats::NullMask},
@@ -62,7 +63,7 @@ pub enum NodeType {
 pub struct BTreePage(pub usize);
 
 impl BTreeNode {
-    fn write_node(buffer: &mut BytesMut, node: Option<BTreePage>) -> Result<(), BTreeError> {
+    fn write_node(buffer: &mut impl BufMut, node: Option<BTreePage>) -> Result<(), BTreeError> {
         match node {
             Some(pn) => {
                 let pn_u64 = u64::try_from(pn.0)?;
@@ -73,29 +74,11 @@ impl BTreeNode {
         Ok(())
     }
 
-    fn write_count(buffer: &mut BytesMut, in_count: usize) {
-        let mut count = in_count;
-        while count > 0 {
-            let last_count = count as u8;
-            let mut digit: u8 = last_count & 0x7f;
-            count >>= 7;
-            if count > 0 {
-                digit |= 0x80;
-            }
-            buffer.put_u8(digit);
-        }
-    }
-
-    fn write_sql_tuple(buffer: &mut BytesMut, tuple: &SqlTuple) {
+    fn write_sql_tuple(buffer: &mut impl BufMut, tuple: &SqlTuple) {
         let nulls = NullMask::serialize(&tuple, false);
         buffer.put(nulls);
 
-        for data in tuple.0.iter() {
-            match data {
-                Some(d) => d.serialize(buffer),
-                None => {}
-            }
-        }
+        tuple.serialize(buffer);
     }
 
     pub fn parse(buffer: &mut impl Buf, index_def: &Index) -> Result<BTreeNode, BTreeError> {
@@ -112,7 +95,7 @@ impl BTreeNode {
         let right_node = Self::parse_page(buffer)?;
 
         if node_type == 0 {
-            let bucket_count = Self::parse_count(buffer)?;
+            let bucket_count = parse_size(buffer)?;
             let mut buckets = Vec::with_capacity(bucket_count);
 
             for b in 0..bucket_count {
@@ -129,7 +112,7 @@ impl BTreeNode {
                 nodes: buckets,
             }));
         } else {
-            let bucket_count = Self::parse_count(buffer)?;
+            let bucket_count = parse_size(buffer)?;
             let mut buckets = Vec::with_capacity(bucket_count);
 
             for b in 0..bucket_count {
@@ -154,28 +137,6 @@ impl BTreeNode {
                 nodes: buckets,
             }));
         }
-    }
-
-    fn parse_count(buffer: &mut impl Buf) -> Result<usize, BTreeError> {
-        let mut length: usize = 0;
-        let mut high_bit = 1;
-        let mut loop_count = 0;
-        while high_bit == 1 {
-            if !buffer.has_remaining() {
-                return Err(BTreeError::BufferTooShort());
-            }
-
-            let b = buffer.get_u8();
-            high_bit = b >> 7;
-
-            let mut low_bits: usize = (b & 0x7f).into();
-            low_bits <<= 7 * loop_count;
-            loop_count += 1;
-
-            length += low_bits;
-        }
-
-        Ok(length)
     }
 
     fn parse_page(buffer: &mut impl Buf) -> Result<Option<BTreePage>, BTreeError> {
@@ -221,7 +182,7 @@ impl BTreeBranch {
         BTreeNode::write_node(&mut buffer, self.left_node)?;
         BTreeNode::write_node(&mut buffer, self.right_node)?;
 
-        BTreeNode::write_count(&mut buffer, self.nodes.len());
+        encode_size(&mut buffer, self.nodes.len());
 
         for (key, pointer) in self.nodes.iter() {
             BTreeNode::write_sql_tuple(&mut buffer, key);
@@ -245,7 +206,7 @@ impl BTreeLeaf {
         BTreeNode::write_node(&mut buffer, self.left_node)?;
         BTreeNode::write_node(&mut buffer, self.right_node)?;
 
-        BTreeNode::write_count(&mut buffer, self.nodes.len());
+        encode_size(&mut buffer, self.nodes.len());
 
         for (key, item_id) in self.nodes.iter() {
             BTreeNode::write_sql_tuple(&mut buffer, key);
@@ -271,6 +232,8 @@ pub enum BTreeError {
     MissingPointerData(usize, usize),
     #[error(transparent)]
     NullMaskError(#[from] NullMaskError),
+    #[error(transparent)]
+    SizeError(#[from] SizeError),
     #[error(transparent)]
     TryFromIntError(#[from] TryFromIntError),
 }

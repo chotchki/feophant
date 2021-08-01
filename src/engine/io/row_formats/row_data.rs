@@ -83,12 +83,7 @@ impl RowData {
         let nulls = NullMask::serialize(&self.user_data, true);
         buffer.put(nulls);
 
-        for data in &self.user_data.0 {
-            match data {
-                Some(d) => d.serialize(&mut buffer),
-                None => {}
-            }
-        }
+        self.user_data.serialize(&mut buffer);
 
         buffer.freeze()
     }
@@ -196,10 +191,7 @@ impl EncodedSize<&SqlTuple> for RowData {
             + ItemPointer::encoded_size()
             + InfoMask::encoded_size()
             + NullMask::encoded_size(input)
-            + input.iter().fold(0, |acc, col| match col {
-                Some(col_s) => acc + col_s.encoded_size(),
-                None => acc,
-            })
+            + input.encoded_size()
     }
 }
 

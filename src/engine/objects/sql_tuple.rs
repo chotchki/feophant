@@ -1,7 +1,10 @@
 //!Wrapper type for a row in the database unattached to a table
 use std::ops::Deref;
 
+use crate::engine::io::SelfEncodedSize;
+
 use super::types::{BaseSqlTypes, SqlTypeDefinition};
+use bytes::BufMut;
 use thiserror::Error;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -14,8 +17,8 @@ impl SqlTuple {
         source: &SqlTypeDefinition,
         target: &SqlTypeDefinition,
     ) -> Result<SqlTuple, SqlTupleError> {
-        if self.0.len() != source.len() {
-            return Err(SqlTupleError::SourceLenMismatch(self.0.len(), source.len()));
+        if self.len() != source.len() {
+            return Err(SqlTupleError::SourceLenMismatch(self.len(), source.len()));
         }
 
         let mut output = Vec::with_capacity(target.len());
@@ -36,13 +39,16 @@ impl SqlTuple {
 
     pub fn merge(left: &SqlTuple, right: &SqlTuple) -> SqlTuple {
         //Code from here: https://stackoverflow.com/a/56490417
-        SqlTuple(
-            left.0
-                .iter()
-                .cloned()
-                .chain(right.0.iter().cloned())
-                .collect(),
-        )
+        SqlTuple(left.iter().cloned().chain(right.iter().cloned()).collect())
+    }
+
+    pub fn serialize(&self, buffer: &mut impl BufMut) {
+        for data in &self.0 {
+            match data {
+                Some(d) => d.serialize(buffer),
+                None => {}
+            }
+        }
     }
 }
 
@@ -51,6 +57,15 @@ impl Deref for SqlTuple {
 
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+impl SelfEncodedSize for SqlTuple {
+    fn encoded_size(&self) -> usize {
+        self.iter().fold(0, |acc, col| match col {
+            Some(col_s) => acc + col_s.encoded_size(),
+            None => acc,
+        })
     }
 }
 
@@ -64,6 +79,8 @@ pub enum SqlTupleError {
 
 #[cfg(test)]
 mod tests {
+    use bytes::BytesMut;
+
     use super::*;
     use crate::engine::objects::types::BaseSqlTypesMapper;
 
@@ -125,5 +142,16 @@ mod tests {
         assert_eq!(merged, expected);
 
         Ok(())
+    }
+
+    #[test]
+    fn test_encoded_size() {
+        let tuple = SqlTuple(vec![Some(BaseSqlTypes::Uuid(uuid::Uuid::new_v4())), None]);
+
+        let mut buffer = BytesMut::new();
+        tuple.serialize(&mut buffer);
+        let buffer = buffer.freeze();
+
+        assert_eq!(tuple.encoded_size(), buffer.len());
     }
 }
