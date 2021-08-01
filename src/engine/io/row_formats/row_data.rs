@@ -193,15 +193,15 @@ impl fmt::Display for RowData {
 
 impl EncodedSize<&SqlTuple> for RowData {
     fn encoded_size(input: &SqlTuple) -> usize {
-        size_of::<u64>() + //Min
-        size_of::<u64>() + //Max
-        ItemPointer::encoded_size() +
-        InfoMask::encoded_size() +
-        NullMask::encoded_size(input);
-        input.iter().fold(0, |acc, col| match col {
-            Some(col_s) => acc + col_s.encoded_size(),
-            None => acc,
-        })
+        size_of::<u64>()
+            + size_of::<u64>()
+            + ItemPointer::encoded_size()
+            + InfoMask::encoded_size()
+            + NullMask::encoded_size(input)
+            + input.iter().fold(0, |acc, col| match col {
+                Some(col_s) => acc + col_s.encoded_size(),
+                None => acc,
+            })
     }
 }
 
@@ -461,5 +461,15 @@ mod tests {
         assert_eq!(column_val, BaseSqlTypes::Text("this is a test".to_string()));
 
         Ok(())
+    }
+
+    #[test]
+    fn test_encoded_size() {
+        let tuple = SqlTuple(vec![Some(BaseSqlTypes::Uuid(uuid::Uuid::new_v4())), None]);
+        match size_of::<usize>() {
+            4 => assert_eq!(40, RowData::encoded_size(&tuple)), //Not 100% certain if correct
+            8 => assert_eq!(44, RowData::encoded_size(&tuple)),
+            _ => panic!("You're on your own on this arch."),
+        }
     }
 }

@@ -16,3 +16,13 @@ impl ConstEncodedSize for InfoMask {
         size_of::<u8>()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_encoded_size() {
+        assert_eq!(1, InfoMask::encoded_size())
+    }
+}

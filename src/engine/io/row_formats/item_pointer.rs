@@ -112,4 +112,13 @@ mod tests {
         );
         Ok(())
     }
+
+    #[test]
+    fn test_encoded_size() {
+        match size_of::<usize>() {
+            4 => assert_eq!(6, ItemPointer::encoded_size()),
+            8 => assert_eq!(10, ItemPointer::encoded_size()),
+            _ => panic!("You're on your own on this arch."),
+        }
+    }
 }

@@ -288,6 +288,25 @@ mod tests {
     }
 
     #[test]
+    fn test_exact_encoding() {
+        let test = BaseSqlTypes::Text("Short String".to_string());
+        assert_eq!(13, test.encoded_size()); //12 bytes plus 1 length
+
+        let mut buffer = BytesMut::with_capacity(test.encoded_size());
+        test.serialize(&mut buffer);
+        let buff = buffer.freeze();
+        assert_eq!(13, buff.len());
+
+        let test = BaseSqlTypes::Text("Short".repeat(40)); //Should be 200 chars
+        assert_eq!(202, test.encoded_size()); //200 bytes plus 2 length
+
+        let mut buffer = BytesMut::with_capacity(test.encoded_size());
+        test.serialize(&mut buffer);
+        let buff = buffer.freeze();
+        assert_eq!(202, buff.len());
+    }
+
+    #[test]
     fn test_builtin_display() {
         let text = BaseSqlTypes::Bool(true);
         assert_eq!(text.to_string(), "true");
