@@ -7,6 +7,27 @@ use thiserror::Error;
 pub struct NullMask {}
 
 impl NullMask {
+    /// Writes out a bit vector that sets a bit for every null value.
+    /// The second value determines if an empty vector should be returned if nothing
+    /// is null. This results in space savings for large rows but requires and external
+    /// indicator to know if the nullmask is there. RowData uses the InfoMask for this.
+    ///
+    /// # Examples
+    /// ```
+    /// # use feophantlib::engine::{io::row_formats::NullMask, objects::{SqlTuple, types::BaseSqlTypes}};
+    /// # use hex_literal::hex;
+    /// # use bytes::Bytes;
+    ///
+    /// let test = SqlTuple(vec![Some(BaseSqlTypes::Bool(true)),
+    ///     Some(BaseSqlTypes::Bool(true)),
+    ///     Some(BaseSqlTypes::Bool(true)),
+    ///     ]);
+    /// let empty = NullMask::serialize(&test, true);
+    /// assert_eq!(Bytes::new(), empty);
+    ///
+    /// let not_empty = NullMask::serialize(&test, false);
+    /// assert_eq!(hex!("00").to_vec(), not_empty);
+    /// ```
     pub fn serialize(input: &SqlTuple, none_null_empty: bool) -> Bytes {
         if input.0.len() == 0 {
             return Bytes::new();
