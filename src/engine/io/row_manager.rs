@@ -196,11 +196,9 @@ pub enum RowManagerError {
 
 #[cfg(test)]
 mod tests {
-    use super::super::super::super::constants::DeserializeTypes;
     use super::super::super::objects::Attribute;
     use super::super::super::objects::Table;
     use super::*;
-    use crate::constants::BuiltinSqlTypes;
     use crate::constants::Nullable;
     use crate::engine::objects::types::BaseSqlTypes;
     use crate::engine::objects::types::BaseSqlTypesMapper;

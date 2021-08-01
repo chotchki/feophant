@@ -254,7 +254,6 @@ pub enum SqlTypeError {
 
 #[cfg(test)]
 mod tests {
-    use std::convert::TryFrom;
 
     use hex_literal::hex;
     use uuid::Uuid;
@@ -314,7 +313,7 @@ mod tests {
     fn test_integer_roundtrip() -> Result<(), Box<dyn std::error::Error>> {
         let test = "5";
         let parse_str = BuiltinSqlTypes::parse(DeserializeTypes::Integer, test)?;
-        let parse_res = match parse_str {
+        match parse_str {
             BuiltinSqlTypes::Integer(i) => {
                 assert_eq!(i, 5);
                 i

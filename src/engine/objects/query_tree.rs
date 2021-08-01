@@ -1,7 +1,6 @@
 //! Is the result of the parse tree post validation
 //! See here: https://www.postgresql.org/docs/current/querytree.html
 use super::types::SqlTypeDefinition;
-use super::Attribute;
 use super::SqlTuple;
 use super::Table;
 use std::sync::Arc;

@@ -27,6 +27,7 @@ pub use sql_parser::SqlParserError;
 pub mod transactions;
 use transactions::{TransactionId, TransactionManager};
 
+use self::io::ConstraintManager;
 use self::objects::QueryResult;
 use std::ops::Deref;
 use thiserror::Error;
@@ -41,9 +42,10 @@ pub struct Engine {
 impl Engine {
     pub fn new(io_manager: IOManager, tran_manager: TransactionManager) -> Engine {
         let vis_row_man = VisibleRowManager::new(RowManager::new(io_manager), tran_manager);
+        let con_man = ConstraintManager::new(vis_row_man.clone());
         Engine {
-            analyzer: Analyzer::new(vis_row_man.clone()),
-            executor: Executor::new(vis_row_man),
+            analyzer: Analyzer::new(vis_row_man),
+            executor: Executor::new(con_man),
         }
     }
 

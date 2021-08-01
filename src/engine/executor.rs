@@ -1,10 +1,10 @@
 use crate::engine::objects::types::BaseSqlTypes;
 use crate::engine::objects::SqlTuple;
 
-use super::super::constants::{BuiltinSqlTypes, TableDefinitions};
-use super::io::{VisibleRowManager, VisibleRowManagerError};
+use super::super::constants::TableDefinitions;
+use super::io::{ConstraintManager, ConstraintManagerError};
 use super::objects::types::SqlTypeDefinition;
-use super::objects::{Attribute, ParseTree, Plan, PlannedStatement, SqlTupleError, Table};
+use super::objects::{ParseTree, Plan, PlannedStatement, SqlTupleError, Table};
 use super::transactions::TransactionId;
 use async_stream::try_stream;
 use futures::stream::Stream;
@@ -19,12 +19,12 @@ use uuid::Uuid;
 
 #[derive(Clone, Debug)]
 pub struct Executor {
-    vis_row_man: VisibleRowManager,
+    cons_man: ConstraintManager,
 }
 
 impl Executor {
-    pub fn new(vis_row_man: VisibleRowManager) -> Executor {
-        Executor { vis_row_man }
+    pub fn new(cons_man: ConstraintManager) -> Executor {
+        Executor { cons_man }
     }
 
     pub fn execute(
@@ -81,7 +81,7 @@ impl Executor {
         target_type: Arc<SqlTypeDefinition>,
     ) -> Pin<Box<impl Stream<Item = Result<SqlTuple, ExecutorError>>>> {
         let s = try_stream! {
-            let vis = self.vis_row_man.clone();
+            let vis = self.cons_man.clone();
 
             for await row in vis.get_stream(tran_id, src_table.clone()) {
                 let data = row?.user_data.clone();
@@ -101,7 +101,7 @@ impl Executor {
         table: Arc<Table>,
         source: Arc<Plan>,
     ) -> Pin<Box<impl Stream<Item = Result<SqlTuple, ExecutorError>>>> {
-        let vis = self.vis_row_man.clone();
+        let vis = self.cons_man.clone();
 
         let s = try_stream! {
             for await val in self.execute_plans(tran_id, source) {
@@ -133,7 +133,7 @@ impl Executor {
         tran_id: TransactionId,
         parse_tree: ParseTree,
     ) -> Result<Vec<SqlTuple>, ExecutorError> {
-        let rm = self.vis_row_man.clone();
+        let rm = self.cons_man.clone();
 
         let create_table = match parse_tree {
             ParseTree::CreateTable(t) => t,
@@ -151,7 +151,7 @@ impl Executor {
 
         let pg_attribute = TableDefinitions::PgAttribute.value();
         for i in 0..create_table.provided_columns.len() {
-            let rm = self.vis_row_man.clone();
+            let rm = self.cons_man.clone();
             let i_u32 = u32::try_from(i).map_err(ExecutorError::ConversionError)?;
             let table_row = SqlTuple(vec![
                 Some(BaseSqlTypes::Uuid(table_id)),
@@ -180,7 +180,7 @@ pub enum ExecutorError {
     #[error(transparent)]
     SqlTupleError(#[from] SqlTupleError),
     #[error(transparent)]
-    VisibleRowManagerError(#[from] VisibleRowManagerError),
+    ConstraintManagerError(#[from] ConstraintManagerError),
     #[error("Unable to convert usize to u32")]
     ConversionError(#[from] TryFromIntError),
     #[error("Recursive Plans Not Allowed")]

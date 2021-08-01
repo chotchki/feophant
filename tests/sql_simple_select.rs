@@ -1,9 +1,6 @@
 mod common;
 
-use feophantlib::{
-    constants::BuiltinSqlTypes,
-    engine::objects::{types::BaseSqlTypes, QueryResult, SqlTuple},
-};
+use feophantlib::engine::objects::{types::BaseSqlTypes, QueryResult, SqlTuple};
 
 #[test]
 fn simple_select() -> Result<(), Box<dyn std::error::Error>> {

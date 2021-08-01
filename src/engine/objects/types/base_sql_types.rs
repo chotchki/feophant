@@ -3,8 +3,8 @@ use crate::engine::io::{
 };
 use bytes::{Buf, BufMut, BytesMut};
 use nom::{
-    error::{convert_error, ParseError, VerboseError},
-    tag_no_case, Err, Finish,
+    error::{convert_error, VerboseError},
+    Finish,
 };
 use std::{
     fmt::{self, Display, Formatter},
@@ -52,7 +52,7 @@ impl BaseSqlTypes {
                 let count = parse_size(buffer)?;
                 let mut items = vec![];
 
-                for i in 0..count {
+                for _ in 0..count {
                     items.push(Self::deserialize(a, buffer)?);
                 }
                 Ok(BaseSqlTypes::Array(items))
@@ -153,10 +153,22 @@ impl BaseSqlTypes {
     }
 
     /// Used to map if we have the types linked up right.
-    /// We can't check for the array subtypes to be right
     pub fn type_matches(&self, right: &BaseSqlTypesMapper) -> bool {
         match (self, right) {
-            (Self::Array(a), BaseSqlTypesMapper::Array(b)) => true,
+            //TODO unit test on arrays
+            (Self::Array(a), BaseSqlTypesMapper::Array(b)) => {
+                if a.is_empty() {
+                    //We match if empty since this means we can still write it to disk
+                    return true;
+                }
+                match (&a[0], b.as_ref()) {
+                    (Self::Bool(_), BaseSqlTypesMapper::Bool) => true,
+                    (Self::Integer(_), BaseSqlTypesMapper::Integer) => true,
+                    (Self::Text(_), BaseSqlTypesMapper::Text) => true,
+                    (Self::Uuid(_), BaseSqlTypesMapper::Uuid) => true,
+                    (_, _) => false,
+                }
+            }
             (Self::Bool(_), BaseSqlTypesMapper::Bool) => true,
             (Self::Integer(_), BaseSqlTypesMapper::Integer) => true,
             (Self::Text(_), BaseSqlTypesMapper::Text) => true,
@@ -191,8 +203,9 @@ impl Display for BaseSqlTypes {
 impl Display for BaseSqlTypesMapper {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
+            //TODO Write unit test!
             BaseSqlTypesMapper::Array(ref a) => match a.as_ref() {
-                BaseSqlTypesMapper::Array(ref aa) => write!(f, "Array({})", **a),
+                BaseSqlTypesMapper::Array(ref aa) => write!(f, "Array({})", **aa),
                 BaseSqlTypesMapper::Bool => write!(f, "Array(Bool)"),
                 BaseSqlTypesMapper::Integer => write!(f, "Array(Integer)"),
                 BaseSqlTypesMapper::Uuid => write!(f, "Array(Uuid)"),

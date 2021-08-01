@@ -1,5 +1,6 @@
 mod constraint_manager;
 pub use constraint_manager::ConstraintManager;
+pub use constraint_manager::ConstraintManagerError;
 
 mod encoded_size;
 pub use encoded_size::ConstEncodedSize;

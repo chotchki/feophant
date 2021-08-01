@@ -1,7 +1,5 @@
 //! Implementation of the null bit flags to know if a column is null or not
 //! I'm not using a standard library because the bitvector library collides with nom
-use std::sync::Arc;
-
 use crate::engine::{io::EncodedSize, objects::SqlTuple};
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use thiserror::Error;

@@ -20,6 +20,7 @@ impl SqlTuple {
 
         let mut output = Vec::with_capacity(target.len());
 
+        //TODO handle possible type conversion OR figure out if it bombs
         'outer: for (t_name, t) in target.iter() {
             for s in 0..source.len() {
                 if *t_name == source[s].0 {
@@ -76,11 +77,7 @@ mod tests {
 
     #[test]
     fn test_sql_tuple_filter() -> Result<(), Box<dyn std::error::Error>> {
-        let source = SqlTypeDefinition(vec![
-            ("foo".to_string(), BaseSqlTypesMapper::Integer),
-            ("bar".to_string(), BaseSqlTypesMapper::Text),
-            ("baz".to_string(), BaseSqlTypesMapper::Text),
-        ]);
+        let source = get_src_type();
 
         let target = SqlTypeDefinition(vec![source[2].clone(), source[1].clone()]);
 
