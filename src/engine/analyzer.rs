@@ -3,7 +3,7 @@
 mod definition_lookup;
 use definition_lookup::{DefinitionLookup, DefinitionLookupError};
 
-use crate::constants::{BuiltinSqlTypes, Nullable, SqlTypeError};
+use crate::constants::Nullable;
 use crate::engine::objects::{JoinType, SqlTuple};
 
 use super::io::VisibleRowManager;

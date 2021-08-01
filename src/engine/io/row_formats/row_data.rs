@@ -1,15 +1,13 @@
 //! Encodes / decodes a row into a byte array based on the supplied specification
 //! Format from here: https://www.postgresql.org/docs/current/storage-page-layout.html
 //! As always I'm only implementing what I need and will extend once I need more
-use crate::engine::io::{ConstEncodedSize, EncodedSize, SelfEncodedSize};
-use crate::engine::objects::types::{BaseSqlTypes, BaseSqlTypesError, SqlTypeDefinition};
-use crate::engine::objects::SqlTuple;
-
-use super::super::super::super::constants::{BuiltinSqlTypes, DeserializeTypes};
 use super::super::super::objects::Table;
 use super::super::super::transactions::TransactionId;
 use super::null_mask::NullMaskError;
 use super::{InfoMask, ItemPointer, ItemPointerError, NullMask};
+use crate::engine::io::{ConstEncodedSize, EncodedSize, SelfEncodedSize};
+use crate::engine::objects::types::{BaseSqlTypes, BaseSqlTypesError, SqlTypeDefinition};
+use crate::engine::objects::SqlTuple;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::fmt;
 use std::mem::size_of;
@@ -211,8 +209,6 @@ pub enum RowDataError {
     BaseSqlTypes(#[from] BaseSqlTypesError),
     #[error("Table definition length {0} does not match columns passed {1}")]
     TableRowSizeMismatch(usize, usize),
-    #[error("Table definition type {0} does not match column passed {1}")]
-    TableRowTypeMismatch(BuiltinSqlTypes, DeserializeTypes),
     #[error("Not enough min data need {0} got {1}")]
     MissingMinData(usize, usize),
     #[error("Not enough max data need {0} got {1}")]

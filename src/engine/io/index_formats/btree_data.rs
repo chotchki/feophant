@@ -18,16 +18,12 @@
 //! * sizeof<usize> bytes pointing to table page
 //! * 2 bytes pointing into count into page
 
-use crate::constants::SqlTypeError;
 use crate::engine::io::page_formats::ItemIdDataError;
 use crate::engine::io::row_formats::NullMaskError;
 use crate::engine::objects::types::{BaseSqlTypes, BaseSqlTypesError};
-use crate::{
-    constants::BuiltinSqlTypes,
-    engine::{
-        io::{page_formats::ItemIdData, row_formats::NullMask},
-        objects::{Index, SqlTuple},
-    },
+use crate::engine::{
+    io::{page_formats::ItemIdData, row_formats::NullMask},
+    objects::{Index, SqlTuple},
 };
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::mem::size_of;
@@ -282,7 +278,7 @@ pub enum BTreeError {
 #[cfg(test)]
 mod tests {
     use crate::{
-        constants::{DeserializeTypes, Nullable, TableDefinitions},
+        constants::{Nullable, TableDefinitions},
         engine::{
             io::page_formats::UInt12,
             objects::{types::BaseSqlTypesMapper, Attribute, Table},

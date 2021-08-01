@@ -2,7 +2,7 @@
 
 use std::fmt;
 
-use crate::constants::{DeserializeTypes, Nullable};
+use crate::constants::Nullable;
 use uuid::Uuid;
 
 use super::types::BaseSqlTypesMapper;
