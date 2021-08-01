@@ -104,26 +104,6 @@ I am restructuring the in memory view of tables/columns to disconnect from on di
 
 I am losing my mental model of how to do complex types AND arrays. Need to re-visit when I've slept.
 
-New version:
-<pre>
-                Table                   Table                    Table                     Table                Uuid
-┌────────────┐    +     ┌────────────┐    +     ┌─────────────┐    +     ┌──────────────┐    +     ┌──────────┐   +   ┌──────────┐
-│            │ SqlTuple │            │ SqlTuple │             │ SqlTuple │              │ RowData  │          │ Page  │          │
-│  Trigger   │ ───────► │  Security  │ ───────► │  Constraint │ ───────► │  Visible Row │ ───────► │  Row     │ ────► │  I/O     │
-│            │          │            │          │             │          │              │          │          │       │          │
-│  Manager   │ ◄─────── │  Manager   │ ◄─────── │  Manager    │ ◄─────── │  Manager     │ ◄─────── │  Manager │ ◄──── │  Manager │
-│            │ SqlTuple │            │ SqlTuple │             │ SqlTuple │              │ RowData  │          │ Uuid  │          │
-└────────────┘    +     └────────────┘    +     └─────────────┘    +     └──────────────┘    +     └──────────┘   +   └──────────┘
-                Type                    Type           ▲         Type           ▲          Type                 Page
-                                                       │                        │
-
-                                                     Null                   Transaction
-                                                     Unique                 Manager
-                                                     Custom
-</pre>
-
-[comment]: # (Diagram made in AsciiFlow!)
-
 Need to get this restructure completed and stop letting the code base be broken.
 
 Almost done, added the ability to efficiently calculate on disk size WITHOUT serializing. Removed multiple clones and serializations. 
