@@ -20,7 +20,7 @@ impl Attribute {
         name: String,
         sql_type: BaseSqlTypesMapper,
         nullable: Nullable,
-        length: Option<usize>,
+        length: Option<usize>, //TODO make use of the length for certain types
     ) -> Attribute {
         Attribute {
             name,

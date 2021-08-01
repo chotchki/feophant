@@ -10,7 +10,7 @@ pub fn expected_encoded_size(size: usize) -> usize {
 
 /// Writes a length out to a byte stream as a series of 7 bit numbers, with the high
 /// bit used to indicate we have hit the end of the length
-pub fn encode_size(buffer: &mut BytesMut, mut size: usize) {
+pub fn encode_size(buffer: &mut impl BufMut, mut size: usize) {
     while size > 0 {
         let last_count = size as u8;
         let mut digit: u8 = last_count & 0x7f;

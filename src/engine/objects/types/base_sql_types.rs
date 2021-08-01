@@ -124,7 +124,7 @@ impl BaseSqlTypes {
         }
     }
 
-    pub fn serialize(&self, buffer: &mut BytesMut) {
+    pub fn serialize(&self, buffer: &mut impl BufMut) {
         match *self {
             Self::Array(ref value) => {
                 encode_size(buffer, value.len());
@@ -147,7 +147,7 @@ impl BaseSqlTypes {
             }
             Self::Text(ref value) => {
                 encode_size(buffer, value.len());
-                buffer.extend_from_slice(value.as_bytes());
+                buffer.put_slice(value.as_bytes());
             }
         }
     }

@@ -11,7 +11,7 @@ use super::IOManager;
 use crate::engine::objects::{Index, SqlTuple};
 
 //TODO Support something other than btrees
-//TODO Support searching on a non primary column
+//TODO Support searching on a non primary index column
 
 #[derive(Clone, Debug)]
 pub struct IndexManager {
