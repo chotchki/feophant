@@ -28,7 +28,7 @@ You can currently start the server, connect to it and have it throw tons of erro
 
 ## Current TODO List - Subject to constant change!
 
-**Path to 0.8**
+**TODO**
 
 Add support for defining a primary key on a table. This implies the following functionality:
 * Index support through the stack down to the page level.
@@ -60,51 +60,54 @@ Back to indexes for now. I need to make a decision on how to handle them hitting
 
 I'll have to switch IOManager to use uuid instead of Table as a key. Upside, I'm basically already doing that. (done)
 
-I'm chewing on splitting the in-memory table/column definitions from the on-disk view. In particular I could remove the circular dependancy I have right now.
+Next up implementing the index manager to add entries to the index.
 
-**Path to 0.9**
+**TODO**
 
-Implement support for running a fuzzer against the code base to ensure we are keeping the code at a high quality.
-
-**Path to 0.10**
 
 Implement where clauses, will likely need to have to start tracing columns from analyizing through to later stages.
 
-**Path to 0.11**
+**TODO**
+
+Implement support for running a fuzzer against the code base to ensure we are keeping the code at a high quality.
+
+
+
+**TODO**
 
 Implement delete for tuples
 
-**Path to 0.12**
+**TODO**
 
 pgbench setup can run successfully, in memory
 
-**Path to 0.13**
+**TODO**
 
 Ensure data about table structures is thread safe in the face of excessive Arc usage.
 
 See where I can pass read only data by reference instead of uisng Arc everywhere
 
-**Path to 0.14**
+**TODO**
 
 Support a row with more than 4kb of text in it.
 
-**Path to 0.15**
+**TODO**
 
 Implement sorting.
 
-**Path to 0.16**
+**TODO**
 
 Implement column aliasing
 
-**Path to 0.17**
+**TODO**
 
 Implement subselect.
 
-**Path to 0.18**
+**TODO**
 
 Implement Updates.
 
-**Path to 0.19**
+**TODO**
 
 Did some reading on how the buffer manager works and my implementation seems to be firmly in the right direction. Take that knowledge and implement persistence
 
