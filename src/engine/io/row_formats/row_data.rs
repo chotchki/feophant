@@ -8,7 +8,7 @@ use super::{InfoMask, ItemPointer, ItemPointerError, NullMask};
 use crate::engine::io::{ConstEncodedSize, EncodedSize, SelfEncodedSize};
 use crate::engine::objects::types::{BaseSqlTypes, BaseSqlTypesError, SqlTypeDefinition};
 use crate::engine::objects::SqlTuple;
-use bytes::{Buf, BufMut, Bytes, BytesMut};
+use bytes::{Buf, BufMut};
 use std::fmt;
 use std::mem::size_of;
 use std::sync::Arc;
@@ -82,7 +82,7 @@ impl RowData {
     }
 
     pub fn parse(table: Arc<Table>, row_buffer: &mut impl Buf) -> Result<RowData, RowDataError> {
-        if row_buffer.remaining() < size_of::<TransactionId>() {
+        if row_buffer.remaining() < TransactionId::encoded_size() {
             return Err(RowDataError::MissingMinData(
                 size_of::<TransactionId>(),
                 row_buffer.remaining(),
@@ -90,7 +90,7 @@ impl RowData {
         }
         let min = TransactionId::new(row_buffer.get_u64_le());
 
-        if row_buffer.remaining() < size_of::<TransactionId>() {
+        if row_buffer.remaining() < TransactionId::encoded_size() {
             return Err(RowDataError::MissingMaxData(
                 size_of::<TransactionId>(),
                 row_buffer.remaining(),
@@ -214,6 +214,8 @@ pub enum RowDataError {
 
 #[cfg(test)]
 mod tests {
+    use bytes::BytesMut;
+
     use crate::constants::Nullable;
     use crate::engine::objects::types::BaseSqlTypesMapper;
 

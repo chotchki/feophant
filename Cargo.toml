@@ -23,7 +23,8 @@ name = "feophant-server"
 path = "src/main.rs"
 
 [dev-dependencies]
-pretty-hex = "0.2.1"
+#Useful for debugging raw pages
+#pretty-hex = "0.2.1"
 tokio-test = "0.4.2"
 
 [dependencies]

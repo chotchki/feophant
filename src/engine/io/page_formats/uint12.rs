@@ -1,8 +1,7 @@
 //We are only going to support 4kb pages to match most common underlying I/O subsystems
-use bytes::{Buf, BufMut, Bytes, BytesMut};
+use bytes::{Buf, BufMut};
 use std::convert::TryFrom;
 use std::fmt;
-use std::mem;
 use std::mem::size_of;
 use std::ops::{Add, AddAssign, Sub, SubAssign};
 use thiserror::Error;
@@ -48,22 +47,24 @@ impl UInt12 {
 
     pub fn serialize_packed(buffer: &mut impl BufMut, args: &Vec<UInt12>) {
         let mut left = true;
-        let mut combined: u8 = 0;
+        let mut combined = None;
+
         for a in args {
             if left {
                 buffer.put_u8((a.to_u16() & 0x00FF) as u8);
-                combined = ((a.to_u16() & 0xFF00) >> 4) as u8;
+                combined = Some(((a.to_u16() & 0xFF00) >> 4) as u8);
                 left = false;
             } else {
-                buffer.put_u8(combined | ((a.to_u16() & 0xFF00) >> 8) as u8);
+                buffer.put_u8(combined.unwrap() | ((a.to_u16() & 0xFF00) >> 8) as u8);
                 buffer.put_u8((a.to_u16() & 0x00FF) as u8);
-                combined = 0;
+                combined = None;
                 left = true;
             }
         }
 
-        if combined != 0 {
-            buffer.put_u8(combined);
+        match combined {
+            Some(s) => buffer.put_u8(s),
+            None => {}
         }
     }
 
@@ -170,6 +171,8 @@ pub enum UInt12Error {
 
 #[cfg(test)]
 mod tests {
+    use bytes::BytesMut;
+
     use super::*;
 
     #[test]
@@ -236,6 +239,9 @@ mod tests {
 
     #[test]
     fn test_roundtrip() -> Result<(), Box<dyn std::error::Error>> {
+        //Value that gave me a lovely bug
+        roundtrip(vec![UInt12::new(0)?], 2)?;
+
         //Test numbers were picked to give a distingishable binary pattern for troubleshooting
         roundtrip(vec![UInt12::new(2730)?], 2)?;
 

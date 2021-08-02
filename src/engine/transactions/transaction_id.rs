@@ -4,6 +4,8 @@ use std::fmt;
 use std::num::TryFromIntError;
 use thiserror::Error;
 
+use crate::engine::io::ConstEncodedSize;
+
 #[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
 pub struct TransactionId(u64);
 
@@ -29,6 +31,12 @@ impl TransactionId {
             Some(s) => Ok(usize::try_from(s)?),
             None => Err(TransactionIdError::Underflow(self, rhs)),
         }
+    }
+}
+
+impl ConstEncodedSize for TransactionId {
+    fn encoded_size() -> usize {
+        8
     }
 }
 

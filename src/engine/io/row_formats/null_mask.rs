@@ -8,9 +8,6 @@ pub struct NullMask {}
 
 impl NullMask {
     /// Writes out a bit vector that sets a bit for every null value.
-    /// The second value determines if an empty vector should be returned if nothing
-    /// is null. This results in space savings for large rows but requires and external
-    /// indicator to know if the nullmask is there. RowData uses the InfoMask for this.
     ///
     /// # Examples
     /// ```
@@ -22,11 +19,9 @@ impl NullMask {
     ///     Some(BaseSqlTypes::Bool(true)),
     ///     Some(BaseSqlTypes::Bool(true)),
     ///     ]);
-    /// let empty = NullMask::serialize(&test, true);
-    /// assert_eq!(Bytes::new(), empty);
     ///
-    /// let not_empty = NullMask::serialize(&test, false);
-    /// assert_eq!(hex!("00").to_vec(), not_empty);
+    /// let mask = NullMask::serialize(&test);
+    /// assert_eq!(hex!("00").to_vec(), mask);
     /// ```
     pub fn serialize(input: &SqlTuple) -> Bytes {
         if input.0.len() == 0 {
@@ -34,7 +29,6 @@ impl NullMask {
         }
 
         let mut buffer = BytesMut::new();
-        let mut any_null = false;
 
         let mut value: u8 = 0;
         let mut mask: u8 = 0x80;
@@ -42,7 +36,6 @@ impl NullMask {
         loop {
             if input.0[i].is_none() {
                 value |= mask;
-                any_null = true;
             }
 
             if (i + 1) == input.0.len() {

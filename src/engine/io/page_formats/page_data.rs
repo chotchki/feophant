@@ -7,10 +7,9 @@ use super::super::super::objects::Table;
 use super::super::row_formats::{ItemPointer, RowData, RowDataError};
 use super::{ItemIdData, ItemIdDataError, PageHeader, PageHeaderError, UInt12, UInt12Error};
 use async_stream::stream;
-use bytes::{BufMut, Bytes, BytesMut};
+use bytes::{Bytes, BytesMut};
 use futures::stream::Stream;
 use std::convert::TryFrom;
-use std::mem;
 use std::sync::Arc;
 use thiserror::Error;
 
@@ -177,7 +176,6 @@ mod tests {
     use super::*;
     use futures::pin_mut;
     use futures::stream::StreamExt;
-    use hex_literal::hex;
 
     //Async testing help can be found here: https://blog.x5ff.xyz/blog/async-tests-tokio-rust/
     macro_rules! aw {
@@ -237,10 +235,6 @@ mod tests {
             assert!(pd.insert(r.min, &table, r.user_data).is_ok());
         }
         let serial = pd.serialize();
-
-        extern crate pretty_hex;
-        use pretty_hex::PrettyHex;
-        println!("{:?}", serial.to_vec().hex_dump());
 
         assert_eq!(PAGE_SIZE as usize, serial.len());
         let pg_parsed = PageData::parse(table.clone(), 0, serial).unwrap();

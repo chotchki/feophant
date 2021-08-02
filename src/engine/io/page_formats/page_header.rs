@@ -3,9 +3,8 @@
 use crate::engine::io::ConstEncodedSize;
 
 use super::{ItemIdData, UInt12, UInt12Error};
-use bytes::{Buf, BufMut, Bytes, BytesMut};
+use bytes::{Buf, BufMut};
 use std::convert::TryFrom;
-use std::mem::size_of;
 use thiserror::Error;
 
 #[derive(Debug, PartialEq)]
@@ -92,6 +91,8 @@ pub enum PageHeaderError {
 
 #[cfg(test)]
 mod tests {
+    use bytes::BytesMut;
+
     use crate::constants::PAGE_SIZE;
 
     use super::*;
@@ -127,25 +128,25 @@ mod tests {
 
         assert_eq!(test.get_item_count(), 2);
 
-        let remain_free = (UInt12::max().to_u16() as usize) + 1 //Initial
-            - size_of::<PageHeader>() //Header
+        let remain_free = PAGE_SIZE as usize //Initial
+            - PageHeader::encoded_size() //Header
             - (ItemIdData::encoded_size() * 2) //Two items
             - 10; //Their data
         assert_eq!(test.get_free_space(), remain_free)
     }
 
     #[test]
-    fn test_too_big() {
+    fn test_too_big() -> Result<(), Box<dyn std::error::Error>> {
         let mut test = PageHeader::new();
 
-        let needed = (UInt12::max().to_u16() as usize) + 1
-            - size_of::<PageHeader>()
-            - ItemIdData::encoded_size();
-        test.add_item(needed).unwrap(); //Should be maxed out
+        let needed = PAGE_SIZE as usize - PageHeader::encoded_size() - ItemIdData::encoded_size();
+        test.add_item(needed)?; //Should be maxed out
 
         assert_eq!(test.get_item_count(), 1); //Should have an item
         assert_eq!(test.get_free_space(), 0); //Should be full
         assert!(!test.can_fit(1)); //Should not be able to store a tiny item
         assert!(test.add_item(0).is_err()); //Adding more should fail
+
+        Ok(())
     }
 }

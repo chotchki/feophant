@@ -86,9 +86,6 @@ mod tests {
         let mut test_serial = test.clone().serialize();
         let test_reparse = ItemPointer::parse(&mut test_serial)?;
 
-        //Smoke test display
-        println!("{}", test_reparse);
-
         assert_eq!(test, test_reparse);
         Ok(())
     }
@@ -106,7 +103,7 @@ mod tests {
 
         assert_eq!(
             Err(ItemPointerError::UInt12Error(UInt12Error::InsufficentData(
-                1
+                0
             ))),
             parse
         );
