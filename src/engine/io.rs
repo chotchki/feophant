@@ -2,10 +2,10 @@ mod constraint_manager;
 pub use constraint_manager::ConstraintManager;
 pub use constraint_manager::ConstraintManagerError;
 
-mod encoded_size;
-pub use encoded_size::ConstEncodedSize;
-pub use encoded_size::EncodedSize;
-pub use encoded_size::SelfEncodedSize;
+mod format_traits;
+pub use format_traits::ConstEncodedSize;
+pub use format_traits::EncodedSize;
+pub use format_traits::SelfEncodedSize;
 
 mod index_formats;
 

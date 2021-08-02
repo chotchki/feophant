@@ -18,9 +18,12 @@
 //! * sizeof<usize> bytes pointing to table page
 //! * 2 bytes pointing into count into page
 
+use crate::constants::PAGE_SIZE;
 use crate::engine::io::page_formats::ItemIdDataError;
 use crate::engine::io::row_formats::NullMaskError;
-use crate::engine::io::{encode_size, parse_size, SizeError};
+use crate::engine::io::{
+    encode_size, expected_encoded_size, parse_size, ConstEncodedSize, SelfEncodedSize, SizeError,
+};
 use crate::engine::objects::types::{BaseSqlTypes, BaseSqlTypesError};
 use crate::engine::{
     io::{page_formats::ItemIdData, row_formats::NullMask},
@@ -75,7 +78,7 @@ impl BTreeNode {
     }
 
     fn write_sql_tuple(buffer: &mut impl BufMut, tuple: &SqlTuple) {
-        let nulls = NullMask::serialize(&tuple, false);
+        let nulls = NullMask::serialize(&tuple);
         buffer.put(nulls);
 
         tuple.serialize(buffer);
@@ -175,7 +178,7 @@ impl BTreeBranch {
     //pub fn can_fit(key_size: SqlTuple) -> bool {}
 
     pub fn serialize(&self) -> Result<Bytes, BTreeError> {
-        let mut buffer = BytesMut::new();
+        let mut buffer = BytesMut::with_capacity(PAGE_SIZE as usize);
         buffer.put_u8(1);
 
         BTreeNode::write_node(&mut buffer, self.parent_node)?;
@@ -191,15 +194,27 @@ impl BTreeBranch {
             buffer.put_uint_le(pointer_u64, size_of::<usize>());
         }
 
+        //Zero pad to page size
+        if buffer.len() < PAGE_SIZE as usize {
+            let free_space = vec![0; PAGE_SIZE as usize - buffer.len()];
+            buffer.extend_from_slice(&free_space);
+        }
+
         Ok(buffer.freeze())
     }
 }
 
 impl BTreeLeaf {
-    //pub fn can_fit(key_size: SqlTuple) -> bool {}
+    pub fn can_fit(&self, key_size: SqlTuple) -> bool {
+        let current_size = 1 + //Type
+        (size_of::<usize>() * 3) + //Pointers
+        expected_encoded_size(self.nodes.len()) +
+        self.nodes.iter().fold(0, |acc, (tup, iid)| acc + tup.encoded_size() + ItemIdData::encoded_size());
+        false
+    }
 
     pub fn serialize(&self) -> Result<Bytes, BTreeError> {
-        let mut buffer = BytesMut::new();
+        let mut buffer = BytesMut::with_capacity(PAGE_SIZE as usize);
         buffer.put_u8(0);
 
         BTreeNode::write_node(&mut buffer, self.parent_node)?;
@@ -211,7 +226,13 @@ impl BTreeLeaf {
         for (key, item_id) in self.nodes.iter() {
             BTreeNode::write_sql_tuple(&mut buffer, key);
 
-            buffer.put(item_id.serialize());
+            item_id.serialize(&mut buffer);
+        }
+
+        //Zero pad to page size
+        if buffer.len() < PAGE_SIZE as usize {
+            let free_space = vec![0; PAGE_SIZE as usize - buffer.len()];
+            buffer.extend_from_slice(&free_space);
         }
 
         Ok(buffer.freeze())

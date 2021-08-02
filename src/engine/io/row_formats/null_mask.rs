@@ -28,7 +28,7 @@ impl NullMask {
     /// let not_empty = NullMask::serialize(&test, false);
     /// assert_eq!(hex!("00").to_vec(), not_empty);
     /// ```
-    pub fn serialize(input: &SqlTuple, none_null_empty: bool) -> Bytes {
+    pub fn serialize(input: &SqlTuple) -> Bytes {
         if input.0.len() == 0 {
             return Bytes::new();
         }
@@ -63,9 +63,6 @@ impl NullMask {
             i += 1;
         }
 
-        if !any_null && none_null_empty {
-            return Bytes::new();
-        }
         buffer.freeze()
     }
 
@@ -145,7 +142,7 @@ mod tests {
     fn test_null_mask_serialize() {
         let test = get_tuple();
 
-        let result = NullMask::serialize(&test, true);
+        let result = NullMask::serialize(&test);
 
         assert_eq!(hex!("aa 80").to_vec(), result.to_vec());
     }
@@ -154,22 +151,9 @@ mod tests {
     fn test_null_mask_single() {
         let test = SqlTuple(vec![None]);
 
-        let result = NullMask::serialize(&test, true);
+        let result = NullMask::serialize(&test);
 
         assert_eq!(hex!("80").to_vec(), result.to_vec());
-    }
-
-    #[test]
-    fn test_null_mask_all_false() {
-        let test = SqlTuple(vec![
-            Some(BaseSqlTypes::Bool(true)),
-            Some(BaseSqlTypes::Bool(true)),
-            Some(BaseSqlTypes::Bool(true)),
-        ]);
-
-        let result = NullMask::serialize(&test, true);
-
-        assert_eq!(Bytes::new(), result);
     }
 
     #[test]
@@ -199,29 +183,11 @@ mod tests {
             true, false, true, false, true, false, true, false, true, false, false, false,
         ];
 
-        let mut result = NullMask::serialize(&test, true);
+        let mut result = NullMask::serialize(&test);
         assert_eq!(Bytes::from_static(&hex!("aa 80")), result);
         let parse = NullMask::parse(&mut result, 12)?;
 
         assert_eq!(end, parse);
-        Ok(())
-    }
-
-    #[test]
-    fn test_null_mask_preserve() -> Result<(), Box<dyn std::error::Error>> {
-        let all_null = SqlTuple(vec![
-            Some(BaseSqlTypes::Bool(true)),
-            Some(BaseSqlTypes::Bool(true)),
-        ]);
-
-        let no_preserve = Bytes::from_static(&[]);
-        let result = NullMask::serialize(&all_null, true);
-        assert_eq!(no_preserve, result);
-
-        let preserve = Bytes::from_static(&[0]);
-        let result = NullMask::serialize(&all_null, false);
-        assert_eq!(preserve, result);
-
         Ok(())
     }
 

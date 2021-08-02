@@ -1,5 +1,7 @@
 //! See https://www.postgresql.org/docs/current/storage-page-layout.html for reference documentation
 //! I'm only implementing enough for my needs until proven otherwise
+use crate::engine::io::ConstEncodedSize;
+
 use super::{ItemIdData, UInt12, UInt12Error};
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::convert::TryFrom;
@@ -15,14 +17,14 @@ pub struct PageHeader {
 impl PageHeader {
     pub fn new() -> PageHeader {
         PageHeader {
-            pd_lower: UInt12::new((size_of::<PageHeader>()) as u16).unwrap(),
+            pd_lower: UInt12::new((PageHeader::encoded_size()) as u16).unwrap(),
             pd_upper: UInt12::max(),
         }
     }
 
     pub fn get_item_count(&self) -> usize {
         let lower: usize = self.pd_lower.to_u16().into();
-        (lower - size_of::<PageHeader>()) / ItemIdData::serialize_size()
+        (lower - PageHeader::encoded_size()) / ItemIdData::encoded_size()
     }
 
     pub fn get_free_space(&self) -> usize {
@@ -34,7 +36,7 @@ impl PageHeader {
     }
 
     pub fn can_fit(&self, row_size: usize) -> bool {
-        let needed = row_size + ItemIdData::serialize_size();
+        let needed = row_size + ItemIdData::encoded_size();
         let have = self.get_free_space();
         have >= needed
     }
@@ -46,7 +48,7 @@ impl PageHeader {
 
         let row_u12 = UInt12::try_from(row_size)?;
 
-        self.pd_lower += UInt12::try_from(ItemIdData::serialize_size())?;
+        self.pd_lower += UInt12::try_from(ItemIdData::encoded_size())?;
         self.pd_upper -= row_u12;
 
         //Need to increment the offset by 1 since the pointer is now pointing a free space
@@ -55,20 +57,22 @@ impl PageHeader {
         Ok(ItemIdData::new(item_offset, row_u12))
     }
 
-    pub fn serialize(&self) -> Bytes {
-        let mut buf = BytesMut::with_capacity(size_of::<PageHeader>());
-        buf.put(self.pd_lower.serialize());
-        buf.put(self.pd_upper.serialize());
-        buf.freeze()
+    pub fn serialize(&self, buffer: &mut impl BufMut) {
+        UInt12::serialize_packed(buffer, &vec![self.pd_lower, self.pd_upper]);
     }
 
     pub fn parse(buffer: &mut impl Buf) -> Result<Self, PageHeaderError> {
-        if buffer.remaining() < size_of::<PageHeader>() {
-            return Err(PageHeaderError::InsufficentData(buffer.remaining()));
-        }
-        let pd_lower = UInt12::parse(buffer)?;
-        let pd_upper = UInt12::parse(buffer)?;
-        Ok(PageHeader { pd_lower, pd_upper })
+        let items = UInt12::parse_packed(buffer, 2)?;
+        Ok(PageHeader {
+            pd_lower: items[0],
+            pd_upper: items[1],
+        })
+    }
+}
+
+impl ConstEncodedSize for PageHeader {
+    fn encoded_size() -> usize {
+        3
     }
 }
 
@@ -88,24 +92,28 @@ pub enum PageHeaderError {
 
 #[cfg(test)]
 mod tests {
+    use crate::constants::PAGE_SIZE;
+
     use super::*;
 
     #[test]
-    fn test_roundtrip() {
+    fn test_roundtrip() -> Result<(), Box<dyn std::error::Error>> {
         let test = PageHeader::new();
-        let mut test_serial = test.serialize();
-        let test_rt = PageHeader::parse(&mut test_serial).unwrap();
+        let mut buffer = BytesMut::new();
+        test.serialize(&mut buffer);
+        let test_rt = PageHeader::parse(&mut buffer)?;
 
         let test_new = PageHeader::new();
         assert_eq!(test_rt, test_new);
+
+        Ok(())
     }
 
     #[test]
     fn test_initial_freespace() {
         let test = PageHeader::new();
 
-        let default_free_space: usize =
-            (UInt12::max().to_u16() as usize) + 1 - size_of::<PageHeader>();
+        let default_free_space: usize = PAGE_SIZE as usize - PageHeader::encoded_size();
         let found_free_space = test.get_free_space();
         assert_eq!(found_free_space, default_free_space);
     }
@@ -121,7 +129,7 @@ mod tests {
 
         let remain_free = (UInt12::max().to_u16() as usize) + 1 //Initial
             - size_of::<PageHeader>() //Header
-            - (ItemIdData::serialize_size() * 2) //Two items
+            - (ItemIdData::encoded_size() * 2) //Two items
             - 10; //Their data
         assert_eq!(test.get_free_space(), remain_free)
     }
@@ -132,7 +140,7 @@ mod tests {
 
         let needed = (UInt12::max().to_u16() as usize) + 1
             - size_of::<PageHeader>()
-            - ItemIdData::serialize_size();
+            - ItemIdData::encoded_size();
         test.add_item(needed).unwrap(); //Should be maxed out
 
         assert_eq!(test.get_item_count(), 1); //Should have an item

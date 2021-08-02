@@ -28,7 +28,7 @@ impl ItemPointer {
         let mut buffer = BytesMut::with_capacity(size_of::<ItemPointer>());
 
         buffer.put_slice(&self.page.to_le_bytes());
-        buffer.put(self.count.serialize());
+        UInt12::serialize_packed(&mut buffer, &vec![self.count]);
 
         buffer.freeze()
     }
@@ -44,8 +44,8 @@ impl ItemPointer {
         let value = buffer.get_uint_le(size_of::<usize>());
         let page = usize::try_from(value)?;
 
-        let count = UInt12::parse(buffer)?;
-        Ok(ItemPointer::new(page, count))
+        let items = UInt12::parse_packed(buffer, 1)?;
+        Ok(ItemPointer::new(page, items[0]))
     }
 }
 

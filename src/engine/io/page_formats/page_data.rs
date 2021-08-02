@@ -1,4 +1,5 @@
-use crate::engine::io::EncodedSize;
+use crate::constants::PAGE_SIZE;
+use crate::engine::io::{ConstEncodedSize, EncodedSize};
 use crate::engine::objects::SqlTuple;
 use crate::engine::transactions::TransactionId;
 
@@ -59,7 +60,7 @@ impl PageData {
     }
 
     pub fn update(&mut self, row_data: RowData, row_count: UInt12) -> Result<(), PageDataError> {
-        let row_data_len = row_data.serialize().len();
+        let row_data_len = RowData::encoded_size(&row_data.user_data);
         let row_count = row_count.to_usize();
         if row_count > self.item_ids.len() - 1 || row_count > self.rows.len() - 1 {
             return Err(PageDataError::IndexOutofBounds(
@@ -95,23 +96,22 @@ impl PageData {
     }
 
     pub fn serialize(&self) -> Bytes {
-        let mut buffer = BytesMut::with_capacity((UInt12::max().to_u16() + 1).into());
+        let mut buffer = BytesMut::with_capacity(PAGE_SIZE as usize);
 
-        buffer.put(self.page_header.serialize());
+        self.page_header.serialize(&mut buffer);
 
         //Now write items data in order
-        for item in self.item_ids.iter() {
-            buffer.put(item.serialize());
-        }
+        self.item_ids.iter().for_each(|f| f.serialize(&mut buffer));
 
         //Fill the free space
         let free_space = vec![0; self.page_header.get_free_space()];
         buffer.extend_from_slice(&free_space);
 
         //Write items in reverse order
-        for value in self.rows.iter().rev() {
-            buffer.put(value.serialize());
-        }
+        self.rows
+            .iter()
+            .rev()
+            .for_each(|r| r.serialize(&mut buffer));
 
         buffer.freeze()
     }
@@ -119,16 +119,15 @@ impl PageData {
     pub fn parse(table: Arc<Table>, page: usize, buffer: Bytes) -> Result<PageData, PageDataError> {
         //Note since we need random access, everything MUST work off slices otherwise counts will be off
 
-        let mut page_header_slice = buffer.slice(0..mem::size_of::<PageHeader>());
+        let mut page_header_slice = buffer.slice(0..PageHeader::encoded_size());
         let page_header = PageHeader::parse(&mut page_header_slice)?;
 
         let mut item_ids: Vec<ItemIdData> = Vec::with_capacity(page_header.get_item_count());
         let mut rows: Vec<RowData> = Vec::with_capacity(page_header.get_item_count());
         for i in 0..page_header.get_item_count() {
-            let iid_lower_offset =
-                mem::size_of::<PageHeader>() + (ItemIdData::serialize_size() * i);
+            let iid_lower_offset = PageHeader::encoded_size() + (ItemIdData::encoded_size() * i);
             let iid_upper_offset =
-                mem::size_of::<PageHeader>() + (ItemIdData::serialize_size() * (i + 1));
+                PageHeader::encoded_size() + (ItemIdData::encoded_size() * (i + 1));
             let mut iid_slice = buffer.slice(iid_lower_offset..iid_upper_offset);
             let iid = ItemIdData::parse(&mut iid_slice)?;
 
@@ -178,6 +177,7 @@ mod tests {
     use super::*;
     use futures::pin_mut;
     use futures::stream::StreamExt;
+    use hex_literal::hex;
 
     //Async testing help can be found here: https://blog.x5ff.xyz/blog/async-tests-tokio-rust/
     macro_rules! aw {
@@ -237,6 +237,12 @@ mod tests {
             assert!(pd.insert(r.min, &table, r.user_data).is_ok());
         }
         let serial = pd.serialize();
+
+        extern crate pretty_hex;
+        use pretty_hex::PrettyHex;
+        println!("{:?}", serial.to_vec().hex_dump());
+
+        assert_eq!(PAGE_SIZE as usize, serial.len());
         let pg_parsed = PageData::parse(table.clone(), 0, serial).unwrap();
 
         pin_mut!(pg_parsed);

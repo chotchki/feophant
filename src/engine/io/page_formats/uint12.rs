@@ -7,9 +7,8 @@ use std::mem::size_of;
 use std::ops::{Add, AddAssign, Sub, SubAssign};
 use thiserror::Error;
 
+use crate::constants::PAGE_SIZE;
 use crate::engine::io::ConstEncodedSize;
-
-const PAGE_SIZE: u16 = 4096;
 
 #[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
 pub struct UInt12(u16);
@@ -47,22 +46,63 @@ impl UInt12 {
         UInt12(PAGE_SIZE - 1)
     }
 
-    pub fn serialize(&self) -> Bytes {
-        let mut buf = BytesMut::with_capacity(mem::size_of::<u16>());
-        buf.put_u16_le(self.0);
-        buf.freeze()
-    }
-
-    pub fn parse(buffer: &mut impl Buf) -> Result<Self, UInt12Error> {
-        if buffer.remaining() < mem::size_of::<u16>() {
-            return Err(UInt12Error::InsufficentData(buffer.remaining()));
+    pub fn serialize_packed(buffer: &mut impl BufMut, args: &Vec<UInt12>) {
+        let mut left = true;
+        let mut combined: u8 = 0;
+        for a in args {
+            if left {
+                buffer.put_u8((a.to_u16() & 0x00FF) as u8);
+                combined = ((a.to_u16() & 0xFF00) >> 4) as u8;
+                left = false;
+            } else {
+                buffer.put_u8(combined | ((a.to_u16() & 0xFF00) >> 8) as u8);
+                buffer.put_u8((a.to_u16() & 0x00FF) as u8);
+                combined = 0;
+                left = true;
+            }
         }
 
-        let raw_value = buffer.get_u16_le();
+        if combined != 0 {
+            buffer.put_u8(combined);
+        }
+    }
 
-        let value = UInt12::new(raw_value)?;
+    pub fn parse_packed(
+        buffer: &mut impl Buf,
+        expected_count: usize,
+    ) -> Result<Vec<UInt12>, UInt12Error> {
+        let mut items = vec![];
+        let mut count = 0;
 
-        Ok(value)
+        let mut left: u16 = 0;
+        let mut middle: u16 = 0;
+
+        while items.len() < expected_count {
+            if !buffer.has_remaining() {
+                return Err(UInt12Error::InsufficentData(buffer.remaining()));
+            }
+
+            match count % 3 {
+                0 => {
+                    left = buffer.get_u8() as u16;
+                }
+                1 => {
+                    middle = buffer.get_u8() as u16;
+                    let item = UInt12::new(left | (middle & 0x00F0) << 4)?;
+                    items.push(item);
+                }
+                2 => {
+                    let right = buffer.get_u8() as u16;
+                    let item = UInt12::new(right | (middle & 0x000F) << 8)?;
+                    items.push(item);
+                }
+                _ => panic!("Modular math is broken."),
+            }
+
+            count += 1;
+        }
+
+        Ok(items)
     }
 }
 
@@ -181,5 +221,31 @@ mod tests {
         let test = UInt12::try_from(large);
 
         assert!(test.is_err());
+    }
+
+    fn roundtrip(input: Vec<UInt12>, serial_len: usize) -> Result<(), Box<dyn std::error::Error>> {
+        let mut buffer = BytesMut::new();
+        UInt12::serialize_packed(&mut buffer, &input);
+        let mut buffer = buffer.freeze();
+        assert_eq!(buffer.len(), serial_len);
+        let test_rt = UInt12::parse_packed(&mut buffer, input.len())?;
+        assert_eq!(test_rt, input);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_roundtrip() -> Result<(), Box<dyn std::error::Error>> {
+        //Test numbers were picked to give a distingishable binary pattern for troubleshooting
+        roundtrip(vec![UInt12::new(2730)?], 2)?;
+
+        roundtrip(vec![UInt12::new(2730)?, UInt12::new(1365)?], 3)?;
+
+        roundtrip(
+            vec![UInt12::new(2730)?, UInt12::new(1365)?, UInt12::new(2730)?],
+            5,
+        )?;
+
+        Ok(())
     }
 }

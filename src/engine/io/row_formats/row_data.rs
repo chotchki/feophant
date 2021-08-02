@@ -62,30 +62,23 @@ impl RowData {
             .ok_or_else(|| RowDataError::UnexpectedNull(name.to_string()))?)
     }
 
-    pub fn serialize(&self) -> Bytes {
-        let mut buffer = BytesMut::new();
+    pub fn serialize(&self, buffer: &mut impl BufMut) {
         buffer.put_u64_le(self.min.get_u64());
         buffer.put_u64_le(self.max.unwrap_or(TransactionId::new(0)).get_u64());
 
         buffer.put(self.item_pointer.serialize());
 
+        //If there is null we add it to the flags and write a nullmask
         let mut mask = InfoMask::empty();
-        for i in self.user_data.0.iter() {
-            match i {
-                Some(_) => {}
-                None => {
-                    mask = InfoMask::HAS_NULL;
-                }
-            }
+        if self.user_data.iter().find(|x| x.is_none()).is_some() {
+            mask = InfoMask::HAS_NULL;
+            buffer.put_u8(mask.bits());
+            buffer.put(NullMask::serialize(&self.user_data));
+        } else {
+            buffer.put_u8(mask.bits());
         }
-        buffer.put_u8(mask.bits());
 
-        let nulls = NullMask::serialize(&self.user_data, true);
-        buffer.put(nulls);
-
-        self.user_data.serialize(&mut buffer);
-
-        buffer.freeze()
+        self.user_data.serialize(buffer);
     }
 
     pub fn parse(table: Arc<Table>, row_buffer: &mut impl Buf) -> Result<RowData, RowDataError> {
@@ -253,8 +246,11 @@ mod tests {
             SqlTuple(vec![Some(BaseSqlTypes::Text("this is a test".to_string()))]),
         );
 
-        let mut test_serial = test.serialize();
-        let test_parse = RowData::parse(table, &mut test_serial)?;
+        let mut buffer = BytesMut::new();
+        test.serialize(&mut buffer);
+        let mut buffer = buffer.freeze();
+
+        let test_parse = RowData::parse(table, &mut buffer)?;
         assert_eq!(test, test_parse);
 
         Ok(())
@@ -292,8 +288,11 @@ mod tests {
             ]),
         );
 
-        let mut test_serial = test.serialize();
-        let test_parse = RowData::parse(table, &mut test_serial)?;
+        let mut buffer = BytesMut::new();
+        test.serialize(&mut buffer);
+        let mut buffer = buffer.freeze();
+
+        let test_parse = RowData::parse(table, &mut buffer)?;
         assert_eq!(test, test_parse);
 
         Ok(())
@@ -320,8 +319,11 @@ mod tests {
             SqlTuple(vec![Some(BaseSqlTypes::Uuid(uuid::Uuid::new_v4()))]),
         );
 
-        let mut test_serial = test.serialize();
-        let test_parse = RowData::parse(table, &mut test_serial)?;
+        let mut buffer = BytesMut::new();
+        test.serialize(&mut buffer);
+        let mut buffer = buffer.freeze();
+
+        let test_parse = RowData::parse(table, &mut buffer)?;
         assert_eq!(test, test_parse);
 
         Ok(())
@@ -359,8 +361,11 @@ mod tests {
             ]),
         );
 
-        let mut test_serial = test.serialize();
-        let test_parse = RowData::parse(table, &mut test_serial)?;
+        let mut buffer = BytesMut::new();
+        test.serialize(&mut buffer);
+        let mut buffer = buffer.freeze();
+
+        let test_parse = RowData::parse(table, &mut buffer)?;
         assert_eq!(test, test_parse);
 
         Ok(())
@@ -395,9 +400,12 @@ mod tests {
             SqlTuple(vec![Some(BaseSqlTypes::Uuid(uuid::Uuid::new_v4())), None]),
         );
 
-        let mut test_serial = test.serialize();
-        println!("{:?}", test_serial.len());
-        let test_parse = RowData::parse(table, &mut test_serial)?;
+        let mut buffer = BytesMut::new();
+        test.serialize(&mut buffer);
+        let mut buffer = buffer.freeze();
+
+        println!("{:?}", buffer.len());
+        let test_parse = RowData::parse(table, &mut buffer)?;
         assert_eq!(test, test_parse);
 
         Ok(())
@@ -441,8 +449,11 @@ mod tests {
             ]),
         );
 
-        let mut test_serial = test.serialize();
-        let test_parse = RowData::parse(table, &mut test_serial)?;
+        let mut buffer = BytesMut::new();
+        test.serialize(&mut buffer);
+        let mut buffer = buffer.freeze();
+
+        let test_parse = RowData::parse(table, &mut buffer)?;
         assert_eq!(test, test_parse.clone());
 
         let column_val = test_parse.get_column_not_null("header")?;
