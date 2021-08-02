@@ -16,8 +16,20 @@
       "sourceLanguages": [
         "rust"
       ],
-      "sourceMap": {
-        "/rustc/*": "${env:HOME}/.rustup/toolchains/stable-aarch64-apple-darwin/lib/rustlib/src/rust"
+      "linux": {
+        "sourceMap": {
+          //"/rustc/*": "${env:HOME}/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust"
+        }
+      },
+      "osx": {
+        "sourceMap": {
+          "/rustc/*": "${env:HOME}/.rustup/toolchains/stable-aarch64-apple-darwin/lib/rustlib/src/rust"
+        }
+      },
+      "windows": {
+        "sourceMap": {
+          "/rustc/*": "${env:USERPROFILE}/.rustup/toolchains/stable-x86_64-pc-windows-msvc/lib/rustlib/src/rust"
+        }
       },
     },
   ]
