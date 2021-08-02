@@ -201,7 +201,7 @@ impl BTreeBranch {
 
         current_size + new_size <= PAGE_SIZE as usize 
     }
-
+    
     pub fn serialize(&self) -> Result<Bytes, BTreeError> {
         let mut buffer = BytesMut::with_capacity(PAGE_SIZE as usize);
         buffer.put_u8(NodeType::Branch as u8);
