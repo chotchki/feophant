@@ -116,7 +116,7 @@ impl BTreeNode {
                     let item_id = ItemIdData::parse(buffer)?;
                     items.push(item_id);
                 }
-                
+
                 buckets.insert(bucket, items);
             }
 
@@ -190,18 +190,18 @@ impl BTreeBranch {
         let current_size = 1 + //Type
         (size_of::<BTreePage>() * 3) + //Pointers
         expected_encoded_size(self.nodes.len() + 1) + //Length assuming inserted
-        self.nodes.iter().fold(0, |acc, (tup, _)| acc + 
+        self.nodes.iter().fold(0, |acc, (tup, _)| acc +
             NullMask::encoded_size(&tup) +  //Null
             tup.encoded_size() + //Keys
             size_of::<BTreePage>()); //Pointer to rowdata
-        
+
         let new_size = NullMask::encoded_size(&new_keys) +  //Null
         new_keys.encoded_size() + //Keys
         ItemIdData::encoded_size();
 
-        current_size + new_size <= PAGE_SIZE as usize 
+        current_size + new_size <= PAGE_SIZE as usize
     }
-    
+
     pub fn serialize(&self) -> Result<Bytes, BTreeError> {
         let mut buffer = BytesMut::with_capacity(PAGE_SIZE as usize);
         buffer.put_u8(NodeType::Branch as u8);
@@ -230,25 +230,25 @@ impl BTreeBranch {
 }
 
 impl BTreeLeaf {
-    
     pub fn add(&mut self, key: SqlTuple, item_ptr: ItemIdData) -> Result<(), BTreeError> {
-        if !self.can_fit(&key){
+        if !self.can_fit(&key) {
             return Err(BTreeError::KeyTooLarge(key.encoded_size()));
         }
 
         match self.nodes.get_mut(&key) {
             Some(iids) => iids.push(item_ptr),
-            None => {self.nodes.insert(key, vec![item_ptr]);}
+            None => {
+                self.nodes.insert(key, vec![item_ptr]);
+            }
         }
 
         Ok(())
     }
 
-
     pub fn can_fit(&self, new_key: &SqlTuple) -> bool {
         let mut new_key_present = self.nodes.contains_key(&new_key);
 
-        let mut new_size = 1 + (size_of::<BTreePage>() * 3); //Type plus pointers 
+        let mut new_size = 1 + (size_of::<BTreePage>() * 3); //Type plus pointers
 
         //The bucket length may change size
         if new_key_present {
@@ -275,7 +275,7 @@ impl BTreeLeaf {
             }
         }
 
-        new_size <= PAGE_SIZE as usize 
+        new_size <= PAGE_SIZE as usize
     }
 
     pub fn serialize(&self) -> Result<Bytes, BTreeError> {
@@ -296,7 +296,6 @@ impl BTreeLeaf {
                 iid.serialize(&mut buffer);
             }
         }
-
 
         //Zero pad to page size
         if buffer.len() < PAGE_SIZE as usize {
@@ -375,14 +374,23 @@ mod tests {
     #[test]
     fn test_btree_branch_roundtrip() -> Result<(), Box<dyn std::error::Error>> {
         let mut nodes = BTreeMap::new();
-        nodes.insert(SqlTuple(vec![None, Some(BaseSqlTypes::Text("Test".to_string()))]),  BTreePage(3));
-        nodes.insert(SqlTuple(vec![Some(BaseSqlTypes::Integer(5)), Some(BaseSqlTypes::Text("Test2".to_string()))]), BTreePage(3));
+        nodes.insert(
+            SqlTuple(vec![None, Some(BaseSqlTypes::Text("Test".to_string()))]),
+            BTreePage(3),
+        );
+        nodes.insert(
+            SqlTuple(vec![
+                Some(BaseSqlTypes::Integer(5)),
+                Some(BaseSqlTypes::Text("Test2".to_string())),
+            ]),
+            BTreePage(3),
+        );
 
         let test = BTreeBranch {
             parent_node: None,
             left_node: Some(BTreePage(1)),
             right_node: Some(BTreePage(2)),
-            nodes
+            nodes,
         };
 
         let mut test_serial = test.clone().serialize()?;
@@ -399,8 +407,14 @@ mod tests {
     #[test]
     fn test_btree_leaf_roundtrip() -> Result<(), Box<dyn std::error::Error>> {
         let mut nodes = BTreeMap::new();
-        nodes.insert(SqlTuple(vec![None, Some(BaseSqlTypes::Text("Test".to_string()))]), vec![ ItemIdData::new(UInt12::new(1)?, UInt12::new(2)?)]);
-        nodes.insert(SqlTuple(vec![None, Some(BaseSqlTypes::Text("Test2".to_string()))]), vec![ ItemIdData::new(UInt12::new(3)?, UInt12::new(4)?)]);
+        nodes.insert(
+            SqlTuple(vec![None, Some(BaseSqlTypes::Text("Test".to_string()))]),
+            vec![ItemIdData::new(UInt12::new(1)?, UInt12::new(2)?)],
+        );
+        nodes.insert(
+            SqlTuple(vec![None, Some(BaseSqlTypes::Text("Test2".to_string()))]),
+            vec![ItemIdData::new(UInt12::new(3)?, UInt12::new(4)?)],
+        );
 
         let test = BTreeLeaf {
             parent_node: None,
