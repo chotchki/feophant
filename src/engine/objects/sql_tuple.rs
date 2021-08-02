@@ -7,7 +7,7 @@ use super::types::{BaseSqlTypes, SqlTypeDefinition};
 use bytes::BufMut;
 use thiserror::Error;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct SqlTuple(pub Vec<Option<BaseSqlTypes>>);
 
 impl SqlTuple {

@@ -19,7 +19,7 @@ use uuid::Uuid;
 
 use super::parse_type;
 
-#[derive(Clone, Debug, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum BaseSqlTypes {
     //TODO consider making it an Arc since I don't mutate just copy
     Array(Vec<BaseSqlTypes>),

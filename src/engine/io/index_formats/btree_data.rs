@@ -4,25 +4,29 @@
 //! byte sizeof<usize>: left_node page, 0 if none
 //! byte sizeof<usize>: right_node page, 0 if none
 //! byte +: Pointers to Nodes(Branch) OR TablePages(Leaf)
-
+//!
 //! Pointer format is:
 //! * Key (Array of values) -> Types are stored in Index Config
 //! ** Count of keys in packed 7 bit numbers. Most signifigant bit says if the next byte should be considered
 //! ** Each key then has the following
 //! *** Null Mask
 //! *** Serialized Columns
-
+//!
 //! If a branch:
 //! * sizeof<usize> bytes pointing to child page on the index
 //! If a leaf:
+//! * count of leafs in packed 7bit numbers. Most signifigant bit says if the next byte should be considered
 //! * sizeof<usize> bytes pointing to table page
 //! * 2 bytes pointing into count into page
+//!
+//! Note: Min size for all indexes is 2x PAGE_SIZE since the root page is used to mean None
 
 use crate::constants::PAGE_SIZE;
 use crate::engine::io::page_formats::ItemIdDataError;
 use crate::engine::io::row_formats::NullMaskError;
 use crate::engine::io::{
-    encode_size, expected_encoded_size, parse_size, ConstEncodedSize, SelfEncodedSize, SizeError,
+    encode_size, expected_encoded_size, parse_size, ConstEncodedSize, EncodedSize, SelfEncodedSize,
+    SizeError,
 };
 use crate::engine::objects::types::{BaseSqlTypes, BaseSqlTypesError};
 use crate::engine::{
@@ -30,6 +34,7 @@ use crate::engine::{
     objects::{Index, SqlTuple},
 };
 use bytes::{Buf, BufMut, Bytes, BytesMut};
+use std::collections::{BTreeMap, BinaryHeap};
 use std::mem::size_of;
 use std::{convert::TryFrom, num::TryFromIntError};
 use thiserror::Error;
@@ -45,7 +50,7 @@ pub struct BTreeBranch {
     pub parent_node: Option<BTreePage>,
     pub left_node: Option<BTreePage>,
     pub right_node: Option<BTreePage>,
-    pub nodes: Vec<(SqlTuple, BTreePage)>,
+    pub nodes: BTreeMap<SqlTuple, BTreePage>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -53,16 +58,17 @@ pub struct BTreeLeaf {
     pub parent_node: Option<BTreePage>,
     pub left_node: Option<BTreePage>,
     pub right_node: Option<BTreePage>,
-    pub nodes: Vec<(SqlTuple, ItemIdData)>,
+    pub nodes: BTreeMap<SqlTuple, Vec<ItemIdData>>,
 }
 
+//TODO delete
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum NodeType {
-    Node,
-    Leaf,
+    Branch = 1,
+    Leaf = 0,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
 pub struct BTreePage(pub usize);
 
 impl BTreeNode {
@@ -97,15 +103,21 @@ impl BTreeNode {
         let left_node = Self::parse_page(buffer)?;
         let right_node = Self::parse_page(buffer)?;
 
-        if node_type == 0 {
+        if node_type == NodeType::Leaf as u8 {
             let bucket_count = parse_size(buffer)?;
-            let mut buckets = Vec::with_capacity(bucket_count);
+            let mut buckets = BTreeMap::new();
 
-            for b in 0..bucket_count {
+            for _ in 0..bucket_count {
                 let bucket = Self::parse_sql_tuple(buffer, index_def)?;
 
-                let item_id = ItemIdData::parse(buffer)?;
-                buckets.push((bucket, item_id));
+                let item_count = parse_size(buffer)?;
+                let mut items = vec![];
+                for _ in 0..item_count {
+                    let item_id = ItemIdData::parse(buffer)?;
+                    items.push(item_id);
+                }
+                
+                buckets.insert(bucket, items);
             }
 
             return Ok(BTreeNode::Leaf(BTreeLeaf {
@@ -116,7 +128,7 @@ impl BTreeNode {
             }));
         } else {
             let bucket_count = parse_size(buffer)?;
-            let mut buckets = Vec::with_capacity(bucket_count);
+            let mut buckets = BTreeMap::new();
 
             for b in 0..bucket_count {
                 let bucket = Self::parse_sql_tuple(buffer, index_def)?;
@@ -130,7 +142,7 @@ impl BTreeNode {
                 let pointer = buffer.get_uint_le(size_of::<usize>());
                 let pointer = BTreePage(usize::try_from(pointer)?);
 
-                buckets.push((bucket, pointer));
+                buckets.insert(bucket, pointer);
             }
 
             return Ok(BTreeNode::Branch(BTreeBranch {
@@ -143,13 +155,13 @@ impl BTreeNode {
     }
 
     fn parse_page(buffer: &mut impl Buf) -> Result<Option<BTreePage>, BTreeError> {
-        if buffer.remaining() < size_of::<usize>() {
+        if buffer.remaining() < size_of::<BTreePage>() {
             return Err(BTreeError::MissingPointerData(
-                size_of::<usize>(),
+                size_of::<BTreePage>(),
                 buffer.remaining(),
             ));
         }
-        let value = buffer.get_uint_le(size_of::<usize>());
+        let value = buffer.get_uint_le(size_of::<BTreePage>());
         let mut node = None;
         if value != 0 {
             node = Some(BTreePage(usize::try_from(value)?));
@@ -174,12 +186,25 @@ impl BTreeNode {
 }
 
 impl BTreeBranch {
-    //Am worried that this will be VERY expensive
-    //pub fn can_fit(key_size: SqlTuple) -> bool {}
+    pub fn can_fit(&self, new_keys: SqlTuple) -> bool {
+        let current_size = 1 + //Type
+        (size_of::<BTreePage>() * 3) + //Pointers
+        expected_encoded_size(self.nodes.len() + 1) + //Length assuming inserted
+        self.nodes.iter().fold(0, |acc, (tup, _)| acc + 
+            NullMask::encoded_size(&tup) +  //Null
+            tup.encoded_size() + //Keys
+            size_of::<BTreePage>()); //Pointer to rowdata
+        
+        let new_size = NullMask::encoded_size(&new_keys) +  //Null
+        new_keys.encoded_size() + //Keys
+        ItemIdData::encoded_size();
+
+        current_size + new_size <= PAGE_SIZE as usize 
+    }
 
     pub fn serialize(&self) -> Result<Bytes, BTreeError> {
         let mut buffer = BytesMut::with_capacity(PAGE_SIZE as usize);
-        buffer.put_u8(1);
+        buffer.put_u8(NodeType::Branch as u8);
 
         BTreeNode::write_node(&mut buffer, self.parent_node)?;
         BTreeNode::write_node(&mut buffer, self.left_node)?;
@@ -191,7 +216,7 @@ impl BTreeBranch {
             BTreeNode::write_sql_tuple(&mut buffer, key);
 
             let pointer_u64 = u64::try_from(pointer.0)?;
-            buffer.put_uint_le(pointer_u64, size_of::<usize>());
+            buffer.put_uint_le(pointer_u64, size_of::<BTreePage>());
         }
 
         //Zero pad to page size
@@ -205,17 +230,57 @@ impl BTreeBranch {
 }
 
 impl BTreeLeaf {
-    pub fn can_fit(&self, key_size: SqlTuple) -> bool {
-        let current_size = 1 + //Type
-        (size_of::<usize>() * 3) + //Pointers
-        expected_encoded_size(self.nodes.len()) +
-        self.nodes.iter().fold(0, |acc, (tup, iid)| acc + tup.encoded_size() + ItemIdData::encoded_size());
-        false
+    
+    pub fn add(&mut self, key: SqlTuple, item_ptr: ItemIdData) -> Result<(), BTreeError> {
+        if !self.can_fit(&key){
+            return Err(BTreeError::KeyTooLarge(key.encoded_size()));
+        }
+
+        match self.nodes.get_mut(&key) {
+            Some(iids) => iids.push(item_ptr),
+            None => {self.nodes.insert(key, vec![item_ptr]);}
+        }
+
+        Ok(())
+    }
+
+
+    pub fn can_fit(&self, new_key: &SqlTuple) -> bool {
+        let mut new_key_present = self.nodes.contains_key(&new_key);
+
+        let mut new_size = 1 + (size_of::<BTreePage>() * 3); //Type plus pointers 
+
+        //The bucket length may change size
+        if new_key_present {
+            new_size += expected_encoded_size(self.nodes.len());
+        } else {
+            new_size += expected_encoded_size(self.nodes.len() + 1);
+
+            new_size += NullMask::encoded_size(&new_key);
+            new_size += new_key.encoded_size();
+            new_size += expected_encoded_size(1); //New Item Id
+            new_size += ItemIdData::encoded_size()
+        }
+
+        for (tup, iids) in self.nodes.iter() {
+            new_size += NullMask::encoded_size(&tup);
+            new_size += tup.encoded_size();
+
+            if new_key_present && tup == new_key {
+                new_size += expected_encoded_size(iids.len() + 1);
+                new_size += ItemIdData::encoded_size() * (iids.len() + 1);
+            } else {
+                new_size += expected_encoded_size(iids.len());
+                new_size += ItemIdData::encoded_size() * iids.len();
+            }
+        }
+
+        new_size <= PAGE_SIZE as usize 
     }
 
     pub fn serialize(&self) -> Result<Bytes, BTreeError> {
         let mut buffer = BytesMut::with_capacity(PAGE_SIZE as usize);
-        buffer.put_u8(0);
+        buffer.put_u8(NodeType::Leaf as u8);
 
         BTreeNode::write_node(&mut buffer, self.parent_node)?;
         BTreeNode::write_node(&mut buffer, self.left_node)?;
@@ -223,11 +288,15 @@ impl BTreeLeaf {
 
         encode_size(&mut buffer, self.nodes.len());
 
-        for (key, item_id) in self.nodes.iter() {
+        for (key, iids) in self.nodes.iter() {
             BTreeNode::write_sql_tuple(&mut buffer, key);
 
-            item_id.serialize(&mut buffer);
+            encode_size(&mut buffer, iids.len());
+            for iid in iids {
+                iid.serialize(&mut buffer);
+            }
         }
+
 
         //Zero pad to page size
         if buffer.len() < PAGE_SIZE as usize {
@@ -247,6 +316,8 @@ pub enum BTreeError {
     BufferTooShort(),
     #[error(transparent)]
     ItemIdDataError(#[from] ItemIdDataError),
+    #[error("Key too large size: {0}")]
+    KeyTooLarge(usize),
     #[error("Missing Data for Node Type need {0}, have {1}")]
     MissingNodeTypeData(usize, usize),
     #[error("Missing Data for Pointer need {0}, have {1}")]
@@ -303,23 +374,15 @@ mod tests {
 
     #[test]
     fn test_btree_branch_roundtrip() -> Result<(), Box<dyn std::error::Error>> {
+        let mut nodes = BTreeMap::new();
+        nodes.insert(SqlTuple(vec![None, Some(BaseSqlTypes::Text("Test".to_string()))]),  BTreePage(3));
+        nodes.insert(SqlTuple(vec![Some(BaseSqlTypes::Integer(5)), Some(BaseSqlTypes::Text("Test2".to_string()))]), BTreePage(3));
+
         let test = BTreeBranch {
             parent_node: None,
             left_node: Some(BTreePage(1)),
             right_node: Some(BTreePage(2)),
-            nodes: vec![
-                (
-                    SqlTuple(vec![None, Some(BaseSqlTypes::Text("Test".to_string()))]),
-                    BTreePage(3),
-                ),
-                (
-                    SqlTuple(vec![
-                        Some(BaseSqlTypes::Integer(5)),
-                        Some(BaseSqlTypes::Text("Test2".to_string())),
-                    ]),
-                    BTreePage(3),
-                ),
-            ],
+            nodes
         };
 
         let mut test_serial = test.clone().serialize()?;
@@ -335,23 +398,15 @@ mod tests {
 
     #[test]
     fn test_btree_leaf_roundtrip() -> Result<(), Box<dyn std::error::Error>> {
+        let mut nodes = BTreeMap::new();
+        nodes.insert(SqlTuple(vec![None, Some(BaseSqlTypes::Text("Test".to_string()))]), vec![ ItemIdData::new(UInt12::new(1)?, UInt12::new(2)?)]);
+        nodes.insert(SqlTuple(vec![None, Some(BaseSqlTypes::Text("Test2".to_string()))]), vec![ ItemIdData::new(UInt12::new(3)?, UInt12::new(4)?)]);
+
         let test = BTreeLeaf {
             parent_node: None,
             left_node: Some(BTreePage(1)),
             right_node: Some(BTreePage(2)),
-            nodes: vec![
-                (
-                    SqlTuple(vec![None, Some(BaseSqlTypes::Text("Test".to_string()))]),
-                    ItemIdData::new(UInt12::new(1)?, UInt12::new(2)?),
-                ),
-                (
-                    SqlTuple(vec![
-                        Some(BaseSqlTypes::Integer(5)),
-                        Some(BaseSqlTypes::Text("Test2".to_string())),
-                    ]),
-                    ItemIdData::new(UInt12::new(3)?, UInt12::new(4)?),
-                ),
-            ],
+            nodes,
         };
 
         let mut test_serial = test.clone().serialize()?;
