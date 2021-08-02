@@ -106,13 +106,3 @@ pub enum ConstraintManagerError {
     #[error("Column null when ask not to be {0}")]
     UnexpectedNull(String),
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_example() -> Result<(), Box<dyn std::error::Error>> {
-        Ok(())
-    }
-}

@@ -12,7 +12,7 @@ use create::parse_create_table;
 use insert::parse_insert;
 use nom::branch::alt;
 use nom::bytes::complete::tag;
-use nom::combinator::{all_consuming, complete, opt};
+use nom::combinator::{complete, opt};
 use nom::error::{convert_error, ContextError, ParseError, VerboseError};
 use nom::sequence::tuple;
 use nom::Finish;

@@ -1,5 +1,5 @@
 //! Set of utility functions I've written a few times, but not enough (yet) to break into a submodule.
-use bytes::{Buf, BufMut, BytesMut};
+use bytes::{Buf, BufMut};
 use thiserror::Error;
 
 /// Will provide the length in bytes the supplied usize will encode to without encoding
@@ -56,6 +56,8 @@ pub enum SizeError {
 
 #[cfg(test)]
 mod tests {
+    use bytes::BytesMut;
+
     use super::*;
 
     #[test]
