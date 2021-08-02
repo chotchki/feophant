@@ -31,5 +31,16 @@
 			"}"
 		],
 		"description": "Create a sample unit test block"
+	},
+	"Error Type Block": {
+		"scope": "rust",
+		"prefix": "enum error",
+		"body": [
+			"#[derive(Debug, Error)]",
+			"pub enum SomeError {",
+			"\t#[error(transparent)]",
+			"\tParentError(#[from] ParentError),",
+			"}"
+		]
 	}
 }
