@@ -1,6 +1,14 @@
-mod btree_data;
-pub use btree_data::BTreeBranch;
-pub use btree_data::BTreeError;
-pub use btree_data::BTreeLeaf;
-pub use btree_data::BTreeNode;
-pub use btree_data::BTreePage;
+mod btree_branch;
+pub use btree_branch::BTreeBranch;
+pub use btree_branch::BTreeBranchError;
+
+mod btree_leaf;
+pub use btree_leaf::BTreeLeaf;
+pub use btree_leaf::BTreeLeafError;
+
+mod btree_node;
+pub use btree_node::BTreeNode;
+pub use btree_node::BTreeNodeError;
+
+mod btree_page;
+pub use btree_page::BTreePage;

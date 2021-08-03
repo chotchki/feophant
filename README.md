@@ -62,6 +62,10 @@ I'll have to switch IOManager to use uuid instead of Table as a key. Upside, I'm
 
 Next up implementing the index manager to add entries to the index.
 
+I'm having a hard time figuring this out, I might work to do the operations on the tree before I keep messing with the serialization protocols. I'm just worries they are directly linked.
+
+Got further into the index manager. Unfortunately I need a lock manager to let it even pass the smell test. Time to go on a wild goose chase again! (This project is great for someone with ADHD to have fun on!)
+
 **TODO**
 
 
