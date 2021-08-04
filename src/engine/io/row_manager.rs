@@ -1,6 +1,6 @@
 use super::super::objects::Table;
 use super::super::transactions::TransactionId;
-use super::page_formats::{PageData, PageDataError, UInt12};
+use super::page_formats::{PageData, PageDataError, PageOffset, UInt12};
 use super::row_formats::{ItemPointer, RowData, RowDataError};
 use super::{EncodedSize, IOManager, IOManagerError};
 use crate::engine::objects::SqlTuple;
@@ -54,7 +54,7 @@ impl RowManager {
         page.update(row, row_pointer.count)?;
 
         self.io_manager
-            .update_page(&table.id, page.serialize(), row_pointer.page)
+            .update_page(&table.id, page.serialize(), &row_pointer.page)
             .await?;
         Ok(())
     }
@@ -98,7 +98,7 @@ impl RowManager {
         old_page.update(old_row, row_pointer.count)?;
 
         self.io_manager
-            .update_page(&table.id, old_page.serialize(), row_pointer.page)
+            .update_page(&table.id, old_page.serialize(), &row_pointer.page)
             .await?;
 
         return Ok(new_row_pointer);
@@ -111,7 +111,7 @@ impl RowManager {
     ) -> Result<(PageData, RowData), RowManagerError> {
         let page_bytes = self
             .io_manager
-            .get_page(&table.id, row_pointer.page)
+            .get_page(&table.id, &row_pointer.page)
             .await
             .ok_or_else(|| RowManagerError::NonExistentPage(row_pointer.page))?;
         let page = PageData::parse(table, row_pointer.page, page_bytes)?;
@@ -130,13 +130,13 @@ impl RowManager {
         table: Arc<Table>,
     ) -> impl Stream<Item = Result<RowData, RowManagerError>> {
         try_stream! {
-            let mut page_num = 0;
+            let mut page_num = PageOffset(0);
             for await page_bytes in self.io_manager.get_stream(table.id) {
                 let page = PageData::parse(table.clone(), page_num, page_bytes)?;
                 for await row in page.get_stream() {
                     yield row;
                 }
-                page_num += 1;
+                page_num += PageOffset(1);
             }
         }
     }
@@ -147,9 +147,9 @@ impl RowManager {
         table: Arc<Table>,
         user_data: SqlTuple,
     ) -> Result<ItemPointer, RowManagerError> {
-        let mut page_num = 0;
+        let mut page_num = PageOffset(0);
         loop {
-            let page_bytes = io_manager.get_page(&table.id, page_num).await;
+            let page_bytes = io_manager.get_page(&table.id, &page_num).await;
             match page_bytes {
                 Some(p) => {
                     let mut page = PageData::parse(table.clone(), page_num, p)?;
@@ -157,11 +157,11 @@ impl RowManager {
                         let new_row_pointer = page.insert(current_tran_id, &table, user_data)?;
                         let new_page_bytes = page.serialize();
                         io_manager
-                            .update_page(&table.id, new_page_bytes, page_num)
+                            .update_page(&table.id, new_page_bytes, &page_num)
                             .await?;
                         return Ok(new_row_pointer);
                     } else {
-                        page_num += 1;
+                        page_num += PageOffset(1);
                         continue;
                     }
                 }
@@ -185,9 +185,9 @@ pub enum RowManagerError {
     #[error(transparent)]
     RowDataError(#[from] RowDataError),
     #[error("Page {0} does not exist")]
-    NonExistentPage(usize),
+    NonExistentPage(PageOffset),
     #[error("Row {0} in Page {1} does not exist")]
-    NonExistentRow(UInt12, usize),
+    NonExistentRow(UInt12, PageOffset),
     #[error("Row {0} already deleted in {1}")]
     AlreadyDeleted(UInt12, TransactionId),
     #[error("Row {0} is not visible")]

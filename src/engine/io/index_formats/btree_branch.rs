@@ -1,13 +1,13 @@
 use super::{
     btree_node::{BTreeNodeError, NodeType},
-    BTreeNode, BTreePage,
+    BTreeNode,
 };
 use crate::{
     constants::PAGE_SIZE,
     engine::{
         io::{
             encode_size, expected_encoded_size,
-            page_formats::{ItemIdData, ItemIdDataError},
+            page_formats::{ItemIdData, ItemIdDataError, PageOffset},
             row_formats::{NullMask, NullMaskError},
             ConstEncodedSize, EncodedSize, SelfEncodedSize, SizeError,
         },
@@ -20,11 +20,11 @@ use thiserror::Error;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct BTreeBranch {
-    pub parent_node: Option<BTreePage>,
-    pub left_node: Option<BTreePage>,
-    pub right_node: Option<BTreePage>,
+    pub parent_node: Option<PageOffset>,
+    pub left_node: Option<PageOffset>,
+    pub right_node: Option<PageOffset>,
     pub keys: Vec<SqlTuple>,
-    pub pointers: Vec<BTreePage>,
+    pub pointers: Vec<PageOffset>,
 }
 
 impl BTreeBranch {
@@ -32,7 +32,7 @@ impl BTreeBranch {
 
     pub fn can_fit(&self, new_keys: SqlTuple) -> bool {
         let current_size = 1 + //Type
-        (BTreePage::encoded_size() * 3) + //Pointers
+        (PageOffset::encoded_size() * 3) + //Pointers
         expected_encoded_size(self.keys.len() + 1) + //Length assuming inserted
         self.keys.iter().fold(0, |acc, tup| acc +
             NullMask::encoded_size(&tup) +
@@ -60,7 +60,7 @@ impl BTreeBranch {
 
         for pointer in self.pointers.iter() {
             let pointer_u64 = u64::try_from(pointer.0)?;
-            buffer.put_uint_le(pointer_u64, BTreePage::encoded_size());
+            buffer.put_uint_le(pointer_u64, PageOffset::encoded_size());
         }
 
         //Zero pad to page size
@@ -148,12 +148,12 @@ mod tests {
             ]),
         ];
 
-        let pointers = vec![BTreePage(3), BTreePage(3), BTreePage(3)];
+        let pointers = vec![PageOffset(3), PageOffset(3), PageOffset(3)];
 
         let test = BTreeBranch {
             parent_node: None,
-            left_node: Some(BTreePage(1)),
-            right_node: Some(BTreePage(2)),
+            left_node: Some(PageOffset(1)),
+            right_node: Some(PageOffset(2)),
             keys,
             pointers,
         };

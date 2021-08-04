@@ -20,7 +20,7 @@
 //! Note: Min size for all indexes is 2x PAGE_SIZE since the root page is used to mean None. This will change
 //! since the root page will have a pointer so we can lock and split the root node.
 
-use crate::engine::io::page_formats::ItemIdDataError;
+use crate::engine::io::page_formats::{ItemIdDataError, PageOffset};
 use crate::engine::io::row_formats::NullMaskError;
 use crate::engine::io::{parse_size, ConstEncodedSize, SizeError};
 use crate::engine::objects::types::{BaseSqlTypes, BaseSqlTypesError};
@@ -34,7 +34,7 @@ use std::mem::size_of;
 use std::{convert::TryFrom, num::TryFromIntError};
 use thiserror::Error;
 
-use super::{BTreeBranch, BTreeLeaf, BTreePage};
+use super::{BTreeBranch, BTreeLeaf};
 
 #[derive(Clone, Debug)]
 pub enum BTreeNode {
@@ -51,7 +51,7 @@ pub enum NodeType {
 impl BTreeNode {
     pub fn write_node(
         buffer: &mut impl BufMut,
-        node: Option<BTreePage>,
+        node: Option<PageOffset>,
     ) -> Result<(), BTreeNodeError> {
         match node {
             Some(pn) => {
@@ -119,14 +119,14 @@ impl BTreeNode {
 
             let mut pointers = Vec::with_capacity(pointers_count);
             for _ in 0..pointers_count {
-                if buffer.remaining() < BTreePage::encoded_size() {
+                if buffer.remaining() < PageOffset::encoded_size() {
                     return Err(BTreeNodeError::MissingPointerData(
                         size_of::<usize>(),
                         buffer.remaining(),
                     ));
                 }
-                let pointer = buffer.get_uint_le(BTreePage::encoded_size());
-                let pointer = BTreePage(usize::try_from(pointer)?);
+                let pointer = buffer.get_uint_le(PageOffset::encoded_size());
+                let pointer = PageOffset(usize::try_from(pointer)?);
 
                 pointers.push(pointer);
             }
@@ -141,17 +141,17 @@ impl BTreeNode {
         }
     }
 
-    fn parse_page(buffer: &mut impl Buf) -> Result<Option<BTreePage>, BTreeNodeError> {
-        if buffer.remaining() < size_of::<BTreePage>() {
+    fn parse_page(buffer: &mut impl Buf) -> Result<Option<PageOffset>, BTreeNodeError> {
+        if buffer.remaining() < size_of::<PageOffset>() {
             return Err(BTreeNodeError::MissingPointerData(
-                size_of::<BTreePage>(),
+                size_of::<PageOffset>(),
                 buffer.remaining(),
             ));
         }
-        let value = buffer.get_uint_le(size_of::<BTreePage>());
+        let value = buffer.get_uint_le(size_of::<PageOffset>());
         let mut node = None;
         if value != 0 {
-            node = Some(BTreePage(usize::try_from(value)?));
+            node = Some(PageOffset(usize::try_from(value)?));
         }
         Ok(node)
     }

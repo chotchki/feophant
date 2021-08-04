@@ -5,7 +5,9 @@ use crate::engine::transactions::TransactionId;
 
 use super::super::super::objects::Table;
 use super::super::row_formats::{ItemPointer, RowData, RowDataError};
-use super::{ItemIdData, ItemIdDataError, PageHeader, PageHeaderError, UInt12, UInt12Error};
+use super::{
+    ItemIdData, ItemIdDataError, PageHeader, PageHeaderError, PageOffset, UInt12, UInt12Error,
+};
 use async_stream::stream;
 use bytes::{Bytes, BytesMut};
 use futures::stream::Stream;
@@ -14,7 +16,7 @@ use std::sync::Arc;
 use thiserror::Error;
 
 pub struct PageData {
-    page: usize,
+    page: PageOffset,
     page_header: PageHeader,
     item_ids: Vec<ItemIdData>,
     //TODO debating if I should defer parsing until later
@@ -22,7 +24,7 @@ pub struct PageData {
 }
 
 impl PageData {
-    pub fn new(page: usize) -> PageData {
+    pub fn new(page: PageOffset) -> PageData {
         PageData {
             page,
             page_header: PageHeader::new(),
@@ -115,7 +117,11 @@ impl PageData {
         buffer.freeze()
     }
 
-    pub fn parse(table: Arc<Table>, page: usize, buffer: Bytes) -> Result<PageData, PageDataError> {
+    pub fn parse(
+        table: Arc<Table>,
+        page: PageOffset,
+        buffer: Bytes,
+    ) -> Result<PageData, PageDataError> {
         //Note since we need random access, everything MUST work off slices otherwise counts will be off
 
         let mut page_header_slice = buffer.slice(0..PageHeader::encoded_size());
@@ -185,7 +191,7 @@ mod tests {
     }
 
     fn get_item_pointer(row_num: usize) -> ItemPointer {
-        ItemPointer::new(0, UInt12::new(row_num as u16).unwrap())
+        ItemPointer::new(PageOffset(0), UInt12::new(row_num as u16).unwrap())
     }
 
     fn get_table() -> Arc<Table> {
@@ -230,14 +236,14 @@ mod tests {
             ]),
         ));
 
-        let mut pd = PageData::new(0);
+        let mut pd = PageData::new(PageOffset(0));
         for r in rows.clone() {
             assert!(pd.insert(r.min, &table, r.user_data).is_ok());
         }
         let serial = pd.serialize();
 
         assert_eq!(PAGE_SIZE as usize, serial.len());
-        let pg_parsed = PageData::parse(table.clone(), 0, serial).unwrap();
+        let pg_parsed = PageData::parse(table.clone(), PageOffset(0), serial).unwrap();
 
         pin_mut!(pg_parsed);
         let result_rows: Vec<RowData> = aw!(pg_parsed.get_stream().collect());
@@ -270,12 +276,12 @@ mod tests {
         ]),
         ));
 
-        let mut pd = PageData::new(0);
+        let mut pd = PageData::new(PageOffset(0));
         for r in rows.clone() {
             assert!(pd.insert(r.min, &table, r.user_data).is_ok());
         }
         let serial = pd.serialize();
-        let pg_parsed = PageData::parse(table.clone(), 0, serial).unwrap();
+        let pg_parsed = PageData::parse(table.clone(), PageOffset(0), serial).unwrap();
 
         pin_mut!(pg_parsed);
         let result_rows: Vec<RowData> = aw!(pg_parsed.get_stream().collect());
@@ -297,7 +303,7 @@ mod tests {
             ]),
         );
 
-        let mut pd = PageData::new(0);
+        let mut pd = PageData::new(PageOffset(0));
         let rip = pd.insert(row.min, &table, row.user_data.clone());
         assert!(rip.is_ok());
 

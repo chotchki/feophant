@@ -3,6 +3,7 @@
 //!
 //! We will be treating this a little different since our size will be based on usize
 
+use crate::engine::io::page_formats::PageOffset;
 use crate::engine::io::ConstEncodedSize;
 
 use super::super::page_formats::{UInt12, UInt12Error};
@@ -15,19 +16,19 @@ use thiserror::Error;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ItemPointer {
-    pub page: usize,
+    pub page: PageOffset,
     pub count: UInt12,
 }
 
 impl ItemPointer {
-    pub fn new(page: usize, count: UInt12) -> ItemPointer {
+    pub fn new(page: PageOffset, count: UInt12) -> ItemPointer {
         ItemPointer { page, count }
     }
 
     pub fn serialize(&self) -> Bytes {
         let mut buffer = BytesMut::with_capacity(size_of::<ItemPointer>());
 
-        buffer.put_slice(&self.page.to_le_bytes());
+        buffer.put_slice(&self.page.0.to_le_bytes());
         UInt12::serialize_packed(&mut buffer, &vec![self.count]);
 
         buffer.freeze()
@@ -45,7 +46,7 @@ impl ItemPointer {
         let page = usize::try_from(value)?;
 
         let items = UInt12::parse_packed(buffer, 1)?;
-        Ok(ItemPointer::new(page, items[0]))
+        Ok(ItemPointer::new(PageOffset(page), items[0]))
     }
 }
 
@@ -81,7 +82,7 @@ mod tests {
 
     #[test]
     fn test_item_pointer_roundtrip() -> Result<(), Box<dyn std::error::Error>> {
-        let test = ItemPointer::new(1, UInt12::new(1).unwrap());
+        let test = ItemPointer::new(PageOffset(1), UInt12::new(1).unwrap());
 
         let mut test_serial = test.clone().serialize();
         let test_reparse = ItemPointer::parse(&mut test_serial)?;

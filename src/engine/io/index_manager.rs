@@ -7,7 +7,8 @@
 use std::collections::BTreeMap;
 use std::ops::Range;
 
-use super::index_formats::{BTreeLeafError, BTreeNode, BTreeNodeError, BTreePage};
+use super::index_formats::{BTreeLeafError, BTreeNode, BTreeNodeError};
+use super::page_formats::PageOffset;
 use super::IOManager;
 use super::{page_formats::ItemIdData, IOManagerError};
 use crate::engine::io::SelfEncodedSize;
@@ -89,7 +90,7 @@ impl IndexManager {
                     if l.can_fit(&new_key) {
                         return Ok(self
                             .io_manager
-                            .update_page(&index_def.id, l.serialize()?, current_node.1 .0)
+                            .update_page(&index_def.id, l.serialize()?, &current_node.1)
                             .await?);
                     }
 
@@ -144,9 +145,9 @@ impl IndexManager {
     async fn get_node(
         &self,
         index_def: &Index,
-        offset: &BTreePage,
+        offset: &PageOffset,
     ) -> Result<BTreeNode, IndexManagerError> {
-        match self.io_manager.get_page(&index_def.id, offset.0).await {
+        match self.io_manager.get_page(&index_def.id, offset).await {
             Some(mut page) => Ok(BTreeNode::parse(&mut page, &index_def)?),
             None => Err(IndexManagerError::NoSuchNode(*offset)),
         }
@@ -158,9 +159,9 @@ impl IndexManager {
     async fn get_root_node(
         &self,
         index_def: &Index,
-    ) -> Result<(BTreeNode, BTreePage), IndexManagerError> {
-        match self.get_node(index_def, &BTreePage(1)).await {
-            Ok(o) => Ok((o, BTreePage(1))),
+    ) -> Result<(BTreeNode, PageOffset), IndexManagerError> {
+        match self.get_node(index_def, &PageOffset(1)).await {
+            Ok(o) => Ok((o, PageOffset(1))),
             Err(IndexManagerError::NoSuchNode(_)) => {
                 //Page zero with no data in it
                 self.make_root_page(&index_def.id).await?;
@@ -176,11 +177,11 @@ impl IndexManager {
                     .io_manager
                     .add_page(&index_def.id, root_node.serialize()?)
                     .await?;
-                if page_num != 1 {
+                if page_num != PageOffset(1) {
                     return Err(IndexManagerError::ConcurrentCreationError());
                 }
 
-                Ok((BTreeNode::Leaf(root_node), BTreePage(page_num)))
+                Ok((BTreeNode::Leaf(root_node), page_num))
             }
             Err(e) => Err(e),
         }
@@ -195,7 +196,7 @@ impl IndexManager {
             .add_page(index, root_page_buffer.freeze())
             .await?;
 
-        if page_num != 0 {
+        if page_num != PageOffset(0) {
             return Err(IndexManagerError::ConcurrentCreationError());
         }
 
@@ -218,7 +219,7 @@ pub enum IndexManagerError {
     #[error("Key too large size: {0}, maybe the developer should fix this.")]
     KeyTooLarge(usize),
     #[error("Node does not exists {0}")]
-    NoSuchNode(BTreePage),
+    NoSuchNode(PageOffset),
     #[error("Unable to search, the stack is empty")]
     StackEmpty(),
     #[error("Unable to split a node of size {0}")]

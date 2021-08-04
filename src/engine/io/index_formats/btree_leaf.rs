@@ -1,13 +1,13 @@
 use super::{
     btree_node::{BTreeNodeError, NodeType},
-    BTreeNode, BTreePage,
+    BTreeNode,
 };
 use crate::{
     constants::PAGE_SIZE,
     engine::{
         io::{
             encode_size, expected_encoded_size,
-            page_formats::{ItemIdData, ItemIdDataError},
+            page_formats::{ItemIdData, ItemIdDataError, PageOffset},
             row_formats::{NullMask, NullMaskError},
             ConstEncodedSize, EncodedSize, SelfEncodedSize, SizeError,
         },
@@ -20,9 +20,9 @@ use thiserror::Error;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct BTreeLeaf {
-    pub parent_node: Option<BTreePage>,
-    pub left_node: Option<BTreePage>,
-    pub right_node: Option<BTreePage>,
+    pub parent_node: Option<PageOffset>,
+    pub left_node: Option<PageOffset>,
+    pub right_node: Option<PageOffset>,
     pub nodes: BTreeMap<SqlTuple, Vec<ItemIdData>>,
 }
 
@@ -45,7 +45,7 @@ impl BTreeLeaf {
     pub fn can_fit(&self, new_key: &SqlTuple) -> bool {
         let mut new_key_present = self.nodes.contains_key(&new_key);
 
-        let mut new_size = 1 + (BTreePage::encoded_size() * 3); //Type plus pointers
+        let mut new_size = 1 + (PageOffset::encoded_size() * 3); //Type plus pointers
 
         //The bucket length may change size
         if new_key_present {
@@ -186,8 +186,8 @@ mod tests {
 
         let test = BTreeLeaf {
             parent_node: None,
-            left_node: Some(BTreePage(1)),
-            right_node: Some(BTreePage(2)),
+            left_node: Some(PageOffset(1)),
+            right_node: Some(PageOffset(2)),
             nodes,
         };
 

@@ -9,6 +9,3 @@ pub use btree_leaf::BTreeLeafError;
 mod btree_node;
 pub use btree_node::BTreeNode;
 pub use btree_node::BTreeNodeError;
-
-mod btree_page;
-pub use btree_page::BTreePage;

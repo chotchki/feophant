@@ -217,6 +217,7 @@ mod tests {
     use bytes::BytesMut;
 
     use crate::constants::Nullable;
+    use crate::engine::io::page_formats::PageOffset;
     use crate::engine::objects::types::BaseSqlTypesMapper;
 
     use super::super::super::super::objects::Attribute;
@@ -224,7 +225,7 @@ mod tests {
     use super::*;
 
     fn get_item_pointer() -> ItemPointer {
-        ItemPointer::new(0, UInt12::new(0).unwrap())
+        ItemPointer::new(PageOffset(0), UInt12::new(0).unwrap())
     }
 
     #[test]
