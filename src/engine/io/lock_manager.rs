@@ -17,6 +17,9 @@ use uuid::Uuid;
 use super::page_formats::PageOffset;
 
 /// Every 10 write locks held will include a scan for dead weak refs and their removal.
+/// TODO: Figure out if this makes sense or even if it should decend into the children.
+///     Now that I think about this, I don't think a table's locks will EVER get removed.
+///     Need to figure out decent.
 const CLEANUP_RATE: i8 = 10;
 
 #[derive(Debug, Clone)]
@@ -181,5 +184,43 @@ impl LockManagerEntry {
             self.inner_cleanup_count
                 .fetch_sub(CLEANUP_RATE, Ordering::Relaxed);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    macro_rules! aw {
+        ($e:expr) => {
+            tokio_test::block_on($e)
+        };
+    }
+
+    #[test]
+    fn test_lock_manager_entries() -> Result<(), Box<dyn std::error::Error>> {
+        let le = LockManagerEntry::new();
+
+        //Get a lock twice for read and see if they are equal
+        let lock1 = aw!(le.get_lock(&PageOffset(0)));
+        let lock2 = aw!(le.get_lock(&PageOffset(0)));
+
+        assert_eq!(Arc::as_ptr(&lock1), Arc::as_ptr(&lock2));
+        assert_eq!(Arc::strong_count(&lock1), 2);
+
+        //Get a bunch of locks and make sure they get cleaned up
+        {
+            let mut locks = vec![];
+            for i in 0..100 {
+                locks.push(aw!(le.get_lock(&PageOffset(i))));
+            }
+            assert_eq!(aw!(le.len()), 100);
+        }
+        for i in 0..=CLEANUP_RATE as usize {
+            aw!(le.get_lock(&PageOffset(i)));
+        }
+        assert!(aw!(le.len()) < 110);
+
+        Ok(())
     }
 }
