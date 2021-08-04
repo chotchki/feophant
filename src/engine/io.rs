@@ -16,6 +16,9 @@ mod io_manager;
 pub use io_manager::IOManager;
 pub use io_manager::IOManagerError;
 
+mod lock_manager;
+//pub use lock_manager::LockManager;
+
 mod page_formats;
 
 pub mod row_formats;

@@ -6,7 +6,7 @@ use std::{
 
 use crate::engine::io::ConstEncodedSize;
 
-#[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct PageOffset(pub usize);
 
 impl AddAssign for PageOffset {
