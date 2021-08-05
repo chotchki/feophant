@@ -66,6 +66,12 @@ I'm having a hard time figuring this out, I might work to do the operations on t
 
 Got further into the index manager. Unfortunately I need a lock manager to let it even pass the smell test. Time to go on a wild goose chase again! (This project is great for someone with ADHD to have fun on!)
 
+The lock manager design/code is done but I'm not happy with using a rwlock to protect a tag. I really want to have the lock protect the content but that needs a way for me to support writeback. I think I need to build out two more things, a WAL mechanism and a buffer manager.
+
+I guess I need to commit to doing this for reals. However I am worried about reaching a point of partially working for a while like when I did the type fixing. We'll see how this goes.
+
+For now, the index implementation is now on hold until I get an integrated I/O subsystem and a stubbed out WAL.
+
 **TODO**
 
 

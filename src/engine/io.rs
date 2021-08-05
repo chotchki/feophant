@@ -16,6 +16,10 @@ mod io_manager;
 pub use io_manager::IOManager;
 pub use io_manager::IOManagerError;
 
+mod file_manager;
+pub use file_manager::FileManager;
+pub use file_manager::FileManagerError;
+
 mod lock_manager;
 //pub use lock_manager::LockManager;
 

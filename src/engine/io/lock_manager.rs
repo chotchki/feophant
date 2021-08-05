@@ -1,7 +1,6 @@
-//! Thought process here, I implement a lock manager that you request a uuid + offset (effectively a page) for reading / writing.
+//! Lock Manager provides a way to lock a page offset until all the readers and writers are released.
 //!
-//! Lock manager done, need some headache inducing unit tests and a cleanup method. Right now I'm thinking of cleanup after every
-//! so many write locks held.
+//! TODO: Figure out if the write lock can be used to write back changed pages.
 
 use std::{
     collections::{hash_map::RandomState, HashMap},
@@ -19,7 +18,7 @@ use super::page_formats::PageOffset;
 /// Every 10 write locks held will include a scan for dead weak refs and their removal.
 /// TODO: Figure out if this makes sense or even if it should decend into the children.
 ///     Now that I think about this, I don't think a table's locks will EVER get removed.
-///     Need to figure out decent.
+///     Need to figure out descent.
 const CLEANUP_RATE: i8 = 10;
 
 #[derive(Debug, Clone)]
@@ -44,7 +43,6 @@ impl LockManager {
                 return s1.get_lock(&offset).await;
             }
             None => {
-                //Weak failed, need to recreate
                 drop(lm);
                 return self.insert_key(resource_key, offset).await;
             }

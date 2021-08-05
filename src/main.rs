@@ -25,6 +25,11 @@ async fn main() {
 
     info!("Welcome to FeOphant!");
 
+    let args: Vec<OsString> = env::args_os().collect();
+    if args.len() != 1 {
+        error!("You MUST provide a writeable directory so FeOphant can store its data.");
+    }
+
     //Start the services first
     let io_manager = IOManager::new();
     let transaction_manager = TransactionManager::new();
