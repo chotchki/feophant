@@ -121,12 +121,6 @@ mod tests {
     use super::transactions::TransactionManager;
     use super::*;
 
-    macro_rules! aw {
-        ($e:expr) => {
-            tokio_test::block_on($e)
-        };
-    }
-
     #[test]
     fn create_insert_select() -> Result<(), Box<dyn std::error::Error>> {
         let create_test = "create table foo (bar text)".to_string();
