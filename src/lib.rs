@@ -1,7 +1,7 @@
 #![forbid(unsafe_code)]
 
 #[macro_use]
-pub mod async_helper;
+pub mod async_helpers;
 
 #[macro_use]
 extern crate bitflags;

@@ -8,6 +8,7 @@ pub use page_data::PageDataError;
 
 mod page_offset;
 pub use page_offset::PageOffset;
+pub use page_offset::PageOffsetError;
 
 mod page_header;
 pub use page_header::PageHeader;

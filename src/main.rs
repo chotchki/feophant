@@ -4,6 +4,9 @@
 extern crate log;
 
 extern crate simplelog;
+use std::env;
+use std::ffi::OsString;
+
 use feophantlib::codec::{NetworkFrame, PgCodec};
 use feophantlib::engine::{io::IOManager, transactions::TransactionManager, Engine};
 use feophantlib::processor::ClientProcessor;
@@ -26,7 +29,7 @@ async fn main() {
     info!("Welcome to FeOphant!");
 
     let args: Vec<OsString> = env::args_os().collect();
-    if args.len() != 1 {
+    if args.len() != 2 {
         error!("You MUST provide a writeable directory so FeOphant can store its data.");
     }
 

@@ -43,7 +43,7 @@ impl IndexManager {
         item_ptr: ItemIdData,
     ) -> Result<(), IndexManagerError> {
         let mut search_stack = vec![];
-        search_stack.push((self.get_root_node(index_def).await?));
+        search_stack.push(self.get_root_node(index_def).await?);
 
         loop {
             let current_node = search_stack

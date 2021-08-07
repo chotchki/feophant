@@ -65,7 +65,7 @@ impl LockManager {
             }
         };
 
-        self.cleanup(&mut lm);
+        self.cleanup(&mut lm).await;
 
         lock
     }

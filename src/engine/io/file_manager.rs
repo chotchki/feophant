@@ -1,99 +1,85 @@
-use bytes::{Buf, Bytes, BytesMut};
+use super::page_formats::{PageOffset, UInt12, UInt12Error};
+use bytes::Bytes;
 use std::convert::TryFrom;
+use std::ffi::OsString;
 use std::num::TryFromIntError;
-use std::{
-    ffi::OsString,
-    io::SeekFrom,
-    path::{Path, PathBuf},
-};
 use thiserror::Error;
-use tokio::fs;
 use tokio::sync::mpsc::error::SendError;
-use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
+use tokio::sync::mpsc::{self, UnboundedSender};
 use tokio::sync::oneshot::error::RecvError;
 use tokio::sync::oneshot::{self, Sender};
-use tokio::{
-    fs::{File, OpenOptions},
-    io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt},
-};
 use uuid::Uuid;
 
-use crate::constants::PAGE_SIZE;
-
-use super::page_formats::{PageOffset, UInt12, UInt12Error};
+//Inner Types
+mod file_executor;
+use file_executor::FileExecutor;
+use file_executor::FileExecutorError;
+mod request_type;
+use request_type::RequestType;
+mod response_type;
+use response_type::ResponseType;
 
 /*
 This is a different approach than I had done before. This file manager runs its own loop based on a spawned task
 since the prior approach was too lock heavy and I couldn't figure out an approach that didn't starve resources.
 
+        let path = self.construct_path(resource_key, offset).await?;
+        let offset_in_file = offset.0 % PAGES_PER_FILE * PAGE_SIZE as usize;
 */
 
-/// Linux seems to limit to 1024, macos 256, windows 512 but I'm staying low until
-/// a benchmark proves I need to change it.
-const MAX_FILE_HANDLE_COUNT: usize = 128;
-const PAGES_PER_FILE: usize = 256; //Max file size is 1GB <Result<Bytes, FileManagerError>>
-
-struct FileManager {
-    data_dir: PathBuf,
+pub struct FileManager {
     request_queue: UnboundedSender<(
-        PathBuf,
-        usize,
+        Uuid,
         RequestType,
-        Sender<Result<ResponseType, FileManagerError>>,
+        Sender<Result<ResponseType, FileExecutorError>>,
     )>,
-    recieve_queue: UnboundedReceiver<(
-        PathBuf,
-        usize,
-        RequestType,
-        Sender<Result<ResponseType, FileManagerError>>,
-    )>,
-}
-
-#[derive(Debug, Clone)]
-enum RequestType {
-    Add(Bytes),
-    Read(()),
-    Update(Bytes),
-}
-
-#[derive(Debug, Clone)]
-enum ResponseType {
-    Add(PageOffset),
-    Read(Bytes),
-    Update(()),
+    request_shutdown: UnboundedSender<Sender<()>>,
 }
 
 impl FileManager {
     pub fn new(raw_path: OsString) -> Result<FileManager, FileManagerError> {
-        let data_dir = Path::new(&raw_path).to_path_buf();
+        let (request_queue, receive_queue) = mpsc::unbounded_channel();
+        let (request_shutdown, receive_shutdown) = mpsc::unbounded_channel();
 
-        if !data_dir.is_dir() {
-            return Err(FileManagerError::NeedDirectory(
-                data_dir.to_string_lossy().to_string(),
-            ));
-        }
+        let mut file_executor = FileExecutor::new(raw_path, receive_queue, receive_shutdown)?;
 
-        let (request_queue, recieve_queue) = mpsc::unbounded_channel();
+        tokio::spawn(async move {
+            file_executor.start().await;
+        });
 
         Ok(FileManager {
-            data_dir: Path::new(&raw_path).to_path_buf(),
             request_queue,
-            recieve_queue,
+            request_shutdown,
         })
+    }
+
+    pub async fn shutdown(&self) -> Result<(), FileManagerError> {
+        let (res_shutdown, rev_shutdown) = oneshot::channel();
+        self.request_shutdown.clone().send(res_shutdown)?;
+
+        Ok(rev_shutdown.await?)
     }
 
     pub async fn add_page(
         &self,
         resource_key: &Uuid,
         page: Bytes,
-    ) -> Result<PageOffset, IOManagerError> {
+    ) -> Result<PageOffset, FileManagerError> {
         let size = UInt12::try_from(page.len() - 1)?;
         if size != UInt12::max() {
             return Err(FileManagerError::InvalidPageSize(page.len()));
         }
 
-        let path = self.construct_path(resource_key, offset).await?;
-        let offset_in_file = offset.0 % PAGES_PER_FILE * PAGE_SIZE as usize;
+        let (res_request, res_receiver) = oneshot::channel();
+
+        self.request_queue
+            .send((resource_key.clone(), RequestType::Add(page), res_request))?;
+
+        match res_receiver.await?? {
+            ResponseType::Add(po) => Ok(po),
+            ResponseType::Read(_) => Err(FileManagerError::UnexpectedRead()),
+            ResponseType::Update(_) => Err(FileManagerError::UnexpectedUpdate()),
+        }
     }
 
     pub async fn get_page(
@@ -101,15 +87,15 @@ impl FileManager {
         resource_key: &Uuid,
         offset: &PageOffset,
     ) -> Result<Bytes, FileManagerError> {
-        let path = self.construct_path(resource_key, offset).await?;
-        let offset_in_file = offset.0 % PAGES_PER_FILE * PAGE_SIZE as usize;
+        let (res_request, res_receiver) = oneshot::channel();
 
-        let (error_request, error_reciever) = oneshot::channel();
+        self.request_queue.send((
+            resource_key.clone(),
+            RequestType::Read(offset.clone()),
+            res_request,
+        ))?;
 
-        self.request_queue
-            .send((path, offset_in_file, RequestType::Read(()), error_request))?;
-
-        match error_reciever.await?? {
+        match res_receiver.await?? {
             ResponseType::Add(_) => Err(FileManagerError::UnexpectedAdd()),
             ResponseType::Read(b) => Ok(b),
             ResponseType::Update(_) => Err(FileManagerError::UnexpectedUpdate()),
@@ -127,94 +113,35 @@ impl FileManager {
             return Err(FileManagerError::InvalidPageSize(page.len()));
         }
 
-        let path = self.construct_path(resource_key, offset).await?;
-        let offset_in_file = offset.0 % PAGES_PER_FILE * PAGE_SIZE as usize;
-
-        let (error_request, error_reciever) = oneshot::channel();
+        let (res_request, res_receiver) = oneshot::channel();
 
         self.request_queue.send((
-            path,
-            offset_in_file,
-            RequestType::Update(page),
-            error_request,
+            resource_key.clone(),
+            RequestType::Update((offset.clone(), page)),
+            res_request,
         ))?;
 
-        match error_reciever.await?? {
+        match res_receiver.await?? {
             ResponseType::Add(_) => Err(FileManagerError::UnexpectedAdd()),
             ResponseType::Read(_) => Err(FileManagerError::UnexpectedRead()),
             ResponseType::Update(_) => Ok(()),
         }
     }
+}
 
-    //Todo should work on file handles
-    async fn read_file_chunk(path: &Path, position: usize) -> Result<Bytes, FileManagerError> {
-        let mut buffer = BytesMut::with_capacity(PAGE_SIZE as usize);
-        let position_u64 = u64::try_from(position)?;
-
-        let mut file = File::open(path).await?;
-        file.seek(SeekFrom::Start(position_u64)).await?;
-
-        while buffer.len() != PAGE_SIZE as usize {
-            let readamt = file.read_buf(&mut buffer).await?;
-            if readamt == 0 as usize {
-                return Err(FileManagerError::IncompleteRead(readamt, PAGE_SIZE));
-            }
+impl Drop for FileManager {
+    fn drop(&mut self) {
+        if !self.request_queue.is_closed() {
+            return;
         }
-
-        Ok(buffer.freeze())
-    }
-
-    //Todo should work on file handles
-    async fn write_file_chunk(
-        path: &Path,
-        position: usize,
-        buffer: &mut impl Buf,
-    ) -> Result<(), FileManagerError> {
-        let position_u64 = u64::try_from(position)?;
-
-        let file = OpenOptions::new()
-            .write(true)
-            .create(true)
-            .open(path)
-            .await?;
-        let mut file = File::open(path).await?;
-        file.seek(SeekFrom::Start(position_u64)).await?;
-
-        file.write_all_buf(buffer).await?;
-
-        Ok(())
-    }
-
-    /// Construct what the path should be, roughly at the moment we are doing the following format
-    /// (2 chars of Uuid)/(Uuid).(count based on offset)
-    async fn construct_path(
-        &self,
-        resource_key: &Uuid,
-        offset: &PageOffset,
-    ) -> Result<PathBuf, FileManagerError> {
-        let resource = resource_key.to_simple().to_string();
-        let subfolder = format!("{:?}", &resource.as_bytes()[..2]); //TODO find a better way to do this
-
-        let filename_num = offset.0 / PAGES_PER_FILE;
-        let filename = format!("{0}.{1}", resource, filename_num);
-
-        let mut path = self.data_dir.clone();
-        path.push(subfolder);
-
-        match fs::create_dir(path.clone()).await {
-            Ok(_) => {}
-            Err(ref e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
-            Err(e) => return Err(FileManagerError::IOError(e)),
-        }
-
-        path.push(filename);
-
-        Ok(path)
+        error!("File Manager wasn't shutdown cleanly!");
     }
 }
 
 #[derive(Debug, Error)]
 pub enum FileManagerError {
+    #[error(transparent)]
+    FileExecutorError(#[from] FileExecutorError),
     #[error("Read {0} bytes instead of the required {1}")]
     IncompleteRead(usize, u16),
     #[error("Invalid Page size of {0}")]
@@ -223,6 +150,8 @@ pub enum FileManagerError {
     IOError(#[from] std::io::Error),
     #[error("Need a directory to store the data. Got ({0}) may be stripped of non Unicode chars.")]
     NeedDirectory(String),
+    #[error("The backend processor is not running.")]
+    NotRunning(),
     #[error(transparent)]
     TryFromIntError(#[from] TryFromIntError),
     #[error(transparent)]
@@ -231,12 +160,13 @@ pub enum FileManagerError {
     SendError(
         #[from]
         SendError<(
-            PathBuf,
-            usize,
+            Uuid,
             RequestType,
-            Sender<Result<ResponseType, FileManagerError>>,
+            Sender<Result<ResponseType, FileExecutorError>>,
         )>,
     ),
+    #[error(transparent)]
+    ShutdownSendError(#[from] SendError<Sender<()>>),
     #[error(transparent)]
     UInt12Error(#[from] UInt12Error),
     #[error("Unexpected Add Response")]
@@ -245,4 +175,88 @@ pub enum FileManagerError {
     UnexpectedRead(),
     #[error("Unexpected Update Response")]
     UnexpectedUpdate(),
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use bytes::BytesMut;
+    use tempfile::TempDir;
+    use tokio::time::timeout;
+
+    use crate::constants::PAGE_SIZE;
+
+    use super::*;
+
+    fn get_test_page(fill: u8) -> Bytes {
+        let mut test_page = BytesMut::with_capacity(PAGE_SIZE as usize);
+        let free_space = vec![fill; PAGE_SIZE as usize];
+        test_page.extend_from_slice(&free_space);
+        test_page.freeze()
+    }
+    /*
+        fn check_file_and_contents(
+            fm: &FileManager,
+            key: &Uuid,
+            offset: &PageOffset,
+            test_buf: Bytes,
+        ) -> Result<(), FileManagerError> {
+            let target_path = aw!(fm.construct_path(key, offset))?;
+
+            let mut target_file = aw!(File::open(target_path))?;
+            let mut target_buffer = BytesMut::with_capacity(test_buf.len());
+
+            aw!(target_file.read_exact(&mut target_buffer))?;
+            let target_buffer = target_buffer.freeze();
+
+            assert_eq!(test_buf, target_buffer);
+            Ok(())
+        }
+    */
+
+    #[tokio::test]
+    async fn test_roundtrips() -> Result<(), Box<dyn std::error::Error>> {
+        let tmp = TempDir::new()?;
+        let tmp_dir = tmp.path();
+
+        let fm = FileManager::new(tmp_dir.as_os_str().to_os_string())?;
+
+        let test_uuid = Uuid::new_v4();
+        let test_page = get_test_page(1);
+        let test_page_num = timeout(
+            Duration::new(10, 0),
+            fm.add_page(&test_uuid, test_page.clone()),
+        )
+        .await??;
+
+        assert_eq!(test_page_num, PageOffset(0));
+
+        let test_page_get = timeout(
+            Duration::new(10, 0),
+            fm.get_page(&test_uuid, &test_page_num),
+        )
+        .await??;
+
+        assert_eq!(test_page, test_page_get);
+
+        let test_page2 = get_test_page(2);
+        timeout(
+            Duration::new(10, 0),
+            fm.update_page(&test_uuid, test_page2.clone(), &test_page_num),
+        )
+        .await??;
+
+        let test_page_get2 = timeout(
+            Duration::new(10, 0),
+            fm.get_page(&test_uuid, &test_page_num),
+        )
+        .await??;
+
+        assert_eq!(test_page2, test_page_get2);
+
+        fm.shutdown().await.unwrap();
+
+        Ok(())
+    }
 }
