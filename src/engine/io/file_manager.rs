@@ -259,4 +259,49 @@ mod tests {
 
         Ok(())
     }
+
+    #[tokio::test]
+    async fn test_rollover() -> Result<(), Box<dyn std::error::Error>> {
+        let tmp = TempDir::new()?;
+        let tmp_dir = tmp.path();
+
+        let fm = FileManager::new(tmp_dir.as_os_str().to_os_string())?;
+
+        let test_uuid = Uuid::new_v4();
+        let test_page = get_test_page(1);
+        let test_page_num = timeout(
+            Duration::new(10, 0),
+            fm.add_page(&test_uuid, test_page.clone()),
+        )
+        .await??;
+
+        assert_eq!(test_page_num, PageOffset(0));
+
+        let test_page_get = timeout(
+            Duration::new(10, 0),
+            fm.get_page(&test_uuid, &test_page_num),
+        )
+        .await??;
+
+        assert_eq!(test_page, test_page_get);
+
+        let test_page2 = get_test_page(2);
+        timeout(
+            Duration::new(10, 0),
+            fm.update_page(&test_uuid, test_page2.clone(), &test_page_num),
+        )
+        .await??;
+
+        let test_page_get2 = timeout(
+            Duration::new(10, 0),
+            fm.get_page(&test_uuid, &test_page_num),
+        )
+        .await??;
+
+        assert_eq!(test_page2, test_page_get2);
+
+        fm.shutdown().await.unwrap();
+
+        Ok(())
+    }
 }
