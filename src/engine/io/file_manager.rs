@@ -16,6 +16,8 @@ use file_executor::FileExecutor;
 use file_executor::FileExecutorError;
 mod request_type;
 use request_type::RequestType;
+mod resource_formatter;
+pub use resource_formatter::ResourceFormatter;
 mod response_type;
 use response_type::ResponseType;
 
@@ -237,6 +239,25 @@ mod tests {
         assert_eq!(test_page2, test_page_get2);
 
         fm.shutdown().await.unwrap();
+
+        let fm2 = FileManager::new(tmp_dir.as_os_str().to_os_string())?;
+        let test_uuid3 = Uuid::new_v4();
+        let test_page3 = get_test_page(3);
+        let test_page_num3 = //timeout(
+            //Duration::new(1000, 0),
+            fm2.add_page(&test_uuid, test_page3.clone())//,
+       // )
+        .await?;
+        println!("{0}", test_page_num3);
+        assert!(test_page_num3 > test_page_num);
+
+        let test_page_get2 = timeout(
+            Duration::new(10, 0),
+            fm2.get_page(&test_uuid, &test_page_num),
+        )
+        .await??;
+
+        assert_eq!(test_page2, test_page_get2);
 
         Ok(())
     }

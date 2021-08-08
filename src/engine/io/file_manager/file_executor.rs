@@ -2,6 +2,7 @@
 /// handle queue management.
 use super::{request_type::RequestType, response_type::ResponseType};
 use crate::constants::PAGE_SIZE;
+use crate::engine::io::file_manager::ResourceFormatter;
 use crate::engine::io::page_formats::PageOffset;
 use bytes::{Bytes, BytesMut};
 use std::collections::HashMap;
@@ -26,8 +27,6 @@ use uuid::Uuid;
 /// Linux seems to limit to 1024, macos 256, windows 512 but I'm staying low until
 /// a benchmark proves I need to change it.
 const MAX_FILE_HANDLE_COUNT: usize = 128;
-/// Number of characters per folder
-const PREFIX_LEN: usize = 2;
 /// Empty page buffer
 const EMPTY_BUFFER: [u8; 16] = [0u8; 16];
 
@@ -82,7 +81,7 @@ impl FileExecutor {
                 }
                 maybe_recv = self.receive_queue.recv() => {
                     if let Some((resource_key, req_type, response_channel)) = maybe_recv {
-                            let result = self
+                        let result = self
                             .handle_request(&mut resource_lookup, &resource_key, &req_type)
                             .await;
                         response_channel
@@ -134,7 +133,8 @@ impl FileExecutor {
                 let mut buffer = buffer.clone();
 
                 resource_lookup.insert(resource_key.clone(), next_po.next());
-                let file_path = self.make_file_path(&resource_key, &next_po).await?;
+                let file_path =
+                    Self::make_file_path(self.data_dir.as_path(), &resource_key, &next_po).await?;
 
                 //Need a file handle
                 let mut file = OpenOptions::new()
@@ -155,7 +155,8 @@ impl FileExecutor {
                 return Ok(ResponseType::Add(next_po));
             }
             RequestType::Read(po) => {
-                let file_path = self.make_file_path(&resource_key, &po).await?;
+                let file_path =
+                    Self::make_file_path(self.data_dir.as_path(), &resource_key, &po).await?;
                 let mut buffer = BytesMut::with_capacity(PAGE_SIZE as usize);
 
                 let mut file = File::open(file_path).await?;
@@ -173,7 +174,8 @@ impl FileExecutor {
             }
             RequestType::Update((po, buffer)) => {
                 let mut buffer = buffer.clone();
-                let file_path = self.make_file_path(&resource_key, &po).await?;
+                let file_path =
+                    Self::make_file_path(self.data_dir.as_path(), &resource_key, &po).await?;
 
                 //Need a file handle
                 let mut file = OpenOptions::new()
@@ -192,12 +194,12 @@ impl FileExecutor {
     }
 
     async fn make_file_path(
-        &self,
+        data_dir: &Path,
         resource_key: &Uuid,
         offset: &PageOffset,
     ) -> Result<PathBuf, FileExecutorError> {
-        let mut sub_path = self.make_sub_path(&resource_key).await?;
-        let target_filename = Self::format_uuid(&resource_key);
+        let mut sub_path = Self::make_sub_path(data_dir, &resource_key).await?;
+        let target_filename = ResourceFormatter::format_uuid(&resource_key);
         let target_extension = offset.get_file_number();
         let name = format!("{0}.{1}", target_filename, target_extension);
         sub_path.push(name);
@@ -205,12 +207,13 @@ impl FileExecutor {
     }
 
     async fn find_next_offset(&self, resource_key: &Uuid) -> Result<PageOffset, FileExecutorError> {
-        let (path, count) = match self.search_for_max_file(resource_key).await? {
-            Some((p, c)) => (p, c),
-            None => {
-                return Ok(PageOffset(0));
-            }
-        };
+        let (path, count) =
+            match Self::search_for_max_file(self.data_dir.as_path(), resource_key).await? {
+                Some((p, c)) => (p, c),
+                None => {
+                    return Ok(PageOffset(0));
+                }
+            };
 
         let mut file = File::open(path.clone()).await?;
         let file_meta = file.metadata().await?;
@@ -252,11 +255,11 @@ impl FileExecutor {
 
     /// This will search for the highest numbered file for the Uuid
     async fn search_for_max_file(
-        &self,
+        data_dir: &Path,
         resource_key: &Uuid,
     ) -> Result<Option<(PathBuf, usize)>, FileExecutorError> {
-        let sub_path = self.make_sub_path(&resource_key).await?;
-        let target_filename = Self::format_uuid(&resource_key);
+        let sub_path = Self::make_sub_path(data_dir, &resource_key).await?;
+        let target_filename = ResourceFormatter::format_uuid(&resource_key);
 
         let mut max_file_count = 0;
         let mut max_file_path = None;
@@ -286,7 +289,7 @@ impl FileExecutor {
                 }
             };
 
-            if file_count > max_file_count {
+            if file_count >= max_file_count {
                 max_file_count = file_count;
                 max_file_path = Some(path);
             }
@@ -299,31 +302,22 @@ impl FileExecutor {
     }
 
     //Makes the prefix folder so we don't fill up folders. Will consider more nesting eventually
-    async fn make_sub_path(&self, resource_key: &Uuid) -> Result<PathBuf, FileExecutorError> {
-        let subfolder = Self::get_uuid_prefix(&resource_key);
+    async fn make_sub_path(
+        data_dir: &Path,
+        resource_key: &Uuid,
+    ) -> Result<PathBuf, FileExecutorError> {
+        let subfolder = ResourceFormatter::get_uuid_prefix(&resource_key);
 
         let mut path = PathBuf::new();
-        path.push(self.data_dir.to_path_buf());
+        path.push(data_dir);
         path.push(subfolder);
 
         fs::create_dir_all(path.as_path()).await?;
         Ok(path)
     }
 
-    fn format_uuid(input: &Uuid) -> String {
-        let mut buf = [b'0'; 32];
-        input.to_simple().encode_lower(&mut buf);
-        String::from_utf8_lossy(&buf).into_owned()
-    }
-
     fn format_os_string(input: &OsStr) -> String {
         input.to_ascii_lowercase().to_string_lossy().into_owned()
-    }
-
-    fn get_uuid_prefix(input: &Uuid) -> String {
-        let mut buf = [b'0'; 32];
-        input.to_simple().encode_lower(&mut buf);
-        String::from_utf8_lossy(&buf[..PREFIX_LEN]).into_owned()
     }
 }
 
@@ -347,7 +341,6 @@ pub enum FileExecutorError {
 mod tests {
     use std::time::Duration;
 
-    use hex_literal::hex;
     use tempfile::TempDir;
     use tokio::time::timeout;
 
@@ -362,13 +355,48 @@ mod tests {
         test_page.freeze()
     }
 
-    #[test]
-    fn test_uuid_formating() -> Result<(), Box<dyn std::error::Error>> {
-        let hex = "ee89957f3e9f482c836dda6c349ac632";
-        let test = Uuid::from_bytes(hex!("ee89957f3e9f482c836dda6c349ac632"));
-        assert_eq!(hex, FileExecutor::format_uuid(&test));
+    #[tokio::test]
+    async fn test_search_for_max_file() -> Result<(), Box<dyn std::error::Error>> {
+        let tmp = TempDir::new()?;
 
-        assert_eq!("ee", FileExecutor::get_uuid_prefix(&test));
+        let test_uuid = Uuid::new_v4();
+        let subpath = FileExecutor::make_sub_path(tmp.path(), &test_uuid).await?;
+
+        let test_path =
+            FileExecutor::make_file_path(tmp.path(), &test_uuid, &PageOffset(1)).await?;
+        File::create(test_path.as_path()).await?;
+
+        let path = FileExecutor::search_for_max_file(tmp.path(), &test_uuid).await?;
+        assert_eq!(path, Some((test_path, 0)));
+
+        let test_path =
+            FileExecutor::make_file_path(tmp.path(), &test_uuid, &PageOffset(PAGES_PER_FILE * 100))
+                .await?;
+        File::create(test_path.as_path()).await?;
+
+        let mut test1 = subpath.clone();
+        test1.push("test.file");
+        File::create(test1.as_path()).await?;
+
+        let mut test2 = subpath.clone();
+        test2.push(".file");
+        File::create(test2.as_path()).await?;
+
+        let path = FileExecutor::search_for_max_file(tmp.path(), &test_uuid).await?;
+        assert_eq!(path, Some((test_path, 100)));
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_make_sub_path() -> Result<(), Box<dyn std::error::Error>> {
+        let tmp = TempDir::new()?;
+
+        let test_uuid = Uuid::new_v4();
+
+        //Must be able to repeatedly make the sub_path
+        FileExecutor::make_sub_path(tmp.path(), &test_uuid).await?;
+        FileExecutor::make_sub_path(tmp.path(), &test_uuid).await?;
 
         Ok(())
     }
@@ -381,20 +409,16 @@ mod tests {
         //We're going to touch a single file to force it to think it has far more data than it does.
         //I don't normally write tests this way but I don't want to write GBs unnecessarily.
         let test_uuid = Uuid::new_v4();
-        let test_uuid_str = FileExecutor::format_uuid(&test_uuid);
-
-        let prefix = FileExecutor::get_uuid_prefix(&test_uuid);
         let test_count: usize = 10;
-        let test_filename = format!("{0}.{1}", test_uuid_str, test_count);
+
+        let test_path = FileExecutor::make_file_path(
+            tmp_dir,
+            &test_uuid,
+            &PageOffset(PAGES_PER_FILE * test_count),
+        )
+        .await?;
 
         let mut test_page = get_test_page(1);
-
-        let mut test_path = PathBuf::new();
-        test_path.push(tmp_dir);
-        test_path.push(prefix);
-
-        fs::create_dir(test_path.clone().as_path()).await?;
-        test_path.push(test_filename);
 
         let mut test_file = File::create(test_path).await?;
         test_file.write_all(&mut test_page).await?;
