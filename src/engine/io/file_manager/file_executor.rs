@@ -4,7 +4,6 @@ use super::{request_type::RequestType, response_type::ResponseType};
 use crate::constants::PAGE_SIZE;
 use crate::engine::io::page_formats::PageOffset;
 use bytes::{Bytes, BytesMut};
-use futures::AsyncBufReadExt;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::ffi::OsStr;
@@ -307,11 +306,7 @@ impl FileExecutor {
         path.push(self.data_dir.to_path_buf());
         path.push(subfolder);
 
-        match fs::create_dir(path.as_path()).await {
-            Ok(_) => {}
-            Err(ref e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
-            Err(e) => return Err(FileExecutorError::IOError(e)),
-        }
+        fs::create_dir_all(path.as_path()).await?;
         Ok(path)
     }
 
@@ -350,9 +345,22 @@ pub enum FileExecutorError {
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
     use hex_literal::hex;
+    use tempfile::TempDir;
+    use tokio::time::timeout;
+
+    use crate::{constants::PAGES_PER_FILE, engine::io::FileManager};
 
     use super::*;
+
+    fn get_test_page(fill: u8) -> Bytes {
+        let mut test_page = BytesMut::with_capacity(PAGE_SIZE as usize);
+        let free_space = vec![fill; PAGE_SIZE as usize];
+        test_page.extend_from_slice(&free_space);
+        test_page.freeze()
+    }
 
     #[test]
     fn test_uuid_formating() -> Result<(), Box<dyn std::error::Error>> {
@@ -361,6 +369,58 @@ mod tests {
         assert_eq!(hex, FileExecutor::format_uuid(&test));
 
         assert_eq!("ee", FileExecutor::get_uuid_prefix(&test));
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_rollover() -> Result<(), Box<dyn std::error::Error>> {
+        let tmp = TempDir::new()?;
+        let tmp_dir = tmp.path();
+
+        //We're going to touch a single file to force it to think it has far more data than it does.
+        //I don't normally write tests this way but I don't want to write GBs unnecessarily.
+        let test_uuid = Uuid::new_v4();
+        let test_uuid_str = FileExecutor::format_uuid(&test_uuid);
+
+        let prefix = FileExecutor::get_uuid_prefix(&test_uuid);
+        let test_count: usize = 10;
+        let test_filename = format!("{0}.{1}", test_uuid_str, test_count);
+
+        let mut test_page = get_test_page(1);
+
+        let mut test_path = PathBuf::new();
+        test_path.push(tmp_dir);
+        test_path.push(prefix);
+
+        fs::create_dir(test_path.clone().as_path()).await?;
+        test_path.push(test_filename);
+
+        let mut test_file = File::create(test_path).await?;
+        test_file.write_all(&mut test_page).await?;
+        drop(test_file);
+
+        //Now let's test add
+        let fm = FileManager::new(tmp_dir.as_os_str().to_os_string())?;
+
+        let test_page = get_test_page(2);
+        let test_page_num = timeout(
+            Duration::new(10, 0),
+            fm.add_page(&test_uuid, test_page.clone()),
+        )
+        .await??;
+
+        assert_eq!(test_page_num, PageOffset(PAGES_PER_FILE * test_count));
+
+        let test_page_get = timeout(
+            Duration::new(10, 0),
+            fm.get_page(&test_uuid, &test_page_num),
+        )
+        .await??;
+
+        assert_eq!(test_page, test_page_get);
+
+        fm.shutdown().await.unwrap();
 
         Ok(())
     }
