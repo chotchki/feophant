@@ -25,7 +25,7 @@ impl ItemIdData {
     }
 
     pub fn serialize(&self, buffer: &mut impl BufMut) {
-        UInt12::serialize_packed(buffer, &vec![self.offset, self.length]);
+        UInt12::serialize_packed(buffer, &[self.offset, self.length]);
     }
 
     pub fn parse(buffer: &mut impl Buf) -> Result<Self, ItemIdDataError> {

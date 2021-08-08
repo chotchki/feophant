@@ -29,7 +29,7 @@ impl ItemPointer {
         let mut buffer = BytesMut::with_capacity(size_of::<ItemPointer>());
 
         buffer.put_slice(&self.page.0.to_le_bytes());
-        UInt12::serialize_packed(&mut buffer, &vec![self.count]);
+        UInt12::serialize_packed(&mut buffer, &[self.count]);
 
         buffer.freeze()
     }

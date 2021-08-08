@@ -112,9 +112,7 @@ impl VisibleRowManager {
 
         match row_data.max {
             Some(m) => {
-                if m > tran_id {
-                    Ok(true)
-                } else if tm.get_status(m).await? != TransactionStatus::Commited {
+                if m > tran_id || tm.get_status(m).await? != TransactionStatus::Commited {
                     Ok(true)
                 } else {
                     Ok(false)
