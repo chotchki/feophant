@@ -125,10 +125,19 @@ pub enum NetworkFrameError {
 
 #[cfg(test)]
 mod tests {
+    use uuid::Uuid;
+
+    use crate::engine::objects::types::BaseSqlTypes;
+
     use super::*;
 
+    /// These are unit tests that just ensure the code executes without failure.
+    /// I think I'll need to get replication working to really test these right.
+    ///
+    /// Right now I fire up psql by hand to test. I might be able to do better than
+    /// that now that I think of it.
     #[test]
-    fn test_net_frames_poorly() {
+    fn test_net_frames_poorly() -> Result<(), Box<dyn std::error::Error>> {
         NetworkFrame::authentication_ok();
         NetworkFrame::ready_for_query();
         NetworkFrame::error_response(
@@ -136,6 +145,15 @@ mod tests {
             PgErrorCodes::SystemError,
             "test".to_string(),
         );
-        assert!(true);
+        NetworkFrame::row_description(vec!["foo".to_string(), "bar".to_string()])?;
+
+        let rows = vec![SqlTuple(vec![
+            Some(BaseSqlTypes::Integer(1)),
+            Some(BaseSqlTypes::Text("three".to_string())),
+            Some(BaseSqlTypes::Uuid(Uuid::new_v4())),
+        ])];
+
+        NetworkFrame::data_rows(rows)?;
+        Ok(())
     }
 }
