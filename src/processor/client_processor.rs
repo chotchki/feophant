@@ -103,11 +103,12 @@ impl ClientProcessor {
         };
 
         let mut frames = vec![];
-        if query_res.columns.len() > 0 {
+        if !query_res.columns.is_empty() {
             frames.push(NetworkFrame::row_description(query_res.columns)?);
         }
+
         let results_rows = query_res.rows.len();
-        if results_rows > 0 {
+        if !query_res.rows.is_empty() {
             frames.append(&mut NetworkFrame::data_rows(query_res.rows)?);
         }
 
@@ -118,7 +119,7 @@ impl ClientProcessor {
 
         frames.push(NetworkFrame::ready_for_query());
 
-        return Ok(frames);
+        Ok(frames)
     }
 }
 

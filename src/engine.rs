@@ -85,17 +85,14 @@ impl Engine {
 
         let output_columns = query_tree.targets.iter().map(|t| t.0.clone()).collect();
 
-        return Ok(QueryResult {
+        Ok(QueryResult {
             columns: output_columns,
             rows: result,
-        });
+        })
     }
 
     fn should_bypass_planning(parse_tree: &ParseTree) -> bool {
-        match parse_tree.deref() {
-            ParseTree::CreateTable(_) => true,
-            _ => false,
-        }
+        matches!(parse_tree.deref(), ParseTree::CreateTable(_))
     }
 }
 

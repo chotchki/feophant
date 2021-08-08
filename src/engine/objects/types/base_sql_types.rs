@@ -119,7 +119,7 @@ impl BaseSqlTypes {
             BaseSqlTypesMapper::Array(a) => todo!("Bed time, need to fix!"),
             BaseSqlTypesMapper::Bool => Ok(BaseSqlTypes::Bool(buffer.parse::<bool>()?)),
             BaseSqlTypesMapper::Integer => Ok(BaseSqlTypes::Integer(buffer.parse::<u32>()?)),
-            BaseSqlTypesMapper::Uuid => Ok(BaseSqlTypes::Uuid(uuid::Uuid::parse_str(&buffer)?)),
+            BaseSqlTypesMapper::Uuid => Ok(BaseSqlTypes::Uuid(uuid::Uuid::parse_str(buffer)?)),
             BaseSqlTypesMapper::Text => Ok(BaseSqlTypes::Text(buffer.to_string())),
         }
     }

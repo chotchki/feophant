@@ -105,6 +105,12 @@ impl TransactionManager {
     pub fn parse() {}
 }
 
+impl Default for TransactionManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[derive(Error, Debug)]
 pub enum TransactionManagerError {
     #[error(transparent)]

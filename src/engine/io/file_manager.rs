@@ -75,7 +75,7 @@ impl FileManager {
         let (res_request, res_receiver) = oneshot::channel();
 
         self.request_queue
-            .send((resource_key.clone(), RequestType::Add(page), res_request))?;
+            .send((*resource_key, RequestType::Add(page), res_request))?;
 
         match res_receiver.await?? {
             ResponseType::Add(po) => Ok(po),
@@ -91,11 +91,8 @@ impl FileManager {
     ) -> Result<Bytes, FileManagerError> {
         let (res_request, res_receiver) = oneshot::channel();
 
-        self.request_queue.send((
-            resource_key.clone(),
-            RequestType::Read(offset.clone()),
-            res_request,
-        ))?;
+        self.request_queue
+            .send((*resource_key, RequestType::Read(*offset), res_request))?;
 
         match res_receiver.await?? {
             ResponseType::Add(_) => Err(FileManagerError::UnexpectedAdd()),
@@ -118,8 +115,8 @@ impl FileManager {
         let (res_request, res_receiver) = oneshot::channel();
 
         self.request_queue.send((
-            resource_key.clone(),
-            RequestType::Update((offset.clone(), page)),
+            *resource_key,
+            RequestType::Update((*offset, page)),
             res_request,
         ))?;
 

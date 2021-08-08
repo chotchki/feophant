@@ -24,7 +24,7 @@ impl NullMask {
     /// assert_eq!(hex!("00").to_vec(), mask);
     /// ```
     pub fn serialize(input: &SqlTuple) -> Bytes {
-        if input.0.len() == 0 {
+        if input.0.is_empty() {
             return Bytes::new();
         }
 
