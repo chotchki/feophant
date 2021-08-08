@@ -39,12 +39,10 @@ impl LockManager {
         let lm = self.locks.read().await;
 
         match lm.get(resource_key) {
-            Some(s1) => {
-                return s1.get_lock(&offset).await;
-            }
+            Some(s1) => s1.get_lock(offset).await,
             None => {
                 drop(lm);
-                return self.insert_key(resource_key, offset).await;
+                self.insert_key(resource_key, offset).await
             }
         }
     }
@@ -114,9 +112,7 @@ impl LockManagerEntry {
 
         match le.get(offset) {
             Some(s) => match s.upgrade() {
-                Some(s1) => {
-                    return s1;
-                }
+                Some(s1) => s1,
                 None => {
                     //Weak failed, need to recreate
                     drop(le);

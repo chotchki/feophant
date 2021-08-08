@@ -148,7 +148,7 @@ impl IndexManager {
         offset: &PageOffset,
     ) -> Result<BTreeNode, IndexManagerError> {
         match self.io_manager.get_page(&index_def.id, offset).await {
-            Some(mut page) => Ok(BTreeNode::parse(&mut page, &index_def)?),
+            Some(mut page) => Ok(BTreeNode::parse(&mut page, index_def)?),
             None => Err(IndexManagerError::NoSuchNode(*offset)),
         }
     }

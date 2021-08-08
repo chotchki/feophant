@@ -78,12 +78,12 @@ impl IOManager {
             Some(v) => {
                 let offset = v.len();
                 v.push(page);
-                return Ok(PageOffset(offset));
+                Ok(PageOffset(offset))
             }
             None => {
                 let vec_holder = vec![page];
                 write_lock.insert(*resource_key, vec_holder);
-                return Ok(PageOffset(0));
+                Ok(PageOffset(0))
             }
         }
     }
@@ -113,6 +113,12 @@ impl IOManager {
         existing_value[offset.0] = page;
 
         Ok(())
+    }
+}
+
+impl Default for IOManager {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

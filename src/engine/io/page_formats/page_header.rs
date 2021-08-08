@@ -57,7 +57,7 @@ impl PageHeader {
     }
 
     pub fn serialize(&self, buffer: &mut impl BufMut) {
-        UInt12::serialize_packed(buffer, &vec![self.pd_lower, self.pd_upper]);
+        UInt12::serialize_packed(buffer, &[self.pd_lower, self.pd_upper]);
     }
 
     pub fn parse(buffer: &mut impl Buf) -> Result<Self, PageHeaderError> {

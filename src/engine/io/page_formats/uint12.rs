@@ -33,11 +33,11 @@ impl UInt12 {
         }
     }
 
-    pub fn to_u16(&self) -> u16 {
+    pub fn to_u16(self) -> u16 {
         self.0
     }
 
-    pub fn to_usize(&self) -> usize {
+    pub fn to_usize(self) -> usize {
         usize::try_from(self.0).unwrap()
     }
 
@@ -45,7 +45,7 @@ impl UInt12 {
         UInt12(PAGE_SIZE - 1)
     }
 
-    pub fn serialize_packed(buffer: &mut impl BufMut, args: &Vec<UInt12>) {
+    pub fn serialize_packed(buffer: &mut impl BufMut, args: &[UInt12]) {
         let mut left = true;
         let mut combined = None;
 
@@ -62,9 +62,8 @@ impl UInt12 {
             }
         }
 
-        match combined {
-            Some(s) => buffer.put_u8(s),
-            None => {}
+        if let Some(s) = combined {
+            buffer.put_u8(s)
         }
     }
 

@@ -101,7 +101,7 @@ impl RowManager {
             .update_page(&table.id, old_page.serialize(), &row_pointer.page)
             .await?;
 
-        return Ok(new_row_pointer);
+        Ok(new_row_pointer)
     }
 
     pub async fn get(
@@ -113,12 +113,15 @@ impl RowManager {
             .io_manager
             .get_page(&table.id, &row_pointer.page)
             .await
-            .ok_or_else(|| RowManagerError::NonExistentPage(row_pointer.page))?;
+            .ok_or(RowManagerError::NonExistentPage(row_pointer.page))?;
         let page = PageData::parse(table, row_pointer.page, page_bytes)?;
 
         let row = page
             .get_row(row_pointer.count)
-            .ok_or_else(|| RowManagerError::NonExistentRow(row_pointer.count, row_pointer.page))?
+            .ok_or(RowManagerError::NonExistentRow(
+                row_pointer.count,
+                row_pointer.page,
+            ))?
             .clone();
 
         Ok((page, row))

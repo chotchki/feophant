@@ -12,15 +12,9 @@ pub struct Planner {}
 impl Planner {
     pub fn plan(query_tree: QueryTree) -> Result<PlannedStatement, PlannerError> {
         match query_tree.command_type {
-            CommandType::Insert => {
-                return Planner::plan_insert(query_tree);
-            }
-            CommandType::Select => {
-                return Planner::plan_select(query_tree);
-            }
-            _ => {
-                return Err(PlannerError::NotImplemented());
-            }
+            CommandType::Insert => Planner::plan_insert(query_tree),
+            CommandType::Select => Planner::plan_select(query_tree),
+            _ => Err(PlannerError::NotImplemented()),
         }
     }
 
@@ -36,15 +30,15 @@ impl Planner {
 
         match join {
             (JoinType::Inner, RangeRelation::Table(t), RangeRelation::AnonymousTable(at)) => {
-                return Ok(PlannedStatement {
+                Ok(PlannedStatement {
                     common: PlannedCommon {},
                     plan: Arc::new(Plan::ModifyTable(ModifyTablePlan {
                         table: t.table.clone(),
                         source: Arc::new(Plan::StaticData(at.clone())),
                     })),
-                });
+                })
             }
-            (_, _, _) => return Err(PlannerError::NotImplemented()),
+            (_, _, _) => Err(PlannerError::NotImplemented()),
         }
     }
 
@@ -73,13 +67,13 @@ impl Planner {
             }
         }
 
-        if unjoined.len() == 0 {
-            return Err(PlannerError::NoDataProvided());
+        if unjoined.is_empty() {
+            Err(PlannerError::NoDataProvided())
         } else if unjoined.len() == 1 {
-            return Ok(PlannedStatement {
+            Ok(PlannedStatement {
                 common: PlannedCommon {},
                 plan: unjoined[0].clone(),
-            });
+            })
         } else {
             //let cart_joins = return Ok(PlannedStatement {
             //    common: PlannedCommon {},
@@ -88,7 +82,7 @@ impl Planner {
             //        source: unjoined,
             //    })),
             //});
-            return Err(PlannerError::NotImplemented());
+            Err(PlannerError::NotImplemented())
         }
     }
 }

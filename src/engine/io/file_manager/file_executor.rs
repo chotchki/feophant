@@ -111,11 +111,11 @@ impl FileExecutor {
         req_type: &RequestType,
     ) -> Result<ResponseType, FileExecutorError> {
         //Find the resource key's latest offset so we can iterate on it for adds
-        let next_po = match resource_lookup.get(&resource_key) {
-            Some(po) => po.clone(),
+        let next_po = match resource_lookup.get(resource_key) {
+            Some(po) => *po,
             None => {
-                let po = self.find_next_offset(&resource_key).await?;
-                resource_lookup.insert(resource_key.clone(), po);
+                let po = self.find_next_offset(resource_key).await?;
+                resource_lookup.insert(*resource_key, po);
                 po
             }
         };
@@ -132,9 +132,9 @@ impl FileExecutor {
             RequestType::Add(buffer) => {
                 let mut buffer = buffer.clone();
 
-                resource_lookup.insert(resource_key.clone(), next_po.next());
+                resource_lookup.insert(*resource_key, next_po.next());
                 let file_path =
-                    Self::make_file_path(self.data_dir.as_path(), &resource_key, &next_po).await?;
+                    Self::make_file_path(self.data_dir.as_path(), resource_key, &next_po).await?;
 
                 //Need a file handle
                 let mut file = OpenOptions::new()
@@ -152,11 +152,11 @@ impl FileExecutor {
 
                 file.write_all_buf(&mut buffer).await?;
 
-                return Ok(ResponseType::Add(next_po));
+                Ok(ResponseType::Add(next_po))
             }
             RequestType::Read(po) => {
                 let file_path =
-                    Self::make_file_path(self.data_dir.as_path(), &resource_key, &po).await?;
+                    Self::make_file_path(self.data_dir.as_path(), resource_key, po).await?;
                 let mut buffer = BytesMut::with_capacity(PAGE_SIZE as usize);
 
                 let mut file = File::open(file_path).await?;
@@ -166,7 +166,7 @@ impl FileExecutor {
 
                 while buffer.len() != PAGE_SIZE as usize {
                     let readamt = file.read_buf(&mut buffer).await?;
-                    if readamt == 0 as usize {
+                    if readamt == 0 {
                         return Err(FileExecutorError::IncompleteRead(readamt, PAGE_SIZE));
                     }
                 }
@@ -175,7 +175,7 @@ impl FileExecutor {
             RequestType::Update((po, buffer)) => {
                 let mut buffer = buffer.clone();
                 let file_path =
-                    Self::make_file_path(self.data_dir.as_path(), &resource_key, &po).await?;
+                    Self::make_file_path(self.data_dir.as_path(), resource_key, po).await?;
 
                 //Need a file handle
                 let mut file = OpenOptions::new()
@@ -188,7 +188,7 @@ impl FileExecutor {
                     .await?;
 
                 file.write_all_buf(&mut buffer).await?;
-                return Ok(ResponseType::Update(()));
+                Ok(ResponseType::Update(()))
             }
         }
     }
@@ -198,8 +198,8 @@ impl FileExecutor {
         resource_key: &Uuid,
         offset: &PageOffset,
     ) -> Result<PathBuf, FileExecutorError> {
-        let mut sub_path = Self::make_sub_path(data_dir, &resource_key).await?;
-        let target_filename = ResourceFormatter::format_uuid(&resource_key);
+        let mut sub_path = Self::make_sub_path(data_dir, resource_key).await?;
+        let target_filename = ResourceFormatter::format_uuid(resource_key);
         let target_extension = offset.get_file_number();
         let name = format!("{0}.{1}", target_filename, target_extension);
         sub_path.push(name);
@@ -258,8 +258,8 @@ impl FileExecutor {
         data_dir: &Path,
         resource_key: &Uuid,
     ) -> Result<Option<(PathBuf, usize)>, FileExecutorError> {
-        let sub_path = Self::make_sub_path(data_dir, &resource_key).await?;
-        let target_filename = ResourceFormatter::format_uuid(&resource_key);
+        let sub_path = Self::make_sub_path(data_dir, resource_key).await?;
+        let target_filename = ResourceFormatter::format_uuid(resource_key);
 
         let mut max_file_count = 0;
         let mut max_file_path = None;
@@ -306,7 +306,7 @@ impl FileExecutor {
         data_dir: &Path,
         resource_key: &Uuid,
     ) -> Result<PathBuf, FileExecutorError> {
-        let subfolder = ResourceFormatter::get_uuid_prefix(&resource_key);
+        let subfolder = ResourceFormatter::get_uuid_prefix(resource_key);
 
         let mut path = PathBuf::new();
         path.push(data_dir);

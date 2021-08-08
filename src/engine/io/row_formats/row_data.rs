@@ -57,20 +57,19 @@ impl RowData {
     }
 
     pub fn get_column_not_null(&self, name: &str) -> Result<BaseSqlTypes, RowDataError> {
-        Ok(self
-            .get_column(name)?
-            .ok_or_else(|| RowDataError::UnexpectedNull(name.to_string()))?)
+        self.get_column(name)?
+            .ok_or_else(|| RowDataError::UnexpectedNull(name.to_string()))
     }
 
     pub fn serialize(&self, buffer: &mut impl BufMut) {
         buffer.put_u64_le(self.min.get_u64());
-        buffer.put_u64_le(self.max.unwrap_or(TransactionId::new(0)).get_u64());
+        buffer.put_u64_le(self.max.unwrap_or_else(|| TransactionId::new(0)).get_u64());
 
         buffer.put(self.item_pointer.serialize());
 
         //If there is null we add it to the flags and write a nullmask
         let mut mask = InfoMask::empty();
-        if self.user_data.iter().find(|x| x.is_none()).is_some() {
+        if self.user_data.iter().any(|x| x.is_none()) {
             mask = InfoMask::HAS_NULL;
             buffer.put_u8(mask.bits());
             buffer.put(NullMask::serialize(&self.user_data));
