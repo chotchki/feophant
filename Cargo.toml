@@ -25,6 +25,7 @@ path = "src/main.rs"
 [dev-dependencies]
 #Useful for debugging raw pages
 #pretty-hex = "0.2.1"
+tokio-postgres = "0.7.2"
 tempfile = "3"
 tokio-test = "0.4.2"
 
