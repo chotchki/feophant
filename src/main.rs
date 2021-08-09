@@ -4,20 +4,14 @@
 extern crate log;
 
 extern crate simplelog;
-use std::env;
-use std::ffi::OsString;
-
-use feophantlib::codec::{NetworkFrame, PgCodec};
-use feophantlib::engine::{io::IOManager, transactions::TransactionManager, Engine};
-use feophantlib::processor::ClientProcessor;
-use futures::sink::SinkExt;
-use futures::stream::StreamExt;
+use feophantlib::feophant::FeOphant;
 use simplelog::{ColorChoice, CombinedLogger, Config, LevelFilter, TermLogger, TerminalMode};
-use tokio::net::TcpListener;
-use tokio_util::codec::Framed;
+use std::env;
+use thiserror::Error;
+use tokio::signal;
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     CombinedLogger::init(vec![TermLogger::new(
         LevelFilter::Debug,
         Config::default(),
@@ -28,55 +22,17 @@ async fn main() {
 
     info!("Welcome to FeOphant!");
 
-    let args: Vec<OsString> = env::args_os().collect();
-    if args.len() != 2 {
-        error!("You MUST provide a writeable directory so FeOphant can store its data.");
-    }
+    let data_dir = env::args_os().nth(1).ok_or_else(MainError::NoDataDir)?;
+    let feo = FeOphant::new(data_dir).await?;
 
-    //Start the services first
-    let io_manager = IOManager::new();
-    let transaction_manager = TransactionManager::new();
-    let engine = Engine::new(io_manager, transaction_manager.clone());
+    signal::ctrl_c().await?;
 
-    //Bind to a fixed port
-    let port: u32 = 50000;
-    let listener = TcpListener::bind(format!("{}{}", "127.0.0.1:", port))
-        .await
-        .unwrap();
+    feo.shutdown().await?;
 
-    info!("Up and listening on port {}", port);
-
-    loop {
-        let (stream, client_addr) = listener.accept().await.unwrap();
-
-        info!("Got a connection from {}", client_addr);
-
-        let tm = transaction_manager.clone();
-        let eng = engine.clone();
-        tokio::spawn(async move {
-            let codec = PgCodec {};
-            let (mut sink, mut input) = Framed::new(stream, codec).split();
-
-            let mut process = ClientProcessor::new(eng, tm);
-            while let Some(Ok(event)) = input.next().await {
-                let responses: Vec<NetworkFrame> = match process.process(event).await {
-                    Ok(responses) => responses,
-                    Err(e) => {
-                        warn!("Had a processing error {}", e);
-                        break;
-                    }
-                };
-
-                for response in responses {
-                    match sink.send(response).await {
-                        Ok(_) => {}
-                        Err(e) => {
-                            warn!("Unable to send response {}", e);
-                            break;
-                        }
-                    }
-                }
-            }
-        });
-    }
+    Ok(())
+}
+#[derive(Debug, Error)]
+pub enum MainError {
+    #[error("You MUST provide a writeable directory so FeOphant can store its data.")]
+    NoDataDir(),
 }

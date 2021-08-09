@@ -15,4 +15,5 @@ extern crate simplelog;
 pub mod codec;
 pub mod constants;
 pub mod engine;
+pub mod feophant;
 pub mod processor;

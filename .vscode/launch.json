@@ -12,6 +12,9 @@
         ]
       },
       "cwd": "${workspaceFolder}",
+      "args": [
+        "/tmp/feophant"
+      ],
       "stopOnEntry": false,
       "sourceLanguages": [
         "rust"

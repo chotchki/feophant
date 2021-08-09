@@ -6,7 +6,7 @@ use tokio::sync::RwLock;
 
 #[derive(Clone, Debug)]
 pub struct TransactionManager {
-    tran_min: TransactionId, //Used to index the know transactions array
+    tran_min: TransactionId, //Used to index the known transactions array
     known_trans: Arc<RwLock<Vec<TransactionStatus>>>,
 }
 
