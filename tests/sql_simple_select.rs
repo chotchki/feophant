@@ -1,4 +1,4 @@
-use tokio_postgres::{SimpleQueryMessage, SimpleQueryRow};
+use tokio_postgres::SimpleQueryMessage;
 
 mod common;
 
