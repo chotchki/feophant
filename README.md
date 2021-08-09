@@ -72,6 +72,9 @@ I guess I need to commit to doing this for reals. However I am worried about rea
 
 For now, the index implementation is now on hold until I get an integrated I/O subsystem and a stubbed out WAL.
 
+The real I/O subsystem has been written and tested. About to integrate it.
+Real integration tests using a non feophant postgres rust driver are also working.
+
 **TODO**
 
 
