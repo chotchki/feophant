@@ -128,53 +128,30 @@ mod tests {
     #![allow(unused_must_use)]
     use super::*;
 
-    //Async testing help can be found here: https://blog.x5ff.xyz/blog/async-tests-tokio-rust/
-    macro_rules! aw {
-        ($e:expr) => {
-            tokio_test::block_on($e)
-        };
-    }
-
-    #[test]
-    fn tran_man_statuses() {
+    #[tokio::test]
+    async fn tran_man_statuses() -> Result<(), Box<dyn std::error::Error>> {
         let mut tm = TransactionManager::new();
-        let tran1 = aw!(tm.start_trans()).unwrap();
-        let tran2 = aw!(tm.start_trans()).unwrap();
+        let tran1 = tm.start_trans().await?;
+        let tran2 = tm.start_trans().await?;
 
         assert_ne!(tran1, tran2);
         assert!(tran1 < tran2);
 
-        assert_eq!(
-            aw!(tm.get_status(tran1)).unwrap(),
-            TransactionStatus::InProgress
-        );
-        assert_eq!(
-            aw!(tm.get_status(tran2)).unwrap(),
-            TransactionStatus::InProgress
-        );
+        assert_eq!(tm.get_status(tran1).await?, TransactionStatus::InProgress);
+        assert_eq!(tm.get_status(tran2).await?, TransactionStatus::InProgress);
 
-        assert!(aw!(tm.commit_trans(tran1)).is_ok());
-        assert!(aw!(tm.commit_trans(tran1)).is_err());
+        assert!(tm.commit_trans(tran1).await.is_ok());
+        assert!(tm.commit_trans(tran1).await.is_err());
 
-        assert_eq!(
-            aw!(tm.get_status(tran1)).unwrap(),
-            TransactionStatus::Commited
-        );
-        assert_eq!(
-            aw!(tm.get_status(tran2)).unwrap(),
-            TransactionStatus::InProgress
-        );
+        assert_eq!(tm.get_status(tran1).await?, TransactionStatus::Commited);
+        assert_eq!(tm.get_status(tran2).await?, TransactionStatus::InProgress);
 
-        assert!(aw!(tm.abort_trans(tran2)).is_ok());
-        assert!(aw!(tm.abort_trans(tran2)).is_err());
+        assert!(tm.abort_trans(tran2).await.is_ok());
+        assert!(tm.abort_trans(tran2).await.is_err());
 
-        assert_eq!(
-            aw!(tm.get_status(tran1)).unwrap(),
-            TransactionStatus::Commited
-        );
-        assert_eq!(
-            aw!(tm.get_status(tran2)).unwrap(),
-            TransactionStatus::Aborted
-        );
+        assert_eq!(tm.get_status(tran1).await?, TransactionStatus::Commited);
+        assert_eq!(tm.get_status(tran2).await?, TransactionStatus::Aborted);
+
+        Ok(())
     }
 }

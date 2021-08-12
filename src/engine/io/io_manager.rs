@@ -141,13 +141,6 @@ mod tests {
     use super::*;
     use bytes::{BufMut, BytesMut};
 
-    //Async testing help can be found here: https://blog.x5ff.xyz/blog/async-tests-tokio-rust/
-    macro_rules! aw {
-        ($e:expr) => {
-            tokio_test::block_on($e)
-        };
-    }
-
     fn get_bytes(data: u8) -> Bytes {
         let mut buf = BytesMut::with_capacity(4096);
         for _ in 0..=4095 {
@@ -156,33 +149,36 @@ mod tests {
         buf.freeze()
     }
 
-    #[test]
-    fn test_get_and_put() {
+    #[tokio::test]
+    async fn test_get_and_put() -> Result<(), Box<dyn std::error::Error>> {
         let buf_frozen = get_bytes(1);
 
         let pm = IOManager::new();
         let table = Arc::new(Table::new(Uuid::new_v4(), "test".to_string(), Vec::new()));
 
-        aw!(pm.add_page(&table.id, buf_frozen.clone()));
-        let check = aw!(pm.get_page(&table.id, &PageOffset(0))).unwrap();
+        pm.add_page(&table.id, buf_frozen.clone()).await;
+        let check = pm.get_page(&table.id, &PageOffset(0)).await.unwrap();
         assert_eq!(check, buf_frozen.clone());
+
+        Ok(())
     }
 
-    #[test]
-    fn test_edit_page() {
+    #[tokio::test]
+    async fn test_edit_page() {
         let buf_1 = get_bytes(1);
         let buf_2 = get_bytes(2);
 
         let pm = IOManager::new();
         let table = Arc::new(Table::new(Uuid::new_v4(), "test".to_string(), Vec::new()));
 
-        aw!(pm.add_page(&table.id, buf_1.clone()));
-        aw!(pm.add_page(&table.id, buf_1.clone()));
-        let check_1 = aw!(pm.get_page(&table.id, &PageOffset(1))).unwrap();
+        pm.add_page(&table.id, buf_1.clone()).await;
+        pm.add_page(&table.id, buf_1.clone()).await;
+        let check_1 = pm.get_page(&table.id, &PageOffset(1)).await.unwrap();
         assert_eq!(buf_1.clone(), check_1.clone());
 
-        aw!(pm.update_page(&table.id, buf_2.clone(), &PageOffset(1)));
-        let check_2 = aw!(pm.get_page(&table.id, &PageOffset(1))).unwrap();
+        pm.update_page(&table.id, buf_2.clone(), &PageOffset(1))
+            .await;
+        let check_2 = pm.get_page(&table.id, &PageOffset(1)).await.unwrap();
         assert_eq!(buf_2.clone(), check_2.clone());
         assert_ne!(buf_1.clone(), check_2.clone());
     }

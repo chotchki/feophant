@@ -81,7 +81,7 @@ impl Executor {
         target_type: Arc<SqlTypeDefinition>,
     ) -> Pin<Box<impl Stream<Item = Result<SqlTuple, ExecutorError>>>> {
         let s = try_stream! {
-            let vis = self.cons_man.clone();
+            let vis = self.cons_man;
 
             for await row in vis.get_stream(tran_id, src_table.clone()) {
                 let data = row?.user_data.clone();
@@ -101,10 +101,10 @@ impl Executor {
         table: Arc<Table>,
         source: Arc<Plan>,
     ) -> Pin<Box<impl Stream<Item = Result<SqlTuple, ExecutorError>>>> {
-        let vis = self.cons_man.clone();
+        let vis = self.clone().cons_man;
 
         let s = try_stream! {
-            for await val in self.execute_plans(tran_id, source) {
+            for await val in self.clone().execute_plans(tran_id, source) {
                 let unwrapped_val = val?;
                 vis.clone()
                     .insert_row(tran_id, table.clone(), unwrapped_val.clone())
@@ -133,7 +133,7 @@ impl Executor {
         tran_id: TransactionId,
         parse_tree: ParseTree,
     ) -> Result<Vec<SqlTuple>, ExecutorError> {
-        let rm = self.cons_man.clone();
+        let cm = self.cons_man.clone();
 
         let create_table = match parse_tree {
             ParseTree::CreateTable(t) => t,
@@ -147,11 +147,11 @@ impl Executor {
             Some(BaseSqlTypes::Text(create_table.table_name.clone())),
         ]);
 
-        rm.insert_row(tran_id, pg_class, table_row).await?;
+        cm.insert_row(tran_id, pg_class, table_row).await?;
 
         let pg_attribute = TableDefinitions::PgAttribute.value();
         for i in 0..create_table.provided_columns.len() {
-            let rm = self.cons_man.clone();
+            let cm = self.cons_man.clone();
             let i_u32 = u32::try_from(i).map_err(ExecutorError::ConversionError)?;
             let table_row = SqlTuple(vec![
                 Some(BaseSqlTypes::Uuid(table_id)),
@@ -165,7 +165,7 @@ impl Executor {
                 Some(BaseSqlTypes::Integer(i_u32)),
                 Some(BaseSqlTypes::Bool(create_table.provided_columns[i].null)),
             ]);
-            rm.clone()
+            cm.clone()
                 .insert_row(tran_id, pg_attribute.clone(), table_row)
                 .await?;
         }

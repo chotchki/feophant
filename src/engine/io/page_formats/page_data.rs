@@ -181,14 +181,7 @@ mod tests {
     use super::super::super::super::transactions::TransactionId;
     use super::*;
     use futures::pin_mut;
-    use futures::stream::StreamExt;
-
-    //Async testing help can be found here: https://blog.x5ff.xyz/blog/async-tests-tokio-rust/
-    macro_rules! aw {
-        ($e:expr) => {
-            tokio_test::block_on($e)
-        };
-    }
+    use tokio_stream::StreamExt;
 
     fn get_item_pointer(row_num: usize) -> ItemPointer {
         ItemPointer::new(PageOffset(0), UInt12::new(row_num as u16).unwrap())
@@ -221,8 +214,8 @@ mod tests {
         ))
     }
 
-    #[test]
-    fn test_page_data_roundtrip() -> Result<(), Box<dyn std::error::Error>> {
+    #[tokio::test]
+    async fn test_page_data_roundtrip() -> Result<(), Box<dyn std::error::Error>> {
         let table = get_table();
 
         let rows = vec!(RowData::new(table.sql_type.clone(),
@@ -246,14 +239,14 @@ mod tests {
         let pg_parsed = PageData::parse(table.clone(), PageOffset(0), serial).unwrap();
 
         pin_mut!(pg_parsed);
-        let result_rows: Vec<RowData> = aw!(pg_parsed.get_stream().collect());
+        let result_rows: Vec<RowData> = pg_parsed.get_stream().collect().await;
         assert_eq!(rows, result_rows);
 
         Ok(())
     }
 
-    #[test]
-    fn test_page_data_roundtrip_two_rows() {
+    #[tokio::test]
+    async fn test_page_data_roundtrip_two_rows() {
         let table = get_table();
 
         let rows = vec!(RowData::new(table.sql_type.clone(),
@@ -284,12 +277,12 @@ mod tests {
         let pg_parsed = PageData::parse(table.clone(), PageOffset(0), serial).unwrap();
 
         pin_mut!(pg_parsed);
-        let result_rows: Vec<RowData> = aw!(pg_parsed.get_stream().collect());
+        let result_rows: Vec<RowData> = pg_parsed.get_stream().collect().await;
         assert_eq!(rows, result_rows);
     }
 
-    #[test]
-    fn test_page_data_update() {
+    #[tokio::test]
+    async fn test_page_data_update() {
         let table = get_table();
 
         let mut row = RowData::new(table.sql_type.clone(),
@@ -314,7 +307,7 @@ mod tests {
         assert!(pd.update(row.clone(), ip.count).is_ok());
 
         pin_mut!(pd);
-        let result_rows: Vec<RowData> = aw!(pd.get_stream().collect());
+        let result_rows: Vec<RowData> = pd.get_stream().collect().await;
         assert_eq!(row, result_rows[0]);
     }
 }

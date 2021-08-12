@@ -1,5 +1,7 @@
 use super::page_formats::{PageOffset, UInt12, UInt12Error};
+use async_stream::try_stream;
 use bytes::Bytes;
+use futures::Stream;
 use std::convert::TryFrom;
 use std::ffi::OsString;
 use std::num::TryFromIntError;
@@ -19,7 +21,6 @@ use request_type::RequestType;
 mod resource_formatter;
 pub use resource_formatter::ResourceFormatter;
 mod response_type;
-use response_type::ResponseType;
 
 /*
 This is a different approach than I had done before. This file manager runs its own loop based on a spawned task
@@ -29,12 +30,9 @@ since the prior approach was too lock heavy and I couldn't figure out an approac
         let offset_in_file = offset.0 % PAGES_PER_FILE * PAGE_SIZE as usize;
 */
 
+#[derive(Clone, Debug)]
 pub struct FileManager {
-    request_queue: UnboundedSender<(
-        Uuid,
-        RequestType,
-        Sender<Result<ResponseType, FileExecutorError>>,
-    )>,
+    request_queue: UnboundedSender<(Uuid, RequestType)>,
     request_shutdown: UnboundedSender<Sender<()>>,
 }
 
@@ -75,29 +73,45 @@ impl FileManager {
         let (res_request, res_receiver) = oneshot::channel();
 
         self.request_queue
-            .send((*resource_key, RequestType::Add(page), res_request))?;
+            .send((*resource_key, RequestType::Add((page, res_request))))?;
 
-        match res_receiver.await?? {
-            ResponseType::Add(po) => Ok(po),
-            ResponseType::Read(_) => Err(FileManagerError::UnexpectedRead()),
-            ResponseType::Update(_) => Err(FileManagerError::UnexpectedUpdate()),
-        }
+        Ok(res_receiver.await??)
     }
 
     pub async fn get_page(
         &self,
         resource_key: &Uuid,
         offset: &PageOffset,
-    ) -> Result<Bytes, FileManagerError> {
+    ) -> Result<Option<Bytes>, FileManagerError> {
         let (res_request, res_receiver) = oneshot::channel();
 
         self.request_queue
-            .send((*resource_key, RequestType::Read(*offset), res_request))?;
+            .send((*resource_key, RequestType::Read((*offset, res_request))))?;
 
-        match res_receiver.await?? {
-            ResponseType::Add(_) => Err(FileManagerError::UnexpectedAdd()),
-            ResponseType::Read(b) => Ok(b),
-            ResponseType::Update(_) => Err(FileManagerError::UnexpectedUpdate()),
+        Ok(res_receiver.await??)
+    }
+
+    pub fn get_stream(
+        &self,
+        resource_key: &Uuid,
+    ) -> impl Stream<Item = Result<Option<Bytes>, FileManagerError>> {
+        let request_queue = self.request_queue.clone();
+        let resource_key = *resource_key;
+
+        try_stream! {
+            let mut page_num = PageOffset(0);
+            loop {
+                let (res_request, res_receiver) = oneshot::channel();
+
+                request_queue
+                    .send((resource_key, RequestType::Read((page_num, res_request))))?;
+
+                let page = res_receiver.await??;
+
+                yield page;
+
+                page_num += PageOffset(1);
+            }
         }
     }
 
@@ -116,15 +130,10 @@ impl FileManager {
 
         self.request_queue.send((
             *resource_key,
-            RequestType::Update((*offset, page)),
-            res_request,
+            RequestType::Update((*offset, page, res_request)),
         ))?;
 
-        match res_receiver.await?? {
-            ResponseType::Add(_) => Err(FileManagerError::UnexpectedAdd()),
-            ResponseType::Read(_) => Err(FileManagerError::UnexpectedRead()),
-            ResponseType::Update(_) => Ok(()),
-        }
+        Ok(res_receiver.await??)
     }
 }
 
@@ -156,14 +165,7 @@ pub enum FileManagerError {
     #[error(transparent)]
     RecvError(#[from] RecvError),
     #[error(transparent)]
-    SendError(
-        #[from]
-        SendError<(
-            Uuid,
-            RequestType,
-            Sender<Result<ResponseType, FileExecutorError>>,
-        )>,
-    ),
+    SendError(#[from] SendError<(Uuid, RequestType)>),
     #[error(transparent)]
     ShutdownSendError(#[from] SendError<Sender<()>>),
     #[error(transparent)]
@@ -216,7 +218,8 @@ mod tests {
             Duration::new(10, 0),
             fm.get_page(&test_uuid, &test_page_num),
         )
-        .await??;
+        .await??
+        .unwrap();
 
         assert_eq!(test_page, test_page_get);
 
@@ -231,20 +234,16 @@ mod tests {
             Duration::new(10, 0),
             fm.get_page(&test_uuid, &test_page_num),
         )
-        .await??;
+        .await??
+        .unwrap();
 
         assert_eq!(test_page2, test_page_get2);
 
         fm.shutdown().await.unwrap();
 
         let fm2 = FileManager::new(tmp_dir.as_os_str().to_os_string())?;
-        let test_uuid3 = Uuid::new_v4();
         let test_page3 = get_test_page(3);
-        let test_page_num3 = //timeout(
-            //Duration::new(1000, 0),
-            fm2.add_page(&test_uuid, test_page3.clone())//,
-       // )
-        .await?;
+        let test_page_num3 = fm2.add_page(&test_uuid, test_page3.clone()).await?;
         println!("{0}", test_page_num3);
         assert!(test_page_num3 > test_page_num);
 
@@ -252,7 +251,8 @@ mod tests {
             Duration::new(10, 0),
             fm2.get_page(&test_uuid, &test_page_num),
         )
-        .await??;
+        .await??
+        .unwrap();
 
         assert_eq!(test_page2, test_page_get2);
 

@@ -76,6 +76,10 @@ pub enum PageOffsetError {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
+    use uuid::Uuid;
+
     use super::*;
 
     #[test]
@@ -89,6 +93,10 @@ mod tests {
     #[test]
     fn test_calculate_page_offset() -> Result<(), Box<dyn std::error::Error>> {
         assert_eq!(PageOffset::calculate_page_offset(0, 0), PageOffset(0));
+        assert_eq!(
+            PageOffset::calculate_page_offset(0, PAGE_SIZE as usize),
+            PageOffset(1)
+        );
 
         assert_eq!(
             PageOffset::calculate_page_offset(1, PAGE_SIZE as usize),
@@ -169,6 +177,22 @@ mod tests {
             true
         );
 
+        Ok(())
+    }
+    #[test]
+    fn test_increment_and_hash_map() -> Result<(), Box<dyn std::error::Error>> {
+        let test = PageOffset(0);
+        assert_eq!(test.next(), PageOffset(1));
+
+        let test_uuid = Uuid::new_v4();
+
+        let mut resource_lookup: HashMap<Uuid, PageOffset> = HashMap::new();
+        resource_lookup.insert(test_uuid, PageOffset(0));
+        let test0 = resource_lookup.get(&test_uuid).unwrap();
+        resource_lookup.insert(test_uuid, test0.next());
+        let test1 = resource_lookup.get(&test_uuid).unwrap();
+
+        assert_eq!(*test1, PageOffset(1));
         Ok(())
     }
 }

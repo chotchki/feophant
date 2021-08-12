@@ -185,19 +185,13 @@ impl LockManagerEntry {
 mod tests {
     use super::*;
 
-    macro_rules! aw {
-        ($e:expr) => {
-            tokio_test::block_on($e)
-        };
-    }
-
-    #[test]
-    fn test_lock_manager_entries() -> Result<(), Box<dyn std::error::Error>> {
+    #[tokio::test]
+    async fn test_lock_manager_entries() -> Result<(), Box<dyn std::error::Error>> {
         let le = LockManagerEntry::new();
 
         //Get a lock twice for read and see if they are equal
-        let lock1 = aw!(le.get_lock(&PageOffset(0)));
-        let lock2 = aw!(le.get_lock(&PageOffset(0)));
+        let lock1 = le.get_lock(&PageOffset(0)).await;
+        let lock2 = le.get_lock(&PageOffset(0)).await;
 
         assert_eq!(Arc::as_ptr(&lock1), Arc::as_ptr(&lock2));
         assert_eq!(Arc::strong_count(&lock1), 2);
@@ -206,14 +200,14 @@ mod tests {
         {
             let mut locks = vec![];
             for i in 0..100 {
-                locks.push(aw!(le.get_lock(&PageOffset(i))));
+                locks.push(le.get_lock(&PageOffset(i)).await);
             }
-            assert_eq!(aw!(le.len()), 100);
+            assert_eq!(le.len().await, 100);
         }
         for i in 0..=CLEANUP_RATE as usize {
-            aw!(le.get_lock(&PageOffset(i)));
+            le.get_lock(&PageOffset(i)).await;
         }
-        assert!(aw!(le.len()) < 110);
+        assert!(le.len().await < 110);
 
         Ok(())
     }

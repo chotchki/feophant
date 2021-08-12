@@ -1,10 +1,14 @@
 use crate::{
     codec::{NetworkFrame, PgCodec},
-    engine::{io::IOManager, transactions::TransactionManager, Engine},
+    engine::{
+        io::{FileManager, FileManagerError},
+        transactions::TransactionManager,
+        Engine,
+    },
     processor::ClientProcessor,
 };
 use futures::{SinkExt, StreamExt};
-use std::ffi::OsString;
+use std::{ffi::OsString, sync::Arc};
 use thiserror::Error;
 use tokio::{
     net::TcpListener,
@@ -21,13 +25,14 @@ pub struct FeOphant {
     listener: TcpListener,
     transaction_manager: TransactionManager,
     engine: Engine,
+    file_manager: Arc<FileManager>,
 }
 
 impl FeOphant {
     pub async fn new(data_dir: OsString, port: u16) -> Result<FeOphant, FeOphantError> {
-        let io_manager = IOManager::new();
+        let file_manager = Arc::new(FileManager::new(data_dir)?);
         let transaction_manager = TransactionManager::new();
-        let engine = Engine::new(io_manager, transaction_manager.clone());
+        let engine = Engine::new(file_manager.clone(), transaction_manager.clone());
 
         let listener = TcpListener::bind(format!("{}{}", "127.0.0.1:", port)).await?;
         let port = listener.local_addr()?.port();
@@ -38,6 +43,7 @@ impl FeOphant {
             listener,
             transaction_manager,
             engine,
+            file_manager,
         })
     }
 
@@ -98,6 +104,12 @@ impl FeOphant {
             };
         }
 
+        //Clean up
+        match self.file_manager.shutdown().await {
+            Ok(_) => {}
+            Err(e) => error!("Had an error shutting down I/O {0}", e),
+        }
+
         match shutdown_sender {
             Some(s) => {
                 debug!("Attempting to signal shutdown.");
@@ -117,6 +129,8 @@ pub enum FeOphantError {
     AlreadyStarted(),
     #[error("Can't start the FeOphant twice")]
     CantStartTwice(),
+    #[error(transparent)]
+    FileManagerError(#[from] FileManagerError),
     #[error(transparent)]
     IOError(#[from] std::io::Error),
     #[error(transparent)]

@@ -8,7 +8,7 @@ pub use executor::ExecutorError;
 
 pub mod io;
 use futures::pin_mut;
-use io::{IOManager, RowManager, VisibleRowManager};
+use io::{RowManager, VisibleRowManager};
 pub mod objects;
 use objects::ParseTree;
 
@@ -28,8 +28,10 @@ pub mod transactions;
 use transactions::{TransactionId, TransactionManager};
 
 use self::io::ConstraintManager;
+use self::io::FileManager;
 use self::objects::QueryResult;
 use std::ops::Deref;
+use std::sync::Arc;
 use thiserror::Error;
 use tokio_stream::StreamExt;
 
@@ -40,8 +42,8 @@ pub struct Engine {
 }
 
 impl Engine {
-    pub fn new(io_manager: IOManager, tran_manager: TransactionManager) -> Engine {
-        let vis_row_man = VisibleRowManager::new(RowManager::new(io_manager), tran_manager);
+    pub fn new(file_manager: Arc<FileManager>, tran_manager: TransactionManager) -> Engine {
+        let vis_row_man = VisibleRowManager::new(RowManager::new(file_manager), tran_manager);
         let con_man = ConstraintManager::new(vis_row_man.clone());
         Engine {
             analyzer: Analyzer::new(vis_row_man),
@@ -114,25 +116,32 @@ pub enum EngineError {
 
 #[cfg(test)]
 mod tests {
-    use super::io::IOManager;
+    use tempfile::TempDir;
+
     use super::transactions::TransactionManager;
     use super::*;
 
-    #[test]
-    fn create_insert_select() -> Result<(), Box<dyn std::error::Error>> {
+    #[tokio::test]
+    async fn create_insert_select() -> Result<(), Box<dyn std::error::Error>> {
+        let tmp = TempDir::new()?;
+        let tmp_dir = tmp.path().as_os_str().to_os_string();
+
         let create_test = "create table foo (bar text)".to_string();
         let insert_test = "insert into foo values('test text')".to_string();
         let select_test = "select bar from foo".to_string();
 
         let mut transaction_manager = TransactionManager::new();
-        let mut engine = Engine::new(IOManager::new(), transaction_manager.clone());
+        let mut engine = Engine::new(
+            Arc::new(FileManager::new(tmp_dir)?),
+            transaction_manager.clone(),
+        );
 
-        let tran = aw!(transaction_manager.start_trans())?;
-        aw!(engine.process_query(tran, create_test))?;
-        aw!(transaction_manager.commit_trans(tran))?;
+        let tran = transaction_manager.start_trans().await?;
+        engine.process_query(tran, create_test).await?;
+        transaction_manager.commit_trans(tran).await?;
 
-        aw!(engine.process_query(tran, insert_test))?;
-        aw!(engine.process_query(tran, select_test))?;
+        engine.process_query(tran, insert_test).await?;
+        engine.process_query(tran, select_test).await?;
 
         Ok(())
     }

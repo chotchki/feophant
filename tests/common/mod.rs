@@ -1,4 +1,4 @@
-use feophantlib::engine::{io::IOManager, transactions::TransactionManager, Engine};
+use feophantlib::engine::{transactions::TransactionManager, Engine};
 use feophantlib::feophant::FeOphant;
 use tempfile::TempDir;
 use tokio::sync::oneshot;
@@ -7,19 +7,6 @@ use tokio::sync::{
     oneshot::Sender,
 };
 use tokio_postgres::{Client, NoTls};
-
-#[macro_export]
-macro_rules! aw {
-    ($e:expr) => {
-        tokio_test::block_on($e)
-    };
-}
-
-pub fn _create_engine() -> (TransactionManager, Engine) {
-    let transaction_manager = TransactionManager::new();
-    let engine = Engine::new(IOManager::new(), transaction_manager.clone());
-    (transaction_manager, engine)
-}
 
 pub async fn _create_server_and_client(
 ) -> Result<(UnboundedSender<Sender<()>>, Client), Box<dyn std::error::Error>> {

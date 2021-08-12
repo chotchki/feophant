@@ -6,11 +6,12 @@
 
 use std::collections::BTreeMap;
 use std::ops::Range;
+use std::sync::Arc;
 
 use super::index_formats::{BTreeLeafError, BTreeNode, BTreeNodeError};
+use super::page_formats::ItemIdData;
 use super::page_formats::PageOffset;
-use super::IOManager;
-use super::{page_formats::ItemIdData, IOManagerError};
+use super::{FileManager, FileManagerError};
 use crate::engine::io::SelfEncodedSize;
 use crate::{
     constants::PAGE_SIZE,
@@ -28,12 +29,12 @@ use uuid::Uuid;
 
 #[derive(Clone, Debug)]
 pub struct IndexManager {
-    io_manager: IOManager,
+    file_manager: Arc<FileManager>,
 }
 
 impl IndexManager {
-    pub fn new(io_manager: IOManager) -> IndexManager {
-        IndexManager { io_manager }
+    pub fn new(file_manager: Arc<FileManager>) -> IndexManager {
+        IndexManager { file_manager }
     }
 
     pub async fn add(
@@ -89,7 +90,7 @@ impl IndexManager {
                 BTreeNode::Leaf(mut l) => {
                     if l.can_fit(&new_key) {
                         return Ok(self
-                            .io_manager
+                            .file_manager
                             .update_page(&index_def.id, l.serialize()?, &current_node.1)
                             .await?);
                     }
@@ -147,7 +148,7 @@ impl IndexManager {
         index_def: &Index,
         offset: &PageOffset,
     ) -> Result<BTreeNode, IndexManagerError> {
-        match self.io_manager.get_page(&index_def.id, offset).await {
+        match self.file_manager.get_page(&index_def.id, offset).await? {
             Some(mut page) => Ok(BTreeNode::parse(&mut page, index_def)?),
             None => Err(IndexManagerError::NoSuchNode(*offset)),
         }
@@ -174,7 +175,7 @@ impl IndexManager {
                 };
 
                 let page_num = self
-                    .io_manager
+                    .file_manager
                     .add_page(&index_def.id, root_node.serialize()?)
                     .await?;
                 if page_num != PageOffset(1) {
@@ -192,7 +193,7 @@ impl IndexManager {
         let root_page = vec![0; PAGE_SIZE as usize];
         root_page_buffer.extend_from_slice(&root_page);
         let page_num = self
-            .io_manager
+            .file_manager
             .add_page(index, root_page_buffer.freeze())
             .await?;
 
@@ -215,7 +216,7 @@ pub enum IndexManagerError {
     )]
     ConcurrentCreationError(),
     #[error(transparent)]
-    IOManagerError(#[from] IOManagerError),
+    FileManagerError(#[from] FileManagerError),
     #[error("Key too large size: {0}, maybe the developer should fix this.")]
     KeyTooLarge(usize),
     #[error("Node does not exists {0}")]

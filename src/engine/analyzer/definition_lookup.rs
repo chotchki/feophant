@@ -188,66 +188,80 @@ pub enum DefinitionLookupError {
 
 #[cfg(test)]
 mod tests {
+    use tempfile::TempDir;
+
+    use crate::engine::io::FileManager;
+
     // Note this useful idiom: importing names from outer (for mod tests) scope.
-    use super::super::super::io::{IOManager, RowManager};
+    use super::super::super::io::RowManager;
     use super::super::super::transactions::TransactionManager;
     use super::super::super::Engine;
     use super::*;
 
-    macro_rules! aw {
-        ($e:expr) => {
-            tokio_test::block_on($e)
-        };
-    }
+    #[tokio::test]
+    async fn test_find_pg_class() -> Result<(), Box<dyn std::error::Error>> {
+        let tmp = TempDir::new()?;
+        let tmp_dir = tmp.path().as_os_str().to_os_string();
 
-    #[test]
-    fn test_find_pg_class() {
-        let pm = IOManager::new();
+        let fm = Arc::new(FileManager::new(tmp_dir)?);
         let tm = TransactionManager::new();
-        let rm = RowManager::new(pm);
+        let rm = RowManager::new(fm);
         let vm = VisibleRowManager::new(rm, tm);
         let dl = DefinitionLookup::new(vm);
 
         let tran_id = TransactionId::new(1);
 
-        let pg_class_def = aw!(dl.get_definition(tran_id, "pg_class".to_string())).unwrap();
+        let pg_class_def = dl.get_definition(tran_id, "pg_class".to_string()).await?;
         assert_eq!(pg_class_def.name, "pg_class".to_string());
+
+        Ok(())
     }
 
-    #[test]
-    fn test_no_such_class() {
-        let pm = IOManager::new();
+    #[tokio::test]
+    async fn test_no_such_class() -> Result<(), Box<dyn std::error::Error>> {
+        let tmp = TempDir::new()?;
+        let tmp_dir = tmp.path().as_os_str().to_os_string();
+
+        let fm = Arc::new(FileManager::new(tmp_dir)?);
         let tm = TransactionManager::new();
-        let rm = RowManager::new(pm);
+        let rm = RowManager::new(fm);
         let vm = VisibleRowManager::new(rm, tm);
         let dl = DefinitionLookup::new(vm);
 
         let tran_id = TransactionId::new(1);
 
-        let pg_class_def = aw!(dl.get_definition(tran_id, "something_random".to_string()));
+        let pg_class_def = dl
+            .get_definition(tran_id, "something_random".to_string())
+            .await;
         match pg_class_def {
             Ok(_) => assert!(false),
             Err(DefinitionLookupError::TableDoesNotExist(_)) => assert!(true),
             _ => assert!(false),
         }
+        Ok(())
     }
 
-    #[test]
-    fn test_def_lookup() -> Result<(), Box<dyn std::error::Error>> {
-        let pm = IOManager::new();
+    #[tokio::test]
+    async fn test_def_lookup() -> Result<(), Box<dyn std::error::Error>> {
+        let tmp = TempDir::new()?;
+        let tmp_dir = tmp.path().as_os_str().to_os_string();
+
+        let fm = Arc::new(FileManager::new(tmp_dir)?);
         let mut tm = TransactionManager::new();
-        let rm = RowManager::new(pm.clone());
+        let rm = RowManager::new(fm.clone());
         let vm = VisibleRowManager::new(rm.clone(), tm.clone());
         let dl = DefinitionLookup::new(vm);
-        let mut engine = Engine::new(pm, tm.clone());
+        let mut engine = Engine::new(fm, tm.clone());
 
-        let tran = aw!(tm.start_trans())?;
-        aw!(engine.process_query(tran, "create table foo (bar text)".to_string()))?;
-        aw!(tm.commit_trans(tran))?;
+        let tran = tm.start_trans().await?;
+        engine
+            .process_query(tran, "create table foo (bar text)".to_string())
+            .await?;
+        tm.commit_trans(tran).await?;
 
-        let tran = aw!(tm.start_trans())?;
-        aw!(dl.get_definition(tran, "foo".to_string()))?;
-        aw!(tm.commit_trans(tran))?;
+        let tran = tm.start_trans().await?;
+        dl.get_definition(tran, "foo".to_string()).await?;
+        tm.commit_trans(tran).await?;
 
         assert!(true);
         Ok(())

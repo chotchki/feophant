@@ -1,6 +1,6 @@
 /// Inner type that implements the actual I/O operations so the outter type can
 /// handle queue management.
-use super::{request_type::RequestType, response_type::ResponseType};
+use super::request_type::RequestType;
 use crate::constants::PAGE_SIZE;
 use crate::engine::io::file_manager::ResourceFormatter;
 use crate::engine::io::page_formats::PageOffset;
@@ -33,22 +33,14 @@ const EMPTY_BUFFER: [u8; 16] = [0u8; 16];
 #[derive(Debug)]
 pub struct FileExecutor {
     data_dir: PathBuf,
-    receive_queue: UnboundedReceiver<(
-        Uuid,
-        RequestType,
-        Sender<Result<ResponseType, FileExecutorError>>,
-    )>,
+    receive_queue: UnboundedReceiver<(Uuid, RequestType)>,
     receive_shutdown: UnboundedReceiver<Sender<()>>,
 }
 
 impl FileExecutor {
     pub fn new(
         raw_path: OsString,
-        receive_queue: UnboundedReceiver<(
-            Uuid,
-            RequestType,
-            Sender<Result<ResponseType, FileExecutorError>>,
-        )>,
+        receive_queue: UnboundedReceiver<(Uuid, RequestType)>,
         receive_shutdown: UnboundedReceiver<Sender<()>>,
     ) -> Result<FileExecutor, FileExecutorError> {
         let data_dir = Path::new(&raw_path).to_path_buf();
@@ -80,13 +72,10 @@ impl FileExecutor {
                     } else {}
                 }
                 maybe_recv = self.receive_queue.recv() => {
-                    if let Some((resource_key, req_type, response_channel)) = maybe_recv {
-                        let result = self
-                            .handle_request(&mut resource_lookup, &resource_key, &req_type)
+                    if let Some((resource_key, req_type)) = maybe_recv {
+                        self
+                            .handle_request(&mut resource_lookup, &resource_key, req_type)
                             .await;
-                        response_channel
-                            .send(result)
-                            .unwrap_or_else(|_| error!("Unable to response back."));
                     } else {
                         break;
                     }
@@ -104,91 +93,220 @@ impl FileExecutor {
         }
     }
 
+    //TODO All these match blocks suck but I don't see a way around them.
+    //I'm hoping clippy yells at me once I get it compiling
     async fn handle_request(
         &self,
         resource_lookup: &mut HashMap<Uuid, PageOffset>,
         resource_key: &Uuid,
-        req_type: &RequestType,
-    ) -> Result<ResponseType, FileExecutorError> {
+        req_type: RequestType,
+    ) -> Result<(), FileExecutorError> {
         //Find the resource key's latest offset so we can iterate on it for adds
         let next_po = match resource_lookup.get(resource_key) {
             Some(po) => *po,
             None => {
                 let po = self.find_next_offset(resource_key).await?;
+                println!("found {0}", po);
                 resource_lookup.insert(*resource_key, po);
                 po
             }
         };
 
-        /* Goals here:
-            Process each request.
-            If requests access the SAME file, they cannot happen at the same time.
-                PageOffset can tell me that now.
-            Requests to the same file should reuse file handles.
-            Requests to add should be ordered per uuid.
-        */
-
         match req_type {
-            RequestType::Add(buffer) => {
+            RequestType::Add((buffer, response)) => {
                 let mut buffer = buffer.clone();
 
-                resource_lookup.insert(*resource_key, next_po.next());
+                let new_po = next_po.next();
+                println!("Increment {0} {1} {2}", next_po, new_po, resource_key);
+                resource_lookup.insert(*resource_key, new_po);
                 let file_path =
-                    Self::make_file_path(self.data_dir.as_path(), resource_key, &next_po).await?;
+                    match Self::make_file_path(self.data_dir.as_path(), resource_key, &next_po)
+                        .await
+                    {
+                        Ok(o) => o,
+                        Err(e) => {
+                            response.send(Err(e));
+                            return Ok(());
+                        }
+                    };
 
                 //Need a file handle
-                let mut file = OpenOptions::new()
+                let mut file = match OpenOptions::new()
                     .write(true)
                     .create(true)
                     .open(file_path)
-                    .await?;
+                    .await
+                {
+                    Ok(o) => o,
+                    Err(e) => {
+                        response.send(Err(FileExecutorError::IOError(e)));
+                        return Ok(());
+                    }
+                };
 
-                file.set_len(u64::try_from(next_po.get_file_chunk_size())?)
-                    .await?;
-                file.seek(SeekFrom::Start(u64::try_from(
-                    next_po.get_file_chunk_size(),
-                )?))
-                .await?;
+                match file
+                    .set_len(u64::try_from(next_po.get_file_chunk_size())?)
+                    .await
+                {
+                    Ok(o) => o,
+                    Err(e) => {
+                        response.send(Err(FileExecutorError::IOError(e)));
+                        return Ok(());
+                    }
+                };
 
-                file.write_all_buf(&mut buffer).await?;
+                match file
+                    .seek(SeekFrom::Start(u64::try_from(next_po.get_file_seek())?))
+                    .await
+                {
+                    Ok(o) => o,
+                    Err(e) => {
+                        response.send(Err(FileExecutorError::IOError(e)));
+                        return Ok(());
+                    }
+                };
 
-                Ok(ResponseType::Add(next_po))
-            }
-            RequestType::Read(po) => {
-                let file_path =
-                    Self::make_file_path(self.data_dir.as_path(), resource_key, po).await?;
-                let mut buffer = BytesMut::with_capacity(PAGE_SIZE as usize);
+                match file.write_all_buf(&mut buffer).await {
+                    Ok(o) => o,
+                    Err(e) => {
+                        response.send(Err(FileExecutorError::IOError(e)));
+                        return Ok(());
+                    }
+                };
 
-                let mut file = File::open(file_path).await?;
-
-                file.seek(SeekFrom::Start(u64::try_from(po.get_file_chunk_size())?))
-                    .await?;
-
-                while buffer.len() != PAGE_SIZE as usize {
-                    let readamt = file.read_buf(&mut buffer).await?;
-                    if readamt == 0 {
-                        return Err(FileExecutorError::IncompleteRead(readamt, PAGE_SIZE));
+                match file.sync_all().await {
+                    Ok(o) => o,
+                    Err(e) => {
+                        response.send(Err(FileExecutorError::IOError(e)));
+                        return Ok(());
                     }
                 }
-                Ok(ResponseType::Read(buffer.freeze()))
+
+                println!("Add {0}", next_po);
+                response.send(Ok(next_po));
+
+                Ok(())
             }
-            RequestType::Update((po, buffer)) => {
+            RequestType::Read((po, response)) => {
+                let file_path =
+                    match Self::make_file_path(self.data_dir.as_path(), resource_key, &po).await {
+                        Ok(o) => o,
+                        Err(e) => {
+                            response.send(Err(e));
+                            return Ok(());
+                        }
+                    };
+
+                let mut buffer = BytesMut::with_capacity(PAGE_SIZE as usize);
+
+                let mut file = match File::open(file_path).await {
+                    Ok(o) => o,
+                    Err(e) => {
+                        response.send(Ok(None));
+                        return Ok(());
+                    }
+                };
+
+                let file_meta = match file.metadata().await {
+                    Ok(o) => o,
+                    Err(e) => {
+                        response.send(Err(FileExecutorError::IOError(e)));
+                        return Ok(());
+                    }
+                };
+
+                let file_len = file_meta.len();
+                if u64::try_from(po.get_file_chunk_size())? > file_len {
+                    response.send(Ok(None));
+                    return Ok(());
+                }
+
+                match file
+                    .seek(SeekFrom::Start(u64::try_from(po.get_file_seek())?))
+                    .await
+                {
+                    Ok(o) => o,
+                    Err(e) => {
+                        response.send(Ok(None));
+                        return Ok(());
+                    }
+                };
+
+                while buffer.len() != PAGE_SIZE as usize {
+                    let readamt = match file.read_buf(&mut buffer).await {
+                        Ok(o) => o,
+                        Err(e) => {
+                            response.send(Err(FileExecutorError::IOError(e)));
+                            return Ok(());
+                        }
+                    };
+                    if readamt == 0 {
+                        response.send(Err(FileExecutorError::IncompleteRead(
+                            readamt,
+                            buffer.len(),
+                        )));
+                        return Ok(());
+                    }
+                }
+
+                response.send(Ok(Some(buffer.freeze())));
+                Ok(())
+            }
+            RequestType::Update((po, buffer, response)) => {
                 let mut buffer = buffer.clone();
                 let file_path =
-                    Self::make_file_path(self.data_dir.as_path(), resource_key, po).await?;
+                    match Self::make_file_path(self.data_dir.as_path(), resource_key, &po).await {
+                        Ok(o) => o,
+                        Err(e) => {
+                            response.send(Err(e));
+                            return Ok(());
+                        }
+                    };
 
                 //Need a file handle
-                let mut file = OpenOptions::new()
+                let mut file = match OpenOptions::new()
                     .write(true)
                     .create(true)
                     .open(file_path)
-                    .await?;
+                    .await
+                {
+                    Ok(o) => o,
+                    Err(e) => {
+                        response.send(Err(FileExecutorError::IOError(e)));
+                        return Ok(());
+                    }
+                };
 
-                file.seek(SeekFrom::Start(u64::try_from(po.get_file_chunk_size())?))
-                    .await?;
+                match file
+                    .seek(SeekFrom::Start(u64::try_from(po.get_file_seek())?))
+                    .await
+                {
+                    Ok(o) => o,
+                    Err(e) => {
+                        response.send(Err(FileExecutorError::IOError(e)));
+                        return Ok(());
+                    }
+                };
 
-                file.write_all_buf(&mut buffer).await?;
-                Ok(ResponseType::Update(()))
+                match file.write_all_buf(&mut buffer).await {
+                    Ok(o) => o,
+                    Err(e) => {
+                        response.send(Err(FileExecutorError::IOError(e)));
+                        return Ok(());
+                    }
+                };
+
+                match file.sync_all().await {
+                    Ok(o) => o,
+                    Err(e) => {
+                        response.send(Err(FileExecutorError::IOError(e)));
+                        return Ok(());
+                    }
+                }
+
+                response.send(Ok(()));
+
+                Ok(())
             }
         }
     }
@@ -228,8 +346,11 @@ impl FileExecutor {
         let file_len = usize::try_from(file_len)?;
 
         //Now we need to scan backwards in the file to make sure we find the last non-zero page.
-        let mut in_file_len = file_len.saturating_sub(PAGE_SIZE as usize);
+        let mut in_file_len = file_len;
         while in_file_len != 0 {
+            //Move back to test a block
+            in_file_len = file_len.saturating_sub(PAGE_SIZE as usize);
+
             let in_file_len_u64 = u64::try_from(in_file_len)?;
             file.seek(SeekFrom::Start(in_file_len_u64)).await?;
 
@@ -239,10 +360,10 @@ impl FileExecutor {
             let buffer = buffer.freeze();
             if buffer == Bytes::from_static(&EMPTY_BUFFER) {
                 //Okay we keep going
-                in_file_len = file_len.saturating_sub(PAGE_SIZE as usize);
                 continue;
             } else {
                 //We can calucate our page offset now
+                in_file_len = file_len.saturating_add(PAGE_SIZE as usize);
                 let po = PageOffset::calculate_page_offset(count, in_file_len);
                 return Ok(po);
             }
@@ -325,8 +446,8 @@ impl FileExecutor {
 pub enum FileExecutorError {
     #[error(transparent)]
     FromUtf8Error(#[from] FromUtf8Error),
-    #[error("Read {0} bytes instead of the required {1}")]
-    IncompleteRead(usize, u16),
+    #[error("Read {0} bytes instead of a page, the buffer has {1}")]
+    IncompleteRead(usize, usize),
     #[error("Incorrect page size of {0} on file {1} found. System cannot function")]
     IncorrectPageSize(u64, PathBuf),
     #[error(transparent)]
@@ -401,6 +522,43 @@ mod tests {
         Ok(())
     }
 
+    //Have a known bug, trying the simplest case
+    #[tokio::test]
+    async fn test_simple_startup() -> Result<(), Box<dyn std::error::Error>> {
+        let tmp = TempDir::new()?;
+        let tmp_dir = tmp.path();
+
+        //We're going to touch a single file to force it to think it has far more data than it does.
+        //I don't normally write tests this way but I don't want to write GBs unnecessarily.
+        let test_uuid = Uuid::new_v4();
+
+        let test_path = FileExecutor::make_file_path(tmp_dir, &test_uuid, &PageOffset(0)).await?;
+
+        let mut test_page = get_test_page(1);
+        println!("{:?}", test_path);
+
+        let mut test_file = File::create(test_path).await?;
+        test_file.write_all(&mut test_page).await?;
+        drop(test_file);
+
+        //Now let's test add
+        let fm = FileManager::new(tmp_dir.as_os_str().to_os_string())?;
+
+        let test_page = get_test_page(2);
+        let test_page_num = fm.add_page(&test_uuid, test_page.clone()).await?;
+
+        assert_eq!(test_page_num, PageOffset(2));
+        println!("{:?}", test_page_num);
+
+        let test_page_get = fm.get_page(&test_uuid, &test_page_num).await?.unwrap();
+
+        assert_eq!(test_page, test_page_get);
+
+        fm.shutdown().await.unwrap();
+
+        Ok(())
+    }
+
     #[tokio::test]
     async fn test_rollover() -> Result<(), Box<dyn std::error::Error>> {
         let tmp = TempDir::new()?;
@@ -419,6 +577,7 @@ mod tests {
         .await?;
 
         let mut test_page = get_test_page(1);
+        println!("{:?}", test_path);
 
         let mut test_file = File::create(test_path).await?;
         test_file.write_all(&mut test_page).await?;
@@ -434,13 +593,15 @@ mod tests {
         )
         .await??;
 
-        assert_eq!(test_page_num, PageOffset(PAGES_PER_FILE * test_count));
+        assert_eq!(test_page_num, PageOffset(PAGES_PER_FILE * test_count + 2));
+        println!("{:?}", test_page_num);
 
         let test_page_get = timeout(
             Duration::new(10, 0),
             fm.get_page(&test_uuid, &test_page_num),
         )
-        .await??;
+        .await??
+        .unwrap();
 
         assert_eq!(test_page, test_page_get);
 
