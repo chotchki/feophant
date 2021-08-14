@@ -158,18 +158,18 @@ impl RowData {
 
 impl fmt::Display for RowData {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "RowData\n")?;
-        write!(f, "\tType: {}\n", self.sql_type)?;
-        write!(f, "\tMin Tran: {}\n", self.min)?;
+        writeln!(f, "RowData")?;
+        writeln!(f, "\tType: {}", self.sql_type)?;
+        writeln!(f, "\tMin Tran: {}", self.min)?;
         match self.max {
-            Some(m) => write!(f, "\tMax Tran: {}\n", m),
-            None => write!(f, "\tMax Tran: Unset\n"),
+            Some(m) => writeln!(f, "\tMax Tran: {}", m),
+            None => writeln!(f, "\tMax Tran: Unset"),
         }?;
-        write!(f, "\t{}\n", self.item_pointer)?;
+        writeln!(f, "\t{}", self.item_pointer)?;
         for column in &self.user_data.0 {
             match column {
-                Some(c) => write!(f, "\t{}\n", c),
-                None => write!(f, "\tNull\n"),
+                Some(c) => writeln!(f, "\t{}", c),
+                None => writeln!(f, "\tNull"),
             }?;
         }
         Ok(())
