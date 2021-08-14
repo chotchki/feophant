@@ -35,13 +35,9 @@ impl Analyzer {
         parse_tree: ParseTree,
     ) -> Result<QueryTree, AnalyzerError> {
         match parse_tree {
-            ParseTree::Insert(i) => {
-                return self.insert_processing(tran_id, i).await;
-            }
-            ParseTree::Select(i) => {
-                return self.select_processing(tran_id, i).await;
-            }
-            _ => return Err(AnalyzerError::NotImplemented()),
+            ParseTree::Insert(i) => self.insert_processing(tran_id, i).await,
+            ParseTree::Select(i) => self.select_processing(tran_id, i).await,
+            _ => Err(AnalyzerError::NotImplemented()),
         }
     }
 
@@ -64,7 +60,7 @@ impl Analyzer {
         let anon_tbl = RangeRelation::AnonymousTable(Arc::new(vec![val_cols]));
         let target_tbl = RangeRelation::Table(RangeRelationTable {
             alias: None,
-            table: definition.clone(),
+            table: definition,
         });
 
         //We should be good to build the query tree if we got here
@@ -135,7 +131,7 @@ impl Analyzer {
 
                 if !provided_pair.is_empty() {
                     return Err(AnalyzerError::UnknownColumns(
-                        provided_pair.keys().map(|s| s.clone()).collect(),
+                        provided_pair.keys().cloned().collect(),
                     ));
                 }
 

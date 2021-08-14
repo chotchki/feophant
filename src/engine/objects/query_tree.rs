@@ -75,8 +75,8 @@ pub enum JoinType {
     OuterFull,
 }
 
-#[derive(Clone, Copy, Debug)]
-pub enum SortType {
-    Ascending,
-    Descending,
-}
+//#[derive(Clone, Copy, Debug)]
+//pub enum SortType {
+//    Ascending,
+//   Descending,
+//}

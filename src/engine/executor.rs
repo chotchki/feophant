@@ -120,7 +120,7 @@ impl Executor {
         rows: Arc<Vec<SqlTuple>>,
     ) -> Pin<Box<impl Stream<Item = Result<SqlTuple, ExecutorError>>>> {
         let s = try_stream! {
-            for row in rows.as_ref().into_iter() {
+            for row in rows.as_ref().iter() {
                 yield row.clone();
             }
         };

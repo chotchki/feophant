@@ -16,8 +16,8 @@ pub struct NetworkFrame {
 impl NetworkFrame {
     pub fn new(message_type: u8, payload: Bytes) -> NetworkFrame {
         NetworkFrame {
-            message_type: message_type,
-            payload: payload,
+            message_type,
+            payload,
         }
     }
     pub fn authentication_ok() -> NetworkFrame {

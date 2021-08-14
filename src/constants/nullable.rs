@@ -11,9 +11,9 @@ pub enum Nullable {
 impl From<bool> for Nullable {
     fn from(b: bool) -> Self {
         if b {
-            return Nullable::Null;
+            Nullable::Null
         } else {
-            return Nullable::NotNull;
+            Nullable::NotNull
         }
     }
 }
@@ -21,9 +21,9 @@ impl From<bool> for Nullable {
 impl From<u8> for Nullable {
     fn from(u: u8) -> Self {
         if u == 0x0 {
-            return Nullable::Null;
+            Nullable::Null
         } else {
-            return Nullable::NotNull;
+            Nullable::NotNull
         }
     }
 }

@@ -134,10 +134,10 @@ impl DefinitionLookup {
                 .user_data
                 .0
                 .get(col_offset)
-                .ok_or_else(|| DefinitionLookupError::WrongColumnIndex(col_offset))?;
+                .ok_or(DefinitionLookupError::WrongColumnIndex(col_offset))?;
             let not_null_value = wrapped_value
                 .as_ref()
-                .ok_or_else(|| DefinitionLookupError::ColumnNull(col_offset))?;
+                .ok_or(DefinitionLookupError::ColumnNull(col_offset))?;
             match not_null_value {
                 BaseSqlTypes::Integer(i) => column_tuples.push((i, c.clone())),
                 _ => return Err(DefinitionLookupError::ColumnWrongType()),
@@ -145,10 +145,10 @@ impl DefinitionLookup {
         }
 
         //Now the columns are good but we need to check for gaps
-        column_tuples.sort_by(|a, b| a.0.cmp(&b.0));
-        for i in 0..column_tuples.len() {
+        column_tuples.sort_by(|a, b| a.0.cmp(b.0));
+        for (i, tup) in column_tuples.iter().enumerate() {
             let i_u32 = u32::try_from(i)?;
-            if column_tuples[i].0 != &i_u32 {
+            if tup.0 != &i_u32 {
                 return Err(DefinitionLookupError::ColumnGap(i));
             }
         }

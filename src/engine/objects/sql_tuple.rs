@@ -24,7 +24,7 @@ impl SqlTuple {
         let mut output = Vec::with_capacity(target.len());
 
         //TODO handle possible type conversion OR figure out if it bombs
-        'outer: for (t_name, t) in target.iter() {
+        'outer: for (t_name, _) in target.iter() {
             for s in 0..source.len() {
                 if *t_name == source[s].0 {
                     output.push(self.0[s].clone()); //TODO remove the clone

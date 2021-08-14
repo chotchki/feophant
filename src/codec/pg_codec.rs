@@ -93,9 +93,6 @@ impl Encoder<NetworkFrame> for PgCodec {
         if item.message_type == 0 {
             // Reserve space in the buffer.
             dst.reserve(item.payload.len());
-
-            //Write to Buffer
-            dst.extend_from_slice(&item.payload);
         } else {
             // Reserve space in the buffer.
             dst.reserve(5 + item.payload.len());
@@ -119,9 +116,10 @@ impl Encoder<NetworkFrame> for PgCodec {
 
             let len_slice = u32::to_be_bytes(length);
             dst.extend_from_slice(&len_slice);
-
-            dst.extend_from_slice(&item.payload);
         }
+        //Write to Buffer
+        dst.extend_from_slice(&item.payload);
+
         Ok(())
     }
 }

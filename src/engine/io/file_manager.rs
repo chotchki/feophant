@@ -17,12 +17,10 @@ mod file_executor;
 use file_executor::FileExecutor;
 use file_executor::FileExecutorError;
 mod file_operations;
-use file_operations::FileOperations;
 mod request_type;
 use request_type::RequestType;
 mod resource_formatter;
 pub use resource_formatter::ResourceFormatter;
-mod response_type;
 
 /*
 This is a different approach than I had done before. This file manager runs its own loop based on a spawned task

@@ -51,7 +51,7 @@ impl ConstraintManager {
                     if !d.type_matches(&column.sql_type) {
                         return Err(ConstraintManagerError::TableRowTypeMismatch(
                             d.clone(),
-                            column.sql_type.clone(),
+                            column.sql_type,
                         ));
                     }
                 }

@@ -18,11 +18,10 @@ use std::{
     path::{Path, PathBuf},
 };
 use thiserror::Error;
-use tokio::fs;
 use tokio::sync::mpsc;
 use tokio::{
-    fs::{read_dir, File, OpenOptions},
-    io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt},
+    fs::{read_dir, File},
+    io::{AsyncReadExt, AsyncSeekExt},
     sync::{mpsc::UnboundedReceiver, oneshot::Sender},
 };
 use uuid::Uuid;
@@ -138,7 +137,7 @@ impl FileExecutor {
             }
 
             //Still haven't figured out incrementing file_handles
-            if file_handles_open < MAX_FILE_HANDLE_COUNT && request_queue.len() > 0 {
+            if file_handles_open < MAX_FILE_HANDLE_COUNT && !request_queue.is_empty() {
                 let mut new_request_queue = VecDeque::with_capacity(request_queue.len());
                 for (resource_key, req_type) in request_queue.into_iter() {
                     match req_type {
@@ -601,7 +600,7 @@ mod tests {
     use std::time::Duration;
 
     use tempfile::TempDir;
-    use tokio::time::timeout;
+    use tokio::{io::AsyncWriteExt, time::timeout};
 
     use crate::{constants::PAGES_PER_FILE, engine::io::FileManager};
 
