@@ -252,6 +252,9 @@ mod tests {
     // Current run of this test takes 30.68s using cargo bench
     // cargo bench engine::io::row_manager::tests::test_row_manager_mass_insert
     // I'm 90% certain its due to me opening and closing files like crazy
+
+    //That might have been the build, running: engine::io::row_manager::tests::test_row_manager_mass_insert
+    // takes 12.58s now.
     #[tokio::test]
     async fn test_row_manager_mass_insert() -> Result<(), Box<dyn std::error::Error>> {
         let tmp = TempDir::new()?;

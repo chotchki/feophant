@@ -1,3 +1,4 @@
+use super::file_operations::{FileOperations, FileOperationsError};
 /// Inner type that implements the actual I/O operations so the outter type can
 /// handle queue management.
 use super::request_type::RequestType;
@@ -5,7 +6,8 @@ use crate::constants::PAGE_SIZE;
 use crate::engine::io::file_manager::ResourceFormatter;
 use crate::engine::io::page_formats::PageOffset;
 use bytes::{Bytes, BytesMut};
-use std::collections::HashMap;
+use lru::LruCache;
+use std::collections::{HashMap, VecDeque};
 use std::convert::TryFrom;
 use std::ffi::OsStr;
 use std::num::TryFromIntError;
@@ -17,6 +19,7 @@ use std::{
 };
 use thiserror::Error;
 use tokio::fs;
+use tokio::sync::mpsc;
 use tokio::{
     fs::{read_dir, File, OpenOptions},
     io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt},
@@ -35,6 +38,7 @@ pub struct FileExecutor {
     data_dir: PathBuf,
     receive_queue: UnboundedReceiver<(Uuid, RequestType)>,
     receive_shutdown: UnboundedReceiver<Sender<()>>,
+    resource_lookup: HashMap<Uuid, PageOffset>,
 }
 
 impl FileExecutor {
@@ -51,16 +55,58 @@ impl FileExecutor {
             ));
         }
 
+        let resource_lookup: HashMap<Uuid, PageOffset> = HashMap::new();
+
         Ok(FileExecutor {
             data_dir,
             receive_queue,
             receive_shutdown,
+            resource_lookup,
         })
     }
 
     pub async fn start(&mut self) {
-        let mut resource_lookup: HashMap<Uuid, PageOffset> = HashMap::new();
+        /*
+        Check if we have max jobs in flight, if so select on jobs+shutdown.
+            else jobs+requests+shutdown
+
+        1. Get request
+        2. push onto fifo queue (bounded to max handles)
+        3. Scan fifo queue, per item.
+        4. For an item, take its uuid.
+            4a. an add should be resolved to a page offset
+        5. See if the uuid has other in flight operations.
+            5a. this should check if the end file will be the same.
+            5b. Same file equals skipping.
+        6. If not, check if we have a file handle in the lru cache.
+            6a. spawn a job with it if we do
+            6b. other open one, store it and spawn a job
+        7. The job should return the result to the calling process and the file handle + file its for back on the job queue
+
+        , see if uuid has anything
+
+        */
+
+        let mut file_handles_open = 0;
+
+        // This cache is used to indicate when a file operation is in flight on a handle, there are two options:
+        // * entry: some(file) -> Idle File Handle that can be used
+        // * entry: None -> File handle in use but not returned
+        let mut file_handle_cache: LruCache<(Uuid, usize), Option<File>> =
+            LruCache::new(MAX_FILE_HANDLE_COUNT);
+
+        // This channel is used to restore or drop entries on the file handle cache, there are two options:
+        // * Some(file) -> Idle handle to be stored
+        // * None -> Failure/Error means there is not a handle and the entry should be dropped
+        let (send_completed, mut receive_completed) = mpsc::unbounded_channel();
+
+        // Queue used as a holding ground until a handle is availible for it to execute. Used in a FIFO fashion
+        let mut request_queue: VecDeque<(Uuid, RequestType)> = VecDeque::new();
+
         let mut shutdown_sender = None;
+
+        //TODO All these match blocks suck but I don't see a way around them.
+        //I'm hoping clippy yells at me once I get it compiling
         loop {
             tokio::select! {
                 biased;
@@ -71,17 +117,338 @@ impl FileExecutor {
                         info!("Got shutdown request");
                     } else {}
                 }
-                maybe_recv = self.receive_queue.recv() => {
+                recv_completed = receive_completed.recv() => {
+                    if let Some((resource_key, file_number, file_handle)) = recv_completed {
+                        //If we didn't get a handle back, the file is no longer in use, delete the key
+                        match file_handle {
+                            Some(f) => {file_handle_cache.put((resource_key,file_number), Some(f));}
+                            None => {file_handle_cache.pop(&(resource_key,file_number));}
+                        }
+                    } else {
+                        break;
+                    }
+                }
+                maybe_recv = self.receive_queue.recv(), if request_queue.len() < MAX_FILE_HANDLE_COUNT => {
                     if let Some((resource_key, req_type)) = maybe_recv {
-                        self
-                            .handle_request(&mut resource_lookup, &resource_key, req_type)
-                            .await;
+                        request_queue.push_back((resource_key, req_type));
                     } else {
                         break;
                     }
                 }
             }
+
+            //Still haven't figured out incrementing file_handles
+            if file_handles_open < MAX_FILE_HANDLE_COUNT && request_queue.len() > 0 {
+                let mut new_request_queue = VecDeque::with_capacity(request_queue.len());
+                for (resource_key, req_type) in request_queue.into_iter() {
+                    match req_type {
+                        RequestType::Add((a, response)) => {
+                            let next_po = match self.get_next_po(&resource_key).await {
+                                Ok(po) => po,
+                                Err(e) => {
+                                    let _ = response.send(Err(e));
+                                    continue;
+                                }
+                            };
+
+                            match file_handle_cache.pop(&(resource_key, next_po.get_file_number()))
+                            {
+                                Some(maybe_file) => match maybe_file {
+                                    Some(file) => {
+                                        file_handle_cache
+                                            .put((resource_key, next_po.get_file_number()), None);
+                                        let file_handle_ret = send_completed.clone();
+                                        tokio::spawn(async move {
+                                            let response_f = response;
+
+                                            match FileOperations::add_chunk(file, &next_po, a).await
+                                            {
+                                                Ok(o) => {
+                                                    let _ = file_handle_ret.send((
+                                                        resource_key,
+                                                        next_po.get_file_number(),
+                                                        Some(o),
+                                                    ));
+                                                    let _ = response_f.send(Ok(next_po));
+                                                }
+                                                Err(e) => {
+                                                    let _ = file_handle_ret.send((
+                                                        resource_key,
+                                                        next_po.get_file_number(),
+                                                        None,
+                                                    ));
+                                                    let _ = response_f.send(Err(
+                                                        FileExecutorError::FileOperationsError(e),
+                                                    ));
+                                                }
+                                            }
+                                        });
+                                    }
+                                    None => {
+                                        //Request in flight, skip for now, but have to reinsert into cache
+                                        file_handle_cache
+                                            .put((resource_key, next_po.get_file_number()), None);
+
+                                        new_request_queue.push_back((
+                                            resource_key,
+                                            RequestType::Add((a, response)),
+                                        ));
+                                        continue;
+                                    }
+                                },
+                                None => {
+                                    file_handle_cache
+                                        .put((resource_key, next_po.get_file_number()), None);
+                                    let data_dir = self.data_dir.clone();
+                                    let file_handle_ret = send_completed.clone();
+                                    tokio::spawn(async move {
+                                        let response_f = response;
+
+                                        let file = match FileOperations::open_path(
+                                            &data_dir,
+                                            &resource_key,
+                                            next_po.get_file_number(),
+                                        )
+                                        .await
+                                        {
+                                            Ok(o) => o,
+                                            Err(e) => {
+                                                let _ = file_handle_ret.send((
+                                                    resource_key,
+                                                    next_po.get_file_number(),
+                                                    None,
+                                                ));
+                                                let _ = response_f.send(Err(
+                                                    FileExecutorError::FileOperationsError(e),
+                                                ));
+                                                return;
+                                            }
+                                        };
+
+                                        match FileOperations::add_chunk(file, &next_po, a).await {
+                                            Ok(o) => {
+                                                let _ = file_handle_ret.send((
+                                                    resource_key,
+                                                    next_po.get_file_number(),
+                                                    Some(o),
+                                                ));
+                                                let _ = response_f.send(Ok(next_po));
+                                            }
+                                            Err(e) => {
+                                                let _ = file_handle_ret.send((
+                                                    resource_key,
+                                                    next_po.get_file_number(),
+                                                    None,
+                                                ));
+                                                let _ = response_f.send(Err(
+                                                    FileExecutorError::FileOperationsError(e),
+                                                ));
+                                            }
+                                        }
+                                    });
+                                }
+                            }
+                        }
+                        RequestType::Read((r, response)) => {
+                            match file_handle_cache.pop(&(resource_key, r.get_file_number())) {
+                                Some(maybe_file) => match maybe_file {
+                                    Some(file) => {
+                                        file_handle_cache
+                                            .put((resource_key, r.get_file_number()), None);
+                                        let file_handle_ret = send_completed.clone();
+                                        tokio::spawn(async move {
+                                            let response_f = response;
+
+                                            match FileOperations::read_chunk(file, &r).await {
+                                                Ok((o, buffer)) => {
+                                                    let _ = file_handle_ret.send((
+                                                        resource_key,
+                                                        r.get_file_number(),
+                                                        Some(o),
+                                                    ));
+                                                    let _ = response_f.send(Ok(buffer));
+                                                }
+                                                Err(e) => {
+                                                    let _ = file_handle_ret.send((
+                                                        resource_key,
+                                                        r.get_file_number(),
+                                                        None,
+                                                    ));
+                                                    let _ = response_f.send(Err(
+                                                        FileExecutorError::FileOperationsError(e),
+                                                    ));
+                                                }
+                                            }
+                                        });
+                                    }
+                                    None => {
+                                        //Request in flight, skip for now, but have to reinsert into cache
+                                        file_handle_cache
+                                            .put((resource_key, r.get_file_number()), None);
+                                        new_request_queue.push_back((
+                                            resource_key,
+                                            RequestType::Read((r, response)),
+                                        ));
+                                        continue;
+                                    }
+                                },
+                                None => {
+                                    file_handle_cache
+                                        .put((resource_key, r.get_file_number()), None);
+                                    let data_dir = self.data_dir.clone();
+                                    let file_handle_ret = send_completed.clone();
+                                    tokio::spawn(async move {
+                                        let response_f = response;
+
+                                        let file = match FileOperations::open_path(
+                                            &data_dir,
+                                            &resource_key,
+                                            r.get_file_number(),
+                                        )
+                                        .await
+                                        {
+                                            Ok(o) => o,
+                                            Err(e) => {
+                                                let _ = file_handle_ret.send((
+                                                    resource_key,
+                                                    r.get_file_number(),
+                                                    None,
+                                                ));
+                                                let _ = response_f.send(Err(
+                                                    FileExecutorError::FileOperationsError(e),
+                                                ));
+                                                return;
+                                            }
+                                        };
+
+                                        match FileOperations::read_chunk(file, &r).await {
+                                            Ok((o, maybe_buffer)) => {
+                                                let _ = file_handle_ret.send((
+                                                    resource_key,
+                                                    r.get_file_number(),
+                                                    Some(o),
+                                                ));
+                                                let _ = response_f.send(Ok(maybe_buffer));
+                                            }
+                                            Err(e) => {
+                                                let _ = file_handle_ret.send((
+                                                    resource_key,
+                                                    r.get_file_number(),
+                                                    None,
+                                                ));
+                                                let _ = response_f.send(Err(
+                                                    FileExecutorError::FileOperationsError(e),
+                                                ));
+                                            }
+                                        }
+                                    });
+                                }
+                            }
+                        }
+                        RequestType::Update((u, buffer, response)) => {
+                            match file_handle_cache.pop(&(resource_key, u.get_file_number())) {
+                                Some(maybe_file) => match maybe_file {
+                                    Some(file) => {
+                                        file_handle_cache
+                                            .put((resource_key, u.get_file_number()), None);
+                                        let file_handle_ret = send_completed.clone();
+                                        tokio::spawn(async move {
+                                            let response_f = response;
+
+                                            match FileOperations::update_chunk(file, &u, buffer)
+                                                .await
+                                            {
+                                                Ok(o) => {
+                                                    let _ = file_handle_ret.send((
+                                                        resource_key,
+                                                        u.get_file_number(),
+                                                        Some(o),
+                                                    ));
+                                                    let _ = response_f.send(Ok(()));
+                                                }
+                                                Err(e) => {
+                                                    let _ = file_handle_ret.send((
+                                                        resource_key,
+                                                        u.get_file_number(),
+                                                        None,
+                                                    ));
+                                                    let _ = response_f.send(Err(
+                                                        FileExecutorError::FileOperationsError(e),
+                                                    ));
+                                                }
+                                            }
+                                        });
+                                    }
+                                    None => {
+                                        //Request in flight, skip for now, but have to reinsert into cache
+                                        file_handle_cache
+                                            .put((resource_key, u.get_file_number()), None);
+                                        new_request_queue.push_back((
+                                            resource_key,
+                                            RequestType::Update((u, buffer, response)),
+                                        ));
+                                        continue;
+                                    }
+                                },
+                                None => {
+                                    file_handle_cache
+                                        .put((resource_key, u.get_file_number()), None);
+                                    let data_dir = self.data_dir.clone();
+                                    let file_handle_ret = send_completed.clone();
+                                    tokio::spawn(async move {
+                                        let response_f = response;
+
+                                        let file = match FileOperations::open_path(
+                                            &data_dir,
+                                            &resource_key,
+                                            u.get_file_number(),
+                                        )
+                                        .await
+                                        {
+                                            Ok(o) => o,
+                                            Err(e) => {
+                                                let _ = file_handle_ret.send((
+                                                    resource_key,
+                                                    u.get_file_number(),
+                                                    None,
+                                                ));
+                                                let _ = response_f.send(Err(
+                                                    FileExecutorError::FileOperationsError(e),
+                                                ));
+                                                return;
+                                            }
+                                        };
+
+                                        match FileOperations::update_chunk(file, &u, buffer).await {
+                                            Ok(o) => {
+                                                let _ = file_handle_ret.send((
+                                                    resource_key,
+                                                    u.get_file_number(),
+                                                    Some(o),
+                                                ));
+                                                let _ = response_f.send(Ok(()));
+                                            }
+                                            Err(e) => {
+                                                let _ = file_handle_ret.send((
+                                                    resource_key,
+                                                    u.get_file_number(),
+                                                    None,
+                                                ));
+                                                let _ = response_f.send(Err(
+                                                    FileExecutorError::FileOperationsError(e),
+                                                ));
+                                            }
+                                        }
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+                request_queue = new_request_queue;
+            }
         }
+
         match shutdown_sender {
             Some(s) => {
                 s.send(())
@@ -93,235 +460,19 @@ impl FileExecutor {
         }
     }
 
-    //TODO All these match blocks suck but I don't see a way around them.
-    //I'm hoping clippy yells at me once I get it compiling
-    async fn handle_request(
-        &self,
-        resource_lookup: &mut HashMap<Uuid, PageOffset>,
-        resource_key: &Uuid,
-        req_type: RequestType,
-    ) -> Result<(), FileExecutorError> {
+    async fn get_next_po(&mut self, resource_key: &Uuid) -> Result<PageOffset, FileExecutorError> {
         //Find the resource key's latest offset so we can iterate on it for adds
-        let next_po = match resource_lookup.get(resource_key) {
-            Some(po) => *po,
+        match self.resource_lookup.remove(resource_key) {
+            Some(po) => {
+                self.resource_lookup.insert(*resource_key, po.next());
+                Ok(po)
+            }
             None => {
                 let po = self.find_next_offset(resource_key).await?;
-                println!("found {0}", po);
-                resource_lookup.insert(*resource_key, po);
-                po
-            }
-        };
-
-        match req_type {
-            RequestType::Add((buffer, response)) => {
-                let mut buffer = buffer.clone();
-
-                let new_po = next_po.next();
-                println!("Increment {0} {1} {2}", next_po, new_po, resource_key);
-                resource_lookup.insert(*resource_key, new_po);
-                let file_path =
-                    match Self::make_file_path(self.data_dir.as_path(), resource_key, &next_po)
-                        .await
-                    {
-                        Ok(o) => o,
-                        Err(e) => {
-                            response.send(Err(e));
-                            return Ok(());
-                        }
-                    };
-
-                //Need a file handle
-                let mut file = match OpenOptions::new()
-                    .write(true)
-                    .create(true)
-                    .open(file_path)
-                    .await
-                {
-                    Ok(o) => o,
-                    Err(e) => {
-                        response.send(Err(FileExecutorError::IOError(e)));
-                        return Ok(());
-                    }
-                };
-
-                match file
-                    .set_len(u64::try_from(next_po.get_file_chunk_size())?)
-                    .await
-                {
-                    Ok(o) => o,
-                    Err(e) => {
-                        response.send(Err(FileExecutorError::IOError(e)));
-                        return Ok(());
-                    }
-                };
-
-                match file
-                    .seek(SeekFrom::Start(u64::try_from(next_po.get_file_seek())?))
-                    .await
-                {
-                    Ok(o) => o,
-                    Err(e) => {
-                        response.send(Err(FileExecutorError::IOError(e)));
-                        return Ok(());
-                    }
-                };
-
-                match file.write_all_buf(&mut buffer).await {
-                    Ok(o) => o,
-                    Err(e) => {
-                        response.send(Err(FileExecutorError::IOError(e)));
-                        return Ok(());
-                    }
-                };
-
-                match file.sync_all().await {
-                    Ok(o) => o,
-                    Err(e) => {
-                        response.send(Err(FileExecutorError::IOError(e)));
-                        return Ok(());
-                    }
-                }
-
-                println!("Add {0}", next_po);
-                response.send(Ok(next_po));
-
-                Ok(())
-            }
-            RequestType::Read((po, response)) => {
-                let file_path =
-                    match Self::make_file_path(self.data_dir.as_path(), resource_key, &po).await {
-                        Ok(o) => o,
-                        Err(e) => {
-                            response.send(Err(e));
-                            return Ok(());
-                        }
-                    };
-
-                let mut buffer = BytesMut::with_capacity(PAGE_SIZE as usize);
-
-                let mut file = match File::open(file_path).await {
-                    Ok(o) => o,
-                    Err(e) => {
-                        response.send(Ok(None));
-                        return Ok(());
-                    }
-                };
-
-                let file_meta = match file.metadata().await {
-                    Ok(o) => o,
-                    Err(e) => {
-                        response.send(Err(FileExecutorError::IOError(e)));
-                        return Ok(());
-                    }
-                };
-
-                let file_len = file_meta.len();
-                if u64::try_from(po.get_file_chunk_size())? > file_len {
-                    response.send(Ok(None));
-                    return Ok(());
-                }
-
-                match file
-                    .seek(SeekFrom::Start(u64::try_from(po.get_file_seek())?))
-                    .await
-                {
-                    Ok(o) => o,
-                    Err(e) => {
-                        response.send(Ok(None));
-                        return Ok(());
-                    }
-                };
-
-                while buffer.len() != PAGE_SIZE as usize {
-                    let readamt = match file.read_buf(&mut buffer).await {
-                        Ok(o) => o,
-                        Err(e) => {
-                            response.send(Err(FileExecutorError::IOError(e)));
-                            return Ok(());
-                        }
-                    };
-                    if readamt == 0 {
-                        response.send(Err(FileExecutorError::IncompleteRead(
-                            readamt,
-                            buffer.len(),
-                        )));
-                        return Ok(());
-                    }
-                }
-
-                response.send(Ok(Some(buffer.freeze())));
-                Ok(())
-            }
-            RequestType::Update((po, buffer, response)) => {
-                let mut buffer = buffer.clone();
-                let file_path =
-                    match Self::make_file_path(self.data_dir.as_path(), resource_key, &po).await {
-                        Ok(o) => o,
-                        Err(e) => {
-                            response.send(Err(e));
-                            return Ok(());
-                        }
-                    };
-
-                //Need a file handle
-                let mut file = match OpenOptions::new()
-                    .write(true)
-                    .create(true)
-                    .open(file_path)
-                    .await
-                {
-                    Ok(o) => o,
-                    Err(e) => {
-                        response.send(Err(FileExecutorError::IOError(e)));
-                        return Ok(());
-                    }
-                };
-
-                match file
-                    .seek(SeekFrom::Start(u64::try_from(po.get_file_seek())?))
-                    .await
-                {
-                    Ok(o) => o,
-                    Err(e) => {
-                        response.send(Err(FileExecutorError::IOError(e)));
-                        return Ok(());
-                    }
-                };
-
-                match file.write_all_buf(&mut buffer).await {
-                    Ok(o) => o,
-                    Err(e) => {
-                        response.send(Err(FileExecutorError::IOError(e)));
-                        return Ok(());
-                    }
-                };
-
-                match file.sync_all().await {
-                    Ok(o) => o,
-                    Err(e) => {
-                        response.send(Err(FileExecutorError::IOError(e)));
-                        return Ok(());
-                    }
-                }
-
-                response.send(Ok(()));
-
-                Ok(())
+                self.resource_lookup.insert(*resource_key, po.next());
+                Ok(po)
             }
         }
-    }
-
-    async fn make_file_path(
-        data_dir: &Path,
-        resource_key: &Uuid,
-        offset: &PageOffset,
-    ) -> Result<PathBuf, FileExecutorError> {
-        let mut sub_path = Self::make_sub_path(data_dir, resource_key).await?;
-        let target_filename = ResourceFormatter::format_uuid(resource_key);
-        let target_extension = offset.get_file_number();
-        let name = format!("{0}.{1}", target_filename, target_extension);
-        sub_path.push(name);
-        Ok(sub_path)
     }
 
     async fn find_next_offset(&self, resource_key: &Uuid) -> Result<PageOffset, FileExecutorError> {
@@ -379,7 +530,7 @@ impl FileExecutor {
         data_dir: &Path,
         resource_key: &Uuid,
     ) -> Result<Option<(PathBuf, usize)>, FileExecutorError> {
-        let sub_path = Self::make_sub_path(data_dir, resource_key).await?;
+        let sub_path = FileOperations::make_sub_path(data_dir, resource_key).await?;
         let target_filename = ResourceFormatter::format_uuid(resource_key);
 
         let mut max_file_count = 0;
@@ -422,21 +573,6 @@ impl FileExecutor {
         }
     }
 
-    //Makes the prefix folder so we don't fill up folders. Will consider more nesting eventually
-    async fn make_sub_path(
-        data_dir: &Path,
-        resource_key: &Uuid,
-    ) -> Result<PathBuf, FileExecutorError> {
-        let subfolder = ResourceFormatter::get_uuid_prefix(resource_key);
-
-        let mut path = PathBuf::new();
-        path.push(data_dir);
-        path.push(subfolder);
-
-        fs::create_dir_all(path.as_path()).await?;
-        Ok(path)
-    }
-
     fn format_os_string(input: &OsStr) -> String {
         input.to_ascii_lowercase().to_string_lossy().into_owned()
     }
@@ -444,6 +580,8 @@ impl FileExecutor {
 
 #[derive(Debug, Error)]
 pub enum FileExecutorError {
+    #[error(transparent)]
+    FileOperationsError(#[from] FileOperationsError),
     #[error(transparent)]
     FromUtf8Error(#[from] FromUtf8Error),
     #[error("Read {0} bytes instead of a page, the buffer has {1}")]
@@ -476,52 +614,6 @@ mod tests {
         test_page.freeze()
     }
 
-    #[tokio::test]
-    async fn test_search_for_max_file() -> Result<(), Box<dyn std::error::Error>> {
-        let tmp = TempDir::new()?;
-
-        let test_uuid = Uuid::new_v4();
-        let subpath = FileExecutor::make_sub_path(tmp.path(), &test_uuid).await?;
-
-        let test_path =
-            FileExecutor::make_file_path(tmp.path(), &test_uuid, &PageOffset(1)).await?;
-        File::create(test_path.as_path()).await?;
-
-        let path = FileExecutor::search_for_max_file(tmp.path(), &test_uuid).await?;
-        assert_eq!(path, Some((test_path, 0)));
-
-        let test_path =
-            FileExecutor::make_file_path(tmp.path(), &test_uuid, &PageOffset(PAGES_PER_FILE * 100))
-                .await?;
-        File::create(test_path.as_path()).await?;
-
-        let mut test1 = subpath.clone();
-        test1.push("test.file");
-        File::create(test1.as_path()).await?;
-
-        let mut test2 = subpath.clone();
-        test2.push(".file");
-        File::create(test2.as_path()).await?;
-
-        let path = FileExecutor::search_for_max_file(tmp.path(), &test_uuid).await?;
-        assert_eq!(path, Some((test_path, 100)));
-
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_make_sub_path() -> Result<(), Box<dyn std::error::Error>> {
-        let tmp = TempDir::new()?;
-
-        let test_uuid = Uuid::new_v4();
-
-        //Must be able to repeatedly make the sub_path
-        FileExecutor::make_sub_path(tmp.path(), &test_uuid).await?;
-        FileExecutor::make_sub_path(tmp.path(), &test_uuid).await?;
-
-        Ok(())
-    }
-
     //Have a known bug, trying the simplest case
     #[tokio::test]
     async fn test_simple_startup() -> Result<(), Box<dyn std::error::Error>> {
@@ -532,12 +624,11 @@ mod tests {
         //I don't normally write tests this way but I don't want to write GBs unnecessarily.
         let test_uuid = Uuid::new_v4();
 
-        let test_path = FileExecutor::make_file_path(tmp_dir, &test_uuid, &PageOffset(0)).await?;
+        let mut test_file =
+            FileOperations::open_path(tmp_dir, &test_uuid, PageOffset(0).get_file_number()).await?;
 
         let mut test_page = get_test_page(1);
-        println!("{:?}", test_path);
 
-        let mut test_file = File::create(test_path).await?;
         test_file.write_all(&mut test_page).await?;
         drop(test_file);
 
@@ -548,7 +639,6 @@ mod tests {
         let test_page_num = fm.add_page(&test_uuid, test_page.clone()).await?;
 
         assert_eq!(test_page_num, PageOffset(2));
-        println!("{:?}", test_page_num);
 
         let test_page_get = fm.get_page(&test_uuid, &test_page_num).await?.unwrap();
 
@@ -569,17 +659,15 @@ mod tests {
         let test_uuid = Uuid::new_v4();
         let test_count: usize = 10;
 
-        let test_path = FileExecutor::make_file_path(
+        let mut test_file = FileOperations::open_path(
             tmp_dir,
             &test_uuid,
-            &PageOffset(PAGES_PER_FILE * test_count),
+            PageOffset(PAGES_PER_FILE * test_count).get_file_number(),
         )
         .await?;
 
         let mut test_page = get_test_page(1);
-        println!("{:?}", test_path);
 
-        let mut test_file = File::create(test_path).await?;
         test_file.write_all(&mut test_page).await?;
         drop(test_file);
 
@@ -594,7 +682,6 @@ mod tests {
         .await??;
 
         assert_eq!(test_page_num, PageOffset(PAGES_PER_FILE * test_count + 2));
-        println!("{:?}", test_page_num);
 
         let test_page_get = timeout(
             Duration::new(10, 0),
