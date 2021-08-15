@@ -2,7 +2,7 @@
 
 A SQL database server written in Rust and inspired by PostreSQL.
 
-Just a toy for the moment, but I'm actively working to fix that!
+We now have support for persistent storage! Not crash safe but I'm getting there!
 
 [![Latest Build][build-badge]][build-url]
 [![codecov][codecov-badge]][codecov-url]
@@ -27,7 +27,9 @@ Benchmark to aid in profiling
 `cargo instruments --bench feophant_benchmark -t time`
 
 ## What works user facing
-You can currently start the server, connect to it and have it throw tons of errors. To support more there is a ton of infrastructure required to wire up next steps.
+* Connecting unauthenticated using a postgres client/driver. 
+* You can create tables, insert data and query single tables.
+* Data is persisted to disk, not crash safe and the on disk format is NOT stable.
 
 ## Current TODO List - Subject to constant change!
 
@@ -54,14 +56,10 @@ Implemented the formats but I think I need to add locking to the I/O manager.
     At a minimum I need to support a get for update, update and release lock.
     I'm not sure I understand how this should work :(. I think need to commit to another layer.
 
-Implemented stronger page checking to make sure we don't store something that won't work on the file system.
-
 Back to indexes for now. I need to make a decision on how to handle them hitting the file system.
     Postgres uses a series of OIDs to map onto disk.
 
     I've been using uuids, I think I'm going to continue that. That would also solve the postgres fork approach.
-
-I'll have to switch IOManager to use uuid instead of Table as a key. Upside, I'm basically already doing that. (done)
 
 Next up implementing the index manager to add entries to the index.
 
@@ -75,29 +73,32 @@ I guess I need to commit to doing this for reals. However I am worried about rea
 
 For now, the index implementation is now on hold until I get an integrated I/O subsystem and a stubbed out WAL.
 
-The real I/O subsystem has been written and tested. About to integrate it.
-Real integration tests using a non feophant postgres rust driver are also working.
-
-I/O subsystem integrated but I'm not happy with the performance. I'm debating a caching layer above the file_manager. I need to get some benchmarks together so I know if I'm actually helping.
-
 **TODO**
 
 
 Implement where clauses, will likely need to have to start tracing columns from analyizing through to later stages.
 
+
 **TODO**
 
 Implement support for running a fuzzer against the code base to ensure we are keeping the code at a high quality.
-
-
 
 **TODO**
 
 Implement delete for tuples
 
 **TODO**
+Implement the beginning parts of a WAL so that I can get to crash safety.
 
-pgbench setup can run successfully, in memory
+**TODO**
+Defer parsing rows off disk until they are actually needed. I feel like I parse too early however any work on this should wait until I can really profile this.
+
+**TODO**
+
+pgbench setup can run successfully
+
+**TODO**
+Implement support for parameterized queries.
 
 **TODO**
 
@@ -124,10 +125,6 @@ Implement subselect.
 **TODO**
 
 Implement Updates.
-
-**TODO**
-
-Did some reading on how the buffer manager works and my implementation seems to be firmly in the right direction. Take that knowledge and implement persistence
 
 **1.0 Release Criteria**
 
