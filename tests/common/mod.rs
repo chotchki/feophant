@@ -17,7 +17,7 @@ pub async fn _create_server_and_client(
         UnboundedReceiver<Sender<()>>,
     ) = mpsc::unbounded_channel();
 
-    let feo = FeOphant::new(tmp.into_path().into_os_string(), 50000).await?;
+    let feo = FeOphant::new(tmp.into_path().into_os_string(), 0).await?;
     let port = feo.port;
 
     tokio::spawn(async move {

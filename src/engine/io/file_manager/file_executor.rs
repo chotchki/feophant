@@ -86,7 +86,7 @@ impl FileExecutor {
 
         */
 
-        let mut file_handles_open = 0;
+        let mut file_handles_open: usize = 0;
 
         // This cache is used to indicate when a file operation is in flight on a handle, there are two options:
         // * entry: some(file) -> Idle File Handle that can be used
@@ -121,7 +121,10 @@ impl FileExecutor {
                         //If we didn't get a handle back, the file is no longer in use, delete the key
                         match file_handle {
                             Some(f) => {file_handle_cache.put((resource_key,file_number), Some(f));}
-                            None => {file_handle_cache.pop(&(resource_key,file_number));}
+                            None => {
+                                file_handle_cache.pop(&(resource_key,file_number));
+                                file_handles_open = file_handles_open.saturating_sub(1);
+                            }
                         }
                     } else {
                         break;
@@ -198,6 +201,7 @@ impl FileExecutor {
                                 None => {
                                     file_handle_cache
                                         .put((resource_key, next_po.get_file_number()), None);
+                                    file_handles_open = file_handles_open.saturating_add(1);
                                     let data_dir = self.data_dir.clone();
                                     let file_handle_ret = send_completed.clone();
                                     tokio::spawn(async move {
@@ -294,6 +298,7 @@ impl FileExecutor {
                                 None => {
                                     file_handle_cache
                                         .put((resource_key, r.get_file_number()), None);
+                                    file_handles_open = file_handles_open.saturating_add(1);
                                     let data_dir = self.data_dir.clone();
                                     let file_handle_ret = send_completed.clone();
                                     tokio::spawn(async move {
@@ -392,6 +397,7 @@ impl FileExecutor {
                                 None => {
                                     file_handle_cache
                                         .put((resource_key, u.get_file_number()), None);
+                                    file_handles_open = file_handles_open.saturating_add(1);
                                     let data_dir = self.data_dir.clone();
                                     let file_handle_ret = send_completed.clone();
                                     tokio::spawn(async move {
