@@ -23,6 +23,9 @@ Lauch a postgres client application to test
 `./pgbench -h 127.0.0.1 -p 50000`
 `./psql -h 127.0.0.1 -p 50000`
 
+Benchmark to aid in profiling
+`cargo instruments --bench feophant_benchmark -t time`
+
 ## What works user facing
 You can currently start the server, connect to it and have it throw tons of errors. To support more there is a ton of infrastructure required to wire up next steps.
 

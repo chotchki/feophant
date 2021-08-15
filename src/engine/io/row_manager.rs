@@ -249,12 +249,6 @@ mod tests {
             ])
     }
 
-    // Current run of this test takes 30.68s using cargo bench
-    // cargo bench engine::io::row_manager::tests::test_row_manager_mass_insert
-    // I'm 90% certain its due to me opening and closing files like crazy
-
-    //That might have been the build, running: engine::io::row_manager::tests::test_row_manager_mass_insert
-    // takes 12.58s now.
     #[tokio::test]
     async fn test_row_manager_mass_insert() -> Result<(), Box<dyn std::error::Error>> {
         let tmp = TempDir::new()?;
@@ -266,7 +260,7 @@ mod tests {
 
         let tran_id = TransactionId::new(1);
 
-        for i in 0..500 {
+        for i in 0..50 {
             rm.clone()
                 .insert_row(tran_id, table.clone(), get_row(i.to_string()))
                 .await?;
@@ -286,8 +280,8 @@ mod tests {
             .collect()
             .await;
 
-        assert_eq!(result_rows.len(), 500);
-        for i in 0..500 {
+        assert_eq!(result_rows.len(), 50);
+        for i in 0..50 {
             let sample_row = get_row(i.to_string());
             assert_eq!(result_rows[i].user_data, sample_row);
         }
