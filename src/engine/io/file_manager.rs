@@ -1,3 +1,5 @@
+//! This is a different approach than I had done before. This file manager runs its own loop based on a spawned task
+//! since the prior approach was too lock heavy and I couldn't figure out an approach that didn't starve resources.
 use super::page_formats::{PageOffset, UInt12, UInt12Error};
 use async_stream::try_stream;
 use bytes::Bytes;
@@ -21,14 +23,6 @@ mod request_type;
 use request_type::RequestType;
 mod resource_formatter;
 pub use resource_formatter::ResourceFormatter;
-
-/*
-This is a different approach than I had done before. This file manager runs its own loop based on a spawned task
-since the prior approach was too lock heavy and I couldn't figure out an approach that didn't starve resources.
-
-        let path = self.construct_path(resource_key, offset).await?;
-        let offset_in_file = offset.0 % PAGES_PER_FILE * PAGE_SIZE as usize;
-*/
 
 #[derive(Clone, Debug)]
 pub struct FileManager {
