@@ -1,4 +1,5 @@
-use std::sync::Arc;
+/*use std::sync::Arc;
+use std::time::Duration;
 
 use criterion::BenchmarkId;
 use criterion::Criterion;
@@ -16,6 +17,7 @@ use feophantlib::engine::objects::Table;
 use feophantlib::engine::transactions::TransactionId;
 use futures::pin_mut;
 use tempfile::TempDir;
+use tokio::runtime::Builder;
 use tokio_stream::StreamExt;
 
 fn get_table() -> Arc<Table> {
@@ -94,9 +96,9 @@ async fn row_manager_mass_insert(row_count: usize) -> Result<(), Box<dyn std::er
 }
 
 fn from_elem(c: &mut Criterion) {
-    let rt = tokio::runtime::Runtime::new().unwrap();
+    let rt = Builder::new_current_thread().build().unwrap();
 
-    let row_count: usize = 500;
+    let row_count: usize = 50;
 
     c.bench_with_input(
         BenchmarkId::new("row_manager_mass_insert", row_count),
@@ -111,3 +113,4 @@ fn from_elem(c: &mut Criterion) {
 
 criterion_group!(benches, from_elem);
 criterion_main!(benches);
+*/

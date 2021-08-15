@@ -102,7 +102,7 @@ impl FileOperations {
 
         file.write_all_buf(&mut buffer).await?;
 
-        file.sync_all().await?;
+        //file.sync_all().await?;
 
         Ok(file)
     }
