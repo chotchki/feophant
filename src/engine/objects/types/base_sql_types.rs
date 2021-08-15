@@ -1,7 +1,7 @@
 use crate::engine::io::{
     encode_size, expected_encoded_size, parse_size, SelfEncodedSize, SizeError,
 };
-use bytes::{Buf, BufMut, BytesMut};
+use bytes::{Buf, BufMut};
 use nom::{
     error::{convert_error, VerboseError},
     Finish,
@@ -10,8 +10,7 @@ use std::{
     fmt::{self, Display, Formatter},
     mem::size_of,
     num::ParseIntError,
-    str::{FromStr, ParseBoolError},
-    string::FromUtf8Error,
+    str::{FromStr, ParseBoolError, Utf8Error},
     sync::Arc,
 };
 use thiserror::Error;
@@ -50,7 +49,7 @@ impl BaseSqlTypes {
         match target_type {
             BaseSqlTypesMapper::Array(a) => {
                 let count = parse_size(buffer)?;
-                let mut items = vec![];
+                let mut items = Vec::with_capacity(count);
 
                 for _ in 0..count {
                     items.push(Self::deserialize(a, buffer)?);
@@ -103,11 +102,10 @@ impl BaseSqlTypes {
                     ));
                 }
 
-                //TODO find a way to skip a copy here
                 let value_buff = buffer.copy_to_bytes(length);
-                let value_str = String::from_utf8(value_buff.to_vec())?;
+                let value_str = std::str::from_utf8(&value_buff)?;
 
-                Ok(BaseSqlTypes::Text(value_str))
+                Ok(BaseSqlTypes::Text(value_str.to_string()))
             }
         }
     }
@@ -254,7 +252,7 @@ impl SelfEncodedSize for BaseSqlTypes {
 #[derive(Error, Debug)]
 pub enum BaseSqlTypesError {
     #[error(transparent)]
-    FromUtf8Error(#[from] FromUtf8Error),
+    Utf8Error(#[from] Utf8Error),
     #[error("Length needed {0}, length found {1}")]
     InsufficentBuffer(usize, usize),
     #[error(transparent)]
@@ -273,6 +271,7 @@ pub enum BaseSqlTypesError {
 
 #[cfg(test)]
 mod tests {
+    use bytes::BytesMut;
     use hex_literal::hex;
     use uuid::Uuid;
 

@@ -71,7 +71,7 @@ impl UInt12 {
         buffer: &mut impl Buf,
         expected_count: usize,
     ) -> Result<Vec<UInt12>, UInt12Error> {
-        let mut items = vec![];
+        let mut items = Vec::with_capacity(expected_count);
         let mut count = 0;
 
         let mut left: u16 = 0;

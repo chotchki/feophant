@@ -60,7 +60,7 @@ impl NullMask {
     }
 
     pub fn parse(buffer: &mut impl Buf, column_count: usize) -> Result<Vec<bool>, NullMaskError> {
-        let mut nulls = vec![];
+        let mut nulls = Vec::with_capacity(((column_count + 7) / 8) * 8);
 
         if buffer.remaining() <= column_count / 8 {
             return Err(NullMaskError::BufferTooShort(
