@@ -1,4 +1,4 @@
-/*use std::sync::Arc;
+use std::sync::Arc;
 use std::time::Duration;
 
 use criterion::BenchmarkId;
@@ -98,7 +98,7 @@ async fn row_manager_mass_insert(row_count: usize) -> Result<(), Box<dyn std::er
 fn from_elem(c: &mut Criterion) {
     let rt = Builder::new_current_thread().build().unwrap();
 
-    let row_count: usize = 50;
+    let row_count: usize = 500;
 
     c.bench_with_input(
         BenchmarkId::new("row_manager_mass_insert", row_count),
@@ -113,4 +113,3 @@ fn from_elem(c: &mut Criterion) {
 
 criterion_group!(benches, from_elem);
 criterion_main!(benches);
-*/

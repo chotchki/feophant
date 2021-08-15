@@ -21,18 +21,18 @@ path = "src/lib.rs"
 name = "feophant-server"
 path = "src/main.rs"
 
-#[[bench]]
-#name = "feophant_benchmark"
-#harness = false
+[[bench]]
+name = "feophant_benchmark"
+harness = false
 
-#[profile.release]
-#debug = true
+[profile.release]
+debug = true
 
-#[profile.bench]
-#debug = true
+[profile.bench]
+debug = true
 
 [dev-dependencies]
-#criterion = { version = "0.3", features = ["async_tokio"] }
+criterion = { version = "0.3", features = ["async_tokio"] }
 #Useful for debugging raw pages
 #pretty-hex = "0.2.1"
 tokio-postgres = "0.7.2"
