@@ -188,7 +188,7 @@ mod tests {
 
         let mut resource_lookup: HashMap<Uuid, PageOffset> = HashMap::new();
         resource_lookup.insert(test_uuid, PageOffset(0));
-        let test0 = resource_lookup.get(&test_uuid).unwrap();
+        let test0 = resource_lookup.remove(&test_uuid).unwrap();
         resource_lookup.insert(test_uuid, test0.next());
         let test1 = resource_lookup.get(&test_uuid).unwrap();
 
