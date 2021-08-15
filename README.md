@@ -75,6 +75,8 @@ For now, the index implementation is now on hold until I get an integrated I/O s
 The real I/O subsystem has been written and tested. About to integrate it.
 Real integration tests using a non feophant postgres rust driver are also working.
 
+I/O subsystem integrated but I'm not happy with the performance. I'm debating a caching layer above the file_manager. I need to get some benchmarks together so I know if I'm actually helping.
+
 **TODO**
 
 
