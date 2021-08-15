@@ -41,6 +41,9 @@ Acceptance Criteria:
 * This is independent of transaction control so I think this sits below/in row manager.
 
 **TODO**
+Write a getting started section on the feophant.com website.
+
+**TODO**
 
 Add support for defining a primary key on a table. This implies the following functionality:
 * Index support through the stack down to the page level.
