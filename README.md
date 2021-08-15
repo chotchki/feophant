@@ -34,6 +34,13 @@ Benchmark to aid in profiling
 ## Current TODO List - Subject to constant change!
 
 **TODO**
+Implement page level locks that are ordered to avoid deadlocking.
+
+Acceptance Criteria:
+* Should be able to update a row either inside a page or not without loosing commits.
+* This is independent of transaction control so I think this sits below/in row manager.
+
+**TODO**
 
 Add support for defining a primary key on a table. This implies the following functionality:
 * Index support through the stack down to the page level.
