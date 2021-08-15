@@ -10,4 +10,4 @@ No support is provided at this time. I am working directly off of main until I a
 
 ## Reporting a Vulnerability
 
-Since this project is still in toy status please open an issue or pull request for any security fixes.
+Since this project is still pre-alpha please open an issue or pull request for any security fixes.
