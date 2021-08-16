@@ -11,9 +11,8 @@ use std::{
 };
 
 use tokio::sync::{RwLock, RwLockWriteGuard};
-use uuid::Uuid;
 
-use super::page_formats::PageOffset;
+use super::page_formats::{PageId, PageOffset};
 
 /// Every 10 write locks held will include a scan for dead weak refs and their removal.
 /// TODO: Figure out if this makes sense or even if it should decend into the children.
@@ -23,7 +22,7 @@ const CLEANUP_RATE: i8 = 10;
 
 #[derive(Debug, Clone)]
 pub struct LockManager {
-    locks: Arc<RwLock<HashMap<Uuid, LockManagerEntry>>>,
+    locks: Arc<RwLock<HashMap<PageId, LockManagerEntry>>>,
     cleanup_count: Arc<AtomicI8>,
 }
 
@@ -35,21 +34,21 @@ impl LockManager {
         }
     }
 
-    pub async fn get_lock(&self, resource_key: &Uuid, offset: &PageOffset) -> Arc<RwLock<u8>> {
+    pub async fn get_lock(&self, page_id: &PageId, offset: &PageOffset) -> Arc<RwLock<u8>> {
         let lm = self.locks.read().await;
 
-        match lm.get(resource_key) {
+        match lm.get(page_id) {
             Some(s1) => s1.get_lock(offset).await,
             None => {
                 drop(lm);
-                self.insert_key(resource_key, offset).await
+                self.insert_key(page_id, offset).await
             }
         }
     }
 
-    async fn insert_key(&self, resource_key: &Uuid, offset: &PageOffset) -> Arc<RwLock<u8>> {
+    async fn insert_key(&self, page_id: &PageId, offset: &PageOffset) -> Arc<RwLock<u8>> {
         let mut lm = self.locks.write().await;
-        let lock = match lm.get(resource_key) {
+        let lock = match lm.get(page_id) {
             Some(s3) => {
                 //Got write lock and the entry is there already
                 s3.get_lock(offset).await
@@ -58,7 +57,7 @@ impl LockManager {
                 //Get failed, recreate
                 let entry = LockManagerEntry::new();
                 let new_lock = entry.get_lock(offset).await;
-                lm.insert(*resource_key, entry);
+                lm.insert(*page_id, entry);
                 new_lock
             }
         };
@@ -70,7 +69,7 @@ impl LockManager {
 
     async fn cleanup(
         &self,
-        lm: &mut RwLockWriteGuard<'_, HashMap<Uuid, LockManagerEntry, RandomState>>,
+        lm: &mut RwLockWriteGuard<'_, HashMap<PageId, LockManagerEntry, RandomState>>,
     ) {
         let clean_count = self.cleanup_count.fetch_add(1, Ordering::Relaxed);
         if clean_count > CLEANUP_RATE {
