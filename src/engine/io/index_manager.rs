@@ -9,8 +9,8 @@ use std::ops::Range;
 use std::sync::Arc;
 
 use super::index_formats::{BTreeLeafError, BTreeNode, BTreeNodeError};
-use super::page_formats::ItemIdData;
 use super::page_formats::PageOffset;
+use super::page_formats::{ItemIdData, PageId, PageType};
 use super::{FileManager, FileManagerError};
 use crate::engine::io::SelfEncodedSize;
 use crate::{
@@ -88,10 +88,15 @@ impl IndexManager {
             match current_node.0 {
                 BTreeNode::Branch(b) => {}
                 BTreeNode::Leaf(mut l) => {
+                    let page_id = PageId {
+                        resource_key: index_def.id,
+                        page_type: PageType::Data,
+                    };
+
                     if l.can_fit(&new_key) {
                         return Ok(self
                             .file_manager
-                            .update_page(&index_def.id, l.serialize()?, &current_node.1)
+                            .update_page(&page_id, l.serialize()?, &current_node.1)
                             .await?);
                     }
 
@@ -148,7 +153,12 @@ impl IndexManager {
         index_def: &Index,
         offset: &PageOffset,
     ) -> Result<BTreeNode, IndexManagerError> {
-        match self.file_manager.get_page(&index_def.id, offset).await? {
+        let page_id = PageId {
+            resource_key: index_def.id,
+            page_type: PageType::Data,
+        };
+
+        match self.file_manager.get_page(&page_id, offset).await? {
             Some(mut page) => Ok(BTreeNode::parse(&mut page, index_def)?),
             None => Err(IndexManagerError::NoSuchNode(*offset)),
         }
@@ -164,8 +174,13 @@ impl IndexManager {
         match self.get_node(index_def, &PageOffset(1)).await {
             Ok(o) => Ok((o, PageOffset(1))),
             Err(IndexManagerError::NoSuchNode(_)) => {
+                let page_id = PageId {
+                    resource_key: index_def.id,
+                    page_type: PageType::Data,
+                };
+
                 //Page zero with no data in it
-                self.make_root_page(&index_def.id).await?;
+                self.make_root_page(&page_id).await?;
 
                 let root_node = BTreeLeaf {
                     parent_node: None,
@@ -176,7 +191,7 @@ impl IndexManager {
 
                 let page_num = self
                     .file_manager
-                    .add_page(&index_def.id, root_node.serialize()?)
+                    .add_page(&page_id, root_node.serialize()?)
                     .await?;
                 if page_num != PageOffset(1) {
                     return Err(IndexManagerError::ConcurrentCreationError());
@@ -188,7 +203,7 @@ impl IndexManager {
         }
     }
 
-    async fn make_root_page(&self, index: &Uuid) -> Result<(), IndexManagerError> {
+    async fn make_root_page(&self, index: &PageId) -> Result<(), IndexManagerError> {
         let mut root_page_buffer = BytesMut::with_capacity(PAGE_SIZE as usize);
         let root_page = vec![0; PAGE_SIZE as usize];
         root_page_buffer.extend_from_slice(&root_page);

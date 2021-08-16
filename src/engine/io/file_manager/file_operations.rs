@@ -12,22 +12,22 @@ use tokio::{
     fs::{File, OpenOptions},
     io::AsyncSeekExt,
 };
-use uuid::Uuid;
 
 use crate::constants::PAGE_SIZE;
 use crate::engine::io::file_manager::ResourceFormatter;
-use crate::engine::io::page_formats::PageOffset;
+use crate::engine::io::page_formats::{PageId, PageOffset};
 pub struct FileOperations {}
 
 impl FileOperations {
     pub async fn open_path(
         data_dir: &Path,
-        resource_key: &Uuid,
+        page_id: &PageId,
         file_number: usize,
     ) -> Result<File, FileOperationsError> {
-        let mut path = Self::make_sub_path(data_dir, resource_key).await?;
-        let file_stem = ResourceFormatter::format_uuid(resource_key);
-        let filename = format!("{0}.{1}", file_stem, file_number);
+        let mut path = Self::make_sub_path(data_dir, page_id).await?;
+        let file_stem = ResourceFormatter::format_uuid(&page_id.resource_key);
+        let file_type = page_id.page_type.to_string();
+        let filename = format!("{0}.{1}.{2}", file_stem, file_type, file_number);
 
         path.push(filename);
 
@@ -54,9 +54,9 @@ impl FileOperations {
     //Makes the prefix folder so we don't fill up folders. Will consider more nesting eventually
     pub async fn make_sub_path(
         data_dir: &Path,
-        resource_key: &Uuid,
+        page_id: &PageId,
     ) -> Result<PathBuf, FileOperationsError> {
-        let subfolder = ResourceFormatter::get_uuid_prefix(resource_key);
+        let subfolder = ResourceFormatter::get_uuid_prefix(&page_id.resource_key);
 
         let mut path = PathBuf::new();
         path.push(data_dir);
@@ -121,6 +121,9 @@ pub enum FileOperationsError {
 #[cfg(test)]
 mod tests {
     use tempfile::TempDir;
+    use uuid::Uuid;
+
+    use crate::engine::io::page_formats::PageType;
 
     use super::*;
 
@@ -128,11 +131,14 @@ mod tests {
     async fn test_make_sub_path() -> Result<(), Box<dyn std::error::Error>> {
         let tmp = TempDir::new()?;
 
-        let test_uuid = Uuid::new_v4();
+        let page_id = PageId {
+            resource_key: Uuid::new_v4(),
+            page_type: PageType::Data,
+        };
 
         //Must be able to repeatedly make the sub_path
-        FileOperations::make_sub_path(tmp.path(), &test_uuid).await?;
-        FileOperations::make_sub_path(tmp.path(), &test_uuid).await?;
+        FileOperations::make_sub_path(tmp.path(), &page_id).await?;
+        FileOperations::make_sub_path(tmp.path(), &page_id).await?;
 
         Ok(())
     }

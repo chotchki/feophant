@@ -8,6 +8,7 @@ use criterion::{criterion_group, criterion_main};
 use feophantlib::constants::Nullable;
 use feophantlib::engine::io::row_formats::RowData;
 use feophantlib::engine::io::FileManager;
+use feophantlib::engine::io::LockManager;
 use feophantlib::engine::io::RowManager;
 use feophantlib::engine::objects::types::BaseSqlTypes;
 use feophantlib::engine::objects::types::BaseSqlTypesMapper;
@@ -62,7 +63,7 @@ async fn row_manager_mass_insert(row_count: usize) -> Result<(), Box<dyn std::er
 
     let table = get_table();
     let fm = Arc::new(FileManager::new(tmp_dir.clone())?);
-    let rm = RowManager::new(fm);
+    let rm = RowManager::new(fm, LockManager::new());
 
     let tran_id = TransactionId::new(1);
 
@@ -76,7 +77,7 @@ async fn row_manager_mass_insert(row_count: usize) -> Result<(), Box<dyn std::er
 
     //Now let's make sure they're really in the table, persisting across restarts
     let fm = Arc::new(FileManager::new(tmp_dir)?);
-    let rm = RowManager::new(fm);
+    let rm = RowManager::new(fm, LockManager::new());
 
     pin_mut!(rm);
     let result_rows: Vec<RowData> = rm

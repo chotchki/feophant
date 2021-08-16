@@ -4,13 +4,19 @@ use super::file_operations::{FileOperations, FileOperationsError};
 use super::request_type::RequestType;
 use crate::constants::PAGE_SIZE;
 use crate::engine::io::file_manager::ResourceFormatter;
-use crate::engine::io::page_formats::PageOffset;
+use crate::engine::io::page_formats::{PageId, PageOffset, PageType};
 use bytes::{Bytes, BytesMut};
 use lru::LruCache;
+use nom::bytes::complete::tag_no_case;
+use nom::character::complete::alphanumeric1;
+use nom::error::{ContextError, ParseError};
+use nom::sequence::tuple;
+use nom::IResult;
 use std::collections::{HashMap, VecDeque};
 use std::convert::TryFrom;
 use std::ffi::OsStr;
 use std::num::TryFromIntError;
+use std::str::FromStr;
 use std::string::FromUtf8Error;
 use std::{
     ffi::OsString,
@@ -35,15 +41,15 @@ const EMPTY_BUFFER: [u8; 16] = [0u8; 16];
 #[derive(Debug)]
 pub struct FileExecutor {
     data_dir: PathBuf,
-    receive_queue: UnboundedReceiver<(Uuid, RequestType)>,
+    receive_queue: UnboundedReceiver<(PageId, RequestType)>,
     receive_shutdown: UnboundedReceiver<Sender<()>>,
-    resource_lookup: HashMap<Uuid, PageOffset>,
+    resource_lookup: HashMap<PageId, PageOffset>,
 }
 
 impl FileExecutor {
     pub fn new(
         raw_path: OsString,
-        receive_queue: UnboundedReceiver<(Uuid, RequestType)>,
+        receive_queue: UnboundedReceiver<(PageId, RequestType)>,
         receive_shutdown: UnboundedReceiver<Sender<()>>,
     ) -> Result<FileExecutor, FileExecutorError> {
         let data_dir = Path::new(&raw_path).to_path_buf();
@@ -54,7 +60,7 @@ impl FileExecutor {
             ));
         }
 
-        let resource_lookup: HashMap<Uuid, PageOffset> = HashMap::new();
+        let resource_lookup = HashMap::new();
 
         Ok(FileExecutor {
             data_dir,
@@ -91,7 +97,7 @@ impl FileExecutor {
         // This cache is used to indicate when a file operation is in flight on a handle, there are two options:
         // * entry: some(file) -> Idle File Handle that can be used
         // * entry: None -> File handle in use but not returned
-        let mut file_handle_cache: LruCache<(Uuid, usize), Option<File>> =
+        let mut file_handle_cache: LruCache<(PageId, usize), Option<File>> =
             LruCache::new(MAX_FILE_HANDLE_COUNT);
 
         // This channel is used to restore or drop entries on the file handle cache, there are two options:
@@ -100,7 +106,7 @@ impl FileExecutor {
         let (send_completed, mut receive_completed) = mpsc::unbounded_channel();
 
         // Queue used as a holding ground until a handle is availible for it to execute. Used in a FIFO fashion
-        let mut request_queue: VecDeque<(Uuid, RequestType)> = VecDeque::new();
+        let mut request_queue: VecDeque<(PageId, RequestType)> = VecDeque::new();
 
         let mut shutdown_sender = None;
 
@@ -131,8 +137,8 @@ impl FileExecutor {
                     }
                 }
                 maybe_recv = self.receive_queue.recv(), if request_queue.len() < MAX_FILE_HANDLE_COUNT => {
-                    if let Some((resource_key, req_type)) = maybe_recv {
-                        request_queue.push_back((resource_key, req_type));
+                    if let Some((page_id, req_type)) = maybe_recv {
+                        request_queue.push_back((page_id, req_type));
                     } else {
                         break;
                     }
@@ -142,10 +148,10 @@ impl FileExecutor {
             //Still haven't figured out incrementing file_handles
             if file_handles_open < MAX_FILE_HANDLE_COUNT && !request_queue.is_empty() {
                 let mut new_request_queue = VecDeque::with_capacity(request_queue.len());
-                for (resource_key, req_type) in request_queue.into_iter() {
+                for (page_id, req_type) in request_queue.into_iter() {
                     match req_type {
                         RequestType::Add((a, response)) => {
-                            let next_po = match self.get_next_po(&resource_key).await {
+                            let next_po = match self.get_next_po(&page_id).await {
                                 Ok(po) => po,
                                 Err(e) => {
                                     let _ = response.send(Err(e));
@@ -153,12 +159,11 @@ impl FileExecutor {
                                 }
                             };
 
-                            match file_handle_cache.pop(&(resource_key, next_po.get_file_number()))
-                            {
+                            match file_handle_cache.pop(&(page_id, next_po.get_file_number())) {
                                 Some(maybe_file) => match maybe_file {
                                     Some(file) => {
                                         file_handle_cache
-                                            .put((resource_key, next_po.get_file_number()), None);
+                                            .put((page_id, next_po.get_file_number()), None);
                                         let file_handle_ret = send_completed.clone();
                                         tokio::spawn(async move {
                                             let response_f = response;
@@ -167,7 +172,7 @@ impl FileExecutor {
                                             {
                                                 Ok(o) => {
                                                     let _ = file_handle_ret.send((
-                                                        resource_key,
+                                                        page_id,
                                                         next_po.get_file_number(),
                                                         Some(o),
                                                     ));
@@ -175,7 +180,7 @@ impl FileExecutor {
                                                 }
                                                 Err(e) => {
                                                     let _ = file_handle_ret.send((
-                                                        resource_key,
+                                                        page_id,
                                                         next_po.get_file_number(),
                                                         None,
                                                     ));
@@ -189,18 +194,16 @@ impl FileExecutor {
                                     None => {
                                         //Request in flight, skip for now, but have to reinsert into cache
                                         file_handle_cache
-                                            .put((resource_key, next_po.get_file_number()), None);
+                                            .put((page_id, next_po.get_file_number()), None);
 
-                                        new_request_queue.push_back((
-                                            resource_key,
-                                            RequestType::Add((a, response)),
-                                        ));
+                                        new_request_queue
+                                            .push_back((page_id, RequestType::Add((a, response))));
                                         continue;
                                     }
                                 },
                                 None => {
                                     file_handle_cache
-                                        .put((resource_key, next_po.get_file_number()), None);
+                                        .put((page_id, next_po.get_file_number()), None);
                                     file_handles_open = file_handles_open.saturating_add(1);
                                     let data_dir = self.data_dir.clone();
                                     let file_handle_ret = send_completed.clone();
@@ -209,7 +212,7 @@ impl FileExecutor {
 
                                         let file = match FileOperations::open_path(
                                             &data_dir,
-                                            &resource_key,
+                                            &page_id,
                                             next_po.get_file_number(),
                                         )
                                         .await
@@ -217,7 +220,7 @@ impl FileExecutor {
                                             Ok(o) => o,
                                             Err(e) => {
                                                 let _ = file_handle_ret.send((
-                                                    resource_key,
+                                                    page_id,
                                                     next_po.get_file_number(),
                                                     None,
                                                 ));
@@ -231,7 +234,7 @@ impl FileExecutor {
                                         match FileOperations::add_chunk(file, &next_po, a).await {
                                             Ok(o) => {
                                                 let _ = file_handle_ret.send((
-                                                    resource_key,
+                                                    page_id,
                                                     next_po.get_file_number(),
                                                     Some(o),
                                                 ));
@@ -239,7 +242,7 @@ impl FileExecutor {
                                             }
                                             Err(e) => {
                                                 let _ = file_handle_ret.send((
-                                                    resource_key,
+                                                    page_id,
                                                     next_po.get_file_number(),
                                                     None,
                                                 ));
@@ -253,11 +256,10 @@ impl FileExecutor {
                             }
                         }
                         RequestType::Read((r, response)) => {
-                            match file_handle_cache.pop(&(resource_key, r.get_file_number())) {
+                            match file_handle_cache.pop(&(page_id, r.get_file_number())) {
                                 Some(maybe_file) => match maybe_file {
                                     Some(file) => {
-                                        file_handle_cache
-                                            .put((resource_key, r.get_file_number()), None);
+                                        file_handle_cache.put((page_id, r.get_file_number()), None);
                                         let file_handle_ret = send_completed.clone();
                                         tokio::spawn(async move {
                                             let response_f = response;
@@ -265,7 +267,7 @@ impl FileExecutor {
                                             match FileOperations::read_chunk(file, &r).await {
                                                 Ok((o, buffer)) => {
                                                     let _ = file_handle_ret.send((
-                                                        resource_key,
+                                                        page_id,
                                                         r.get_file_number(),
                                                         Some(o),
                                                     ));
@@ -273,7 +275,7 @@ impl FileExecutor {
                                                 }
                                                 Err(e) => {
                                                     let _ = file_handle_ret.send((
-                                                        resource_key,
+                                                        page_id,
                                                         r.get_file_number(),
                                                         None,
                                                     ));
@@ -286,18 +288,14 @@ impl FileExecutor {
                                     }
                                     None => {
                                         //Request in flight, skip for now, but have to reinsert into cache
-                                        file_handle_cache
-                                            .put((resource_key, r.get_file_number()), None);
-                                        new_request_queue.push_back((
-                                            resource_key,
-                                            RequestType::Read((r, response)),
-                                        ));
+                                        file_handle_cache.put((page_id, r.get_file_number()), None);
+                                        new_request_queue
+                                            .push_back((page_id, RequestType::Read((r, response))));
                                         continue;
                                     }
                                 },
                                 None => {
-                                    file_handle_cache
-                                        .put((resource_key, r.get_file_number()), None);
+                                    file_handle_cache.put((page_id, r.get_file_number()), None);
                                     file_handles_open = file_handles_open.saturating_add(1);
                                     let data_dir = self.data_dir.clone();
                                     let file_handle_ret = send_completed.clone();
@@ -306,7 +304,7 @@ impl FileExecutor {
 
                                         let file = match FileOperations::open_path(
                                             &data_dir,
-                                            &resource_key,
+                                            &page_id,
                                             r.get_file_number(),
                                         )
                                         .await
@@ -314,7 +312,7 @@ impl FileExecutor {
                                             Ok(o) => o,
                                             Err(e) => {
                                                 let _ = file_handle_ret.send((
-                                                    resource_key,
+                                                    page_id,
                                                     r.get_file_number(),
                                                     None,
                                                 ));
@@ -328,7 +326,7 @@ impl FileExecutor {
                                         match FileOperations::read_chunk(file, &r).await {
                                             Ok((o, maybe_buffer)) => {
                                                 let _ = file_handle_ret.send((
-                                                    resource_key,
+                                                    page_id,
                                                     r.get_file_number(),
                                                     Some(o),
                                                 ));
@@ -336,7 +334,7 @@ impl FileExecutor {
                                             }
                                             Err(e) => {
                                                 let _ = file_handle_ret.send((
-                                                    resource_key,
+                                                    page_id,
                                                     r.get_file_number(),
                                                     None,
                                                 ));
@@ -350,11 +348,10 @@ impl FileExecutor {
                             }
                         }
                         RequestType::Update((u, buffer, response)) => {
-                            match file_handle_cache.pop(&(resource_key, u.get_file_number())) {
+                            match file_handle_cache.pop(&(page_id, u.get_file_number())) {
                                 Some(maybe_file) => match maybe_file {
                                     Some(file) => {
-                                        file_handle_cache
-                                            .put((resource_key, u.get_file_number()), None);
+                                        file_handle_cache.put((page_id, u.get_file_number()), None);
                                         let file_handle_ret = send_completed.clone();
                                         tokio::spawn(async move {
                                             let response_f = response;
@@ -364,7 +361,7 @@ impl FileExecutor {
                                             {
                                                 Ok(o) => {
                                                     let _ = file_handle_ret.send((
-                                                        resource_key,
+                                                        page_id,
                                                         u.get_file_number(),
                                                         Some(o),
                                                     ));
@@ -372,7 +369,7 @@ impl FileExecutor {
                                                 }
                                                 Err(e) => {
                                                     let _ = file_handle_ret.send((
-                                                        resource_key,
+                                                        page_id,
                                                         u.get_file_number(),
                                                         None,
                                                     ));
@@ -385,18 +382,16 @@ impl FileExecutor {
                                     }
                                     None => {
                                         //Request in flight, skip for now, but have to reinsert into cache
-                                        file_handle_cache
-                                            .put((resource_key, u.get_file_number()), None);
+                                        file_handle_cache.put((page_id, u.get_file_number()), None);
                                         new_request_queue.push_back((
-                                            resource_key,
+                                            page_id,
                                             RequestType::Update((u, buffer, response)),
                                         ));
                                         continue;
                                     }
                                 },
                                 None => {
-                                    file_handle_cache
-                                        .put((resource_key, u.get_file_number()), None);
+                                    file_handle_cache.put((page_id, u.get_file_number()), None);
                                     file_handles_open = file_handles_open.saturating_add(1);
                                     let data_dir = self.data_dir.clone();
                                     let file_handle_ret = send_completed.clone();
@@ -405,7 +400,7 @@ impl FileExecutor {
 
                                         let file = match FileOperations::open_path(
                                             &data_dir,
-                                            &resource_key,
+                                            &page_id,
                                             u.get_file_number(),
                                         )
                                         .await
@@ -413,7 +408,7 @@ impl FileExecutor {
                                             Ok(o) => o,
                                             Err(e) => {
                                                 let _ = file_handle_ret.send((
-                                                    resource_key,
+                                                    page_id,
                                                     u.get_file_number(),
                                                     None,
                                                 ));
@@ -427,7 +422,7 @@ impl FileExecutor {
                                         match FileOperations::update_chunk(file, &u, buffer).await {
                                             Ok(o) => {
                                                 let _ = file_handle_ret.send((
-                                                    resource_key,
+                                                    page_id,
                                                     u.get_file_number(),
                                                     Some(o),
                                                 ));
@@ -435,7 +430,7 @@ impl FileExecutor {
                                             }
                                             Err(e) => {
                                                 let _ = file_handle_ret.send((
-                                                    resource_key,
+                                                    page_id,
                                                     u.get_file_number(),
                                                     None,
                                                 ));
@@ -465,24 +460,24 @@ impl FileExecutor {
         }
     }
 
-    async fn get_next_po(&mut self, resource_key: &Uuid) -> Result<PageOffset, FileExecutorError> {
+    async fn get_next_po(&mut self, page_id: &PageId) -> Result<PageOffset, FileExecutorError> {
         //Find the resource key's latest offset so we can iterate on it for adds
-        match self.resource_lookup.remove(resource_key) {
+        match self.resource_lookup.remove(page_id) {
             Some(po) => {
-                self.resource_lookup.insert(*resource_key, po.next());
+                self.resource_lookup.insert(*page_id, po.next());
                 Ok(po)
             }
             None => {
-                let po = self.find_next_offset(resource_key).await?;
-                self.resource_lookup.insert(*resource_key, po.next());
+                let po = self.find_next_offset(page_id).await?;
+                self.resource_lookup.insert(*page_id, po.next());
                 Ok(po)
             }
         }
     }
 
-    async fn find_next_offset(&self, resource_key: &Uuid) -> Result<PageOffset, FileExecutorError> {
+    async fn find_next_offset(&self, page_id: &PageId) -> Result<PageOffset, FileExecutorError> {
         let (path, count) =
-            match Self::search_for_max_file(self.data_dir.as_path(), resource_key).await? {
+            match Self::search_for_max_file(self.data_dir.as_path(), page_id).await? {
                 Some((p, c)) => (p, c),
                 None => {
                     return Ok(PageOffset(0));
@@ -533,10 +528,12 @@ impl FileExecutor {
     /// This will search for the highest numbered file for the Uuid
     async fn search_for_max_file(
         data_dir: &Path,
-        resource_key: &Uuid,
+        page_id: &PageId,
     ) -> Result<Option<(PathBuf, usize)>, FileExecutorError> {
-        let sub_path = FileOperations::make_sub_path(data_dir, resource_key).await?;
-        let target_filename = ResourceFormatter::format_uuid(resource_key);
+        let sub_path = FileOperations::make_sub_path(data_dir, page_id).await?;
+        let target_uuid = ResourceFormatter::format_uuid(&page_id.resource_key);
+        let target_type = page_id.page_type.to_string();
+        let target_filename = format!("{0}.{1}", target_uuid, target_type);
 
         let mut max_file_count = 0;
         let mut max_file_path = None;
@@ -607,8 +604,12 @@ mod tests {
 
     use tempfile::TempDir;
     use tokio::{io::AsyncWriteExt, time::timeout};
+    use uuid::Uuid;
 
-    use crate::{constants::PAGES_PER_FILE, engine::io::FileManager};
+    use crate::{
+        constants::PAGES_PER_FILE,
+        engine::io::{page_formats::PageType, FileManager},
+    };
 
     use super::*;
 
@@ -627,10 +628,13 @@ mod tests {
 
         //We're going to touch a single file to force it to think it has far more data than it does.
         //I don't normally write tests this way but I don't want to write GBs unnecessarily.
-        let test_uuid = Uuid::new_v4();
+        let page_id = PageId {
+            resource_key: Uuid::new_v4(),
+            page_type: PageType::Data,
+        };
 
         let mut test_file =
-            FileOperations::open_path(tmp_dir, &test_uuid, PageOffset(0).get_file_number()).await?;
+            FileOperations::open_path(tmp_dir, &page_id, PageOffset(0).get_file_number()).await?;
 
         let mut test_page = get_test_page(1);
 
@@ -641,11 +645,11 @@ mod tests {
         let fm = FileManager::new(tmp_dir.as_os_str().to_os_string())?;
 
         let test_page = get_test_page(2);
-        let test_page_num = fm.add_page(&test_uuid, test_page.clone()).await?;
+        let test_page_num = fm.add_page(&page_id, test_page.clone()).await?;
 
         assert_eq!(test_page_num, PageOffset(2));
 
-        let test_page_get = fm.get_page(&test_uuid, &test_page_num).await?.unwrap();
+        let test_page_get = fm.get_page(&page_id, &test_page_num).await?.unwrap();
 
         assert_eq!(test_page, test_page_get);
 
@@ -661,12 +665,16 @@ mod tests {
 
         //We're going to touch a single file to force it to think it has far more data than it does.
         //I don't normally write tests this way but I don't want to write GBs unnecessarily.
-        let test_uuid = Uuid::new_v4();
+        let page_id = PageId {
+            resource_key: Uuid::new_v4(),
+            page_type: PageType::Data,
+        };
+
         let test_count: usize = 10;
 
         let mut test_file = FileOperations::open_path(
             tmp_dir,
-            &test_uuid,
+            &page_id,
             PageOffset(PAGES_PER_FILE * test_count).get_file_number(),
         )
         .await?;
@@ -682,18 +690,15 @@ mod tests {
         let test_page = get_test_page(2);
         let test_page_num = timeout(
             Duration::new(10, 0),
-            fm.add_page(&test_uuid, test_page.clone()),
+            fm.add_page(&page_id, test_page.clone()),
         )
         .await??;
 
         assert_eq!(test_page_num, PageOffset(PAGES_PER_FILE * test_count + 2));
 
-        let test_page_get = timeout(
-            Duration::new(10, 0),
-            fm.get_page(&test_uuid, &test_page_num),
-        )
-        .await??
-        .unwrap();
+        let test_page_get = timeout(Duration::new(10, 0), fm.get_page(&page_id, &test_page_num))
+            .await??
+            .unwrap();
 
         assert_eq!(test_page, test_page_get);
 

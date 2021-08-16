@@ -6,6 +6,10 @@ mod page_data;
 pub use page_data::PageData;
 pub use page_data::PageDataError;
 
+mod page_id;
+pub use page_id::PageId;
+pub use page_id::PageType;
+
 mod page_offset;
 pub use page_offset::PageOffset;
 pub use page_offset::PageOffsetError;

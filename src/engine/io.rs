@@ -17,7 +17,7 @@ pub use file_manager::FileManager;
 pub use file_manager::FileManagerError;
 
 mod lock_manager;
-//pub use lock_manager::LockManager;
+pub use lock_manager::LockManager;
 
 mod page_formats;
 

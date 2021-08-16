@@ -34,6 +34,14 @@ Benchmark to aid in profiling
 ## Current TODO List - Subject to constant change!
 
 **TODO**
+Implement Free Space Maps so mutation of data doesn't need a linear scan/parse non stop.
+
+Did more thinking, I should implement postgres's streams concept so that I don't need to do lookups to find associated metadata on an object.
+I thought I was going to get to use Uuid+page offset. I think its now going to be uuid+page offset+ type.
+
+struct PageId + enum PageType should do it
+
+**TODO**
 Implement page level locks that are ordered to avoid deadlocking.
 
 Acceptance Criteria:

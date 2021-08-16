@@ -1,6 +1,7 @@
 use super::super::objects::Table;
 use super::super::transactions::TransactionId;
-use super::page_formats::{PageData, PageDataError, PageOffset, UInt12};
+use super::lock_manager::LockManager;
+use super::page_formats::{PageData, PageDataError, PageId, PageOffset, PageType, UInt12};
 use super::row_formats::{ItemPointer, RowData, RowDataError};
 use super::{EncodedSize, FileManager, FileManagerError};
 use crate::engine::objects::SqlTuple;
@@ -15,11 +16,15 @@ use thiserror::Error;
 #[derive(Clone, Debug)]
 pub struct RowManager {
     file_manager: Arc<FileManager>,
+    lock_manager: LockManager,
 }
 
 impl RowManager {
-    pub fn new(file_manager: Arc<FileManager>) -> RowManager {
-        RowManager { file_manager }
+    pub fn new(file_manager: Arc<FileManager>, lock_manager: LockManager) -> RowManager {
+        RowManager {
+            file_manager,
+            lock_manager,
+        }
     }
 
     pub async fn insert_row(
@@ -53,8 +58,12 @@ impl RowManager {
 
         page.update(row, row_pointer.count)?;
 
+        let page_id = PageId {
+            resource_key: table.id,
+            page_type: PageType::Data,
+        };
         self.file_manager
-            .update_page(&table.id, page.serialize(), &row_pointer.page)
+            .update_page(&page_id, page.serialize(), &row_pointer.page)
             .await?;
         Ok(())
     }
@@ -93,8 +102,12 @@ impl RowManager {
         old_row.item_pointer = new_row_pointer;
         old_page.update(old_row, row_pointer.count)?;
 
+        let page_id = PageId {
+            resource_key: table.id,
+            page_type: PageType::Data,
+        };
         self.file_manager
-            .update_page(&table.id, old_page.serialize(), &row_pointer.page)
+            .update_page(&page_id, old_page.serialize(), &row_pointer.page)
             .await?;
 
         Ok(new_row_pointer)
@@ -105,9 +118,14 @@ impl RowManager {
         table: Arc<Table>,
         row_pointer: ItemPointer,
     ) -> Result<(PageData, RowData), RowManagerError> {
+        let page_id = PageId {
+            resource_key: table.id,
+            page_type: PageType::Data,
+        };
+
         let page_bytes = self
             .file_manager
-            .get_page(&table.id, &row_pointer.page)
+            .get_page(&page_id, &row_pointer.page)
             .await?
             .ok_or(RowManagerError::NonExistentPage(row_pointer.page))?;
         let page = PageData::parse(table, row_pointer.page, page_bytes)?;
@@ -128,9 +146,14 @@ impl RowManager {
         self,
         table: Arc<Table>,
     ) -> impl Stream<Item = Result<RowData, RowManagerError>> {
+        let page_id = PageId {
+            resource_key: table.id,
+            page_type: PageType::Data,
+        };
+
         try_stream! {
             let mut page_num = PageOffset(0);
-            for await page_bytes in self.file_manager.get_stream(&table.id) {
+            for await page_bytes in self.file_manager.get_stream(&page_id) {
                 let page_bytes = page_bytes?;
                 match page_bytes {
                     Some(s) => {
@@ -147,15 +170,21 @@ impl RowManager {
         }
     }
 
+    // TODO implement visibility maps so I don't have to scan probable
     async fn insert_row_internal(
         &self,
         current_tran_id: TransactionId,
         table: Arc<Table>,
         user_data: SqlTuple,
     ) -> Result<ItemPointer, RowManagerError> {
+        let page_id = PageId {
+            resource_key: table.id,
+            page_type: PageType::Data,
+        };
+
         let mut page_num = PageOffset(0);
         loop {
-            let page_bytes = self.file_manager.get_page(&table.id, &page_num).await?;
+            let page_bytes = self.file_manager.get_page(&page_id, &page_num).await?;
             match page_bytes {
                 Some(p) => {
                     let mut page = PageData::parse(table.clone(), page_num, p)?;
@@ -163,7 +192,7 @@ impl RowManager {
                         let new_row_pointer = page.insert(current_tran_id, &table, user_data)?;
                         let new_page_bytes = page.serialize();
                         self.file_manager
-                            .update_page(&table.id, new_page_bytes, &page_num)
+                            .update_page(&page_id, new_page_bytes, &page_num)
                             .await?;
                         return Ok(new_row_pointer);
                     } else {
@@ -175,7 +204,7 @@ impl RowManager {
                     let mut new_page = PageData::new(page_num);
                     let new_row_pointer = new_page.insert(current_tran_id, &table, user_data)?; //TODO Will NOT handle overly large rows
                     self.file_manager
-                        .add_page(&table.id, new_page.serialize())
+                        .add_page(&page_id, new_page.serialize())
                         .await?;
                     return Ok(new_row_pointer);
                 }
@@ -256,7 +285,7 @@ mod tests {
 
         let table = get_table();
         let fm = Arc::new(FileManager::new(tmp_dir.clone())?);
-        let rm = RowManager::new(fm);
+        let rm = RowManager::new(fm, LockManager::new());
 
         let tran_id = TransactionId::new(1);
 
@@ -270,7 +299,7 @@ mod tests {
 
         //Now let's make sure they're really in the table, persisting across restarts
         let fm = Arc::new(FileManager::new(tmp_dir)?);
-        let rm = RowManager::new(fm);
+        let rm = RowManager::new(fm, LockManager::new());
 
         pin_mut!(rm);
         let result_rows: Vec<RowData> = rm
@@ -296,7 +325,7 @@ mod tests {
 
         let table = get_table();
         let fm = Arc::new(FileManager::new(tmp_dir)?);
-        let rm = RowManager::new(fm);
+        let rm = RowManager::new(fm, LockManager::new());
 
         let tran_id = TransactionId::new(1);
 
