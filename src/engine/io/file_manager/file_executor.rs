@@ -4,19 +4,13 @@ use super::file_operations::{FileOperations, FileOperationsError};
 use super::request_type::RequestType;
 use crate::constants::PAGE_SIZE;
 use crate::engine::io::file_manager::ResourceFormatter;
-use crate::engine::io::page_formats::{PageId, PageOffset, PageType};
+use crate::engine::io::page_formats::{PageId, PageOffset};
 use bytes::{Bytes, BytesMut};
 use lru::LruCache;
-use nom::bytes::complete::tag_no_case;
-use nom::character::complete::alphanumeric1;
-use nom::error::{ContextError, ParseError};
-use nom::sequence::tuple;
-use nom::IResult;
 use std::collections::{HashMap, VecDeque};
 use std::convert::TryFrom;
 use std::ffi::OsStr;
 use std::num::TryFromIntError;
-use std::str::FromStr;
 use std::string::FromUtf8Error;
 use std::{
     ffi::OsString,
@@ -30,7 +24,6 @@ use tokio::{
     io::{AsyncReadExt, AsyncSeekExt},
     sync::{mpsc::UnboundedReceiver, oneshot::Sender},
 };
-use uuid::Uuid;
 
 /// Linux seems to limit to 1024, macos 256, windows 512 but I'm staying low until
 /// a benchmark proves I need to change it.
