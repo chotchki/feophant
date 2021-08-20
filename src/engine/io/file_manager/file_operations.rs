@@ -69,7 +69,7 @@ impl FileOperations {
     pub async fn read_chunk(
         mut file: File,
         page_offset: &PageOffset,
-    ) -> Result<(File, Option<Bytes>), FileOperationsError> {
+    ) -> Result<(File, Option<BytesMut>), FileOperationsError> {
         let mut buffer = BytesMut::with_capacity(PAGE_SIZE as usize);
 
         let file_meta = file.metadata().await?;
@@ -89,7 +89,7 @@ impl FileOperations {
             }
         }
 
-        Ok((file, Some(buffer.freeze())))
+        Ok((file, Some(buffer)))
     }
 
     pub async fn update_chunk(

@@ -12,16 +12,25 @@ use std::{
 use thiserror::Error;
 use uuid::Uuid;
 
+use crate::engine::io::file_manager::ResourceFormatter;
+
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub struct PageId {
     pub resource_key: Uuid,
     pub page_type: PageType,
 }
 
+impl fmt::Display for PageId {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        writeln!(f, "{}", ResourceFormatter::format_uuid(&self.resource_key))?;
+        writeln!(f, "{}", self.page_type)
+    }
+}
+
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub enum PageType {
     Data,
-    //FreeSpaceMap,
+    FreeSpaceMap,
     //VisibilityMap
 }
 
@@ -44,9 +53,8 @@ impl PageType {
 impl Display for PageType {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            PageType::Data => {
-                write!(f, "data")
-            }
+            PageType::Data => write!(f, "data"),
+            PageType::FreeSpaceMap => write!(f, "fs"),
         }
     }
 }

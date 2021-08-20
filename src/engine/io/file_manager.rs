@@ -2,7 +2,7 @@
 //! since the prior approach was too lock heavy and I couldn't figure out an approach that didn't starve resources.
 use super::page_formats::{PageId, PageOffset, UInt12, UInt12Error};
 use async_stream::try_stream;
-use bytes::Bytes;
+use bytes::{Bytes, BytesMut};
 use futures::Stream;
 use std::convert::TryFrom;
 use std::ffi::OsString;
@@ -75,7 +75,7 @@ impl FileManager {
         &self,
         page_id: &PageId,
         offset: &PageOffset,
-    ) -> Result<Option<Bytes>, FileManagerError> {
+    ) -> Result<Option<BytesMut>, FileManagerError> {
         let (res_request, res_receiver) = oneshot::channel();
 
         self.request_queue
@@ -87,7 +87,7 @@ impl FileManager {
     pub fn get_stream(
         &self,
         page_id: &PageId,
-    ) -> impl Stream<Item = Result<Option<Bytes>, FileManagerError>> {
+    ) -> impl Stream<Item = Result<Option<BytesMut>, FileManagerError>> {
         let request_queue = self.request_queue.clone();
         let page_id = *page_id;
 

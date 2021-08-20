@@ -128,7 +128,7 @@ impl RowManager {
             .get_page(&page_id, &row_pointer.page)
             .await?
             .ok_or(RowManagerError::NonExistentPage(row_pointer.page))?;
-        let page = PageData::parse(table, row_pointer.page, page_bytes)?;
+        let page = PageData::parse(table, row_pointer.page, page_bytes.freeze())?;
 
         let row = page
             .get_row(row_pointer.count)
@@ -157,7 +157,7 @@ impl RowManager {
                 let page_bytes = page_bytes?;
                 match page_bytes {
                     Some(s) => {
-                        let page = PageData::parse(table.clone(), page_num, s)?;
+                        let page = PageData::parse(table.clone(), page_num, s.freeze())?;
                         for await row in page.get_stream() {
                             yield row;
                         }
@@ -187,7 +187,7 @@ impl RowManager {
             let page_bytes = self.file_manager.get_page(&page_id, &page_num).await?;
             match page_bytes {
                 Some(p) => {
-                    let mut page = PageData::parse(table.clone(), page_num, p)?;
+                    let mut page = PageData::parse(table.clone(), page_num, p.freeze())?;
                     if page.can_fit(RowData::encoded_size(&user_data)) {
                         let new_row_pointer = page.insert(current_tran_id, &table, user_data)?;
                         let new_page_bytes = page.serialize();

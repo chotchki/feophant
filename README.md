@@ -39,7 +39,9 @@ Implement Free Space Maps so mutation of data doesn't need a linear scan/parse n
 Did more thinking, I should implement postgres's streams concept so that I don't need to do lookups to find associated metadata on an object.
 I thought I was going to get to use Uuid+page offset. I think its now going to be uuid+page offset+ type.
 
-struct PageId + enum PageType should do it
+struct PageId + enum PageType should do it (done).
+
+So I have a fully ready free space map but I can't avoid the locking issue anymore despite it also being the next item on the todo list.
 
 **TODO**
 Implement page level locks that are ordered to avoid deadlocking.

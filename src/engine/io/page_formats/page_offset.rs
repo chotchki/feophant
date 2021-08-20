@@ -2,7 +2,12 @@ use crate::{
     constants::{PAGES_PER_FILE, PAGE_SIZE},
     engine::io::ConstEncodedSize,
 };
-use std::{fmt, mem::size_of, num::TryFromIntError, ops::AddAssign};
+use std::{
+    fmt,
+    mem::size_of,
+    num::TryFromIntError,
+    ops::{Add, AddAssign, Mul},
+};
 use thiserror::Error;
 
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -33,6 +38,18 @@ impl PageOffset {
         self.get_file_chunk_size() - PAGE_SIZE as usize
     }
 
+    /// Gets the position of the free/visibility mask for an offset
+    /// ```
+    /// # use crate::feophantlib::engine::io::page_formats::PageOffset;
+    /// let page = PageOffset(100);
+    /// assert_eq!(page.get_bitmask_offset(), (PageOffset(0), 100));
+    /// ```
+    pub fn get_bitmask_offset(&self) -> (PageOffset, usize) {
+        let offset = self.0 / (PAGE_SIZE as usize * 8);
+        let inside_offset = self.0 % (PAGE_SIZE as usize * 8);
+        (PageOffset(offset), inside_offset)
+    }
+
     /// Determines if a given offset will be the same file or not
     pub fn is_same_file(&self, rhs: &PageOffset) -> bool {
         let diff;
@@ -47,6 +64,14 @@ impl PageOffset {
     /// Gets the next offset in sequence
     pub fn next(&self) -> PageOffset {
         PageOffset(self.0 + 1)
+    }
+}
+
+impl Add for PageOffset {
+    type Output = PageOffset;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        PageOffset(self.0 + rhs.0)
     }
 }
 
@@ -68,6 +93,14 @@ impl fmt::Display for PageOffset {
     }
 }
 
+impl Mul for PageOffset {
+    type Output = PageOffset;
+
+    fn mul(self, rhs: Self) -> Self::Output {
+        PageOffset(self.0 * rhs.0)
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum PageOffsetError {
     #[error(transparent)]
@@ -83,10 +116,22 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_add() -> Result<(), Box<dyn std::error::Error>> {
+        assert_eq!(PageOffset(1) + PageOffset(2), PageOffset(3));
+        Ok(())
+    }
+
+    #[test]
     fn test_add_assign() -> Result<(), Box<dyn std::error::Error>> {
         let mut test = PageOffset(1);
         test += PageOffset(2);
         assert_eq!(test, PageOffset(3));
+        Ok(())
+    }
+
+    #[test]
+    fn test_mul() -> Result<(), Box<dyn std::error::Error>> {
+        assert_eq!(PageOffset(2) * PageOffset(3), PageOffset(6));
         Ok(())
     }
 
