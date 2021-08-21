@@ -96,7 +96,7 @@ impl IndexManager {
                     if l.can_fit(&new_key) {
                         return Ok(self
                             .file_manager
-                            .update_page(&page_id, l.serialize()?, &current_node.1)
+                            .update_page(&page_id, &current_node.1, l.serialize()?)
                             .await?);
                     }
 

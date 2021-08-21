@@ -19,6 +19,10 @@ pub use file_manager::FileManagerError;
 mod free_space_manager;
 pub use free_space_manager::FreeSpaceManager;
 
+mod lock_cache_manager;
+pub use lock_cache_manager::LockCacheManager;
+pub use lock_cache_manager::LockCacheManagerError;
+
 mod lock_manager;
 pub use lock_manager::LockManager;
 

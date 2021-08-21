@@ -138,7 +138,6 @@ impl FileExecutor {
                 }
             }
 
-            //Still haven't figured out incrementing file_handles
             if file_handles_open < MAX_FILE_HANDLE_COUNT && !request_queue.is_empty() {
                 let mut new_request_queue = VecDeque::with_capacity(request_queue.len());
                 for (page_id, req_type) in request_queue.into_iter() {

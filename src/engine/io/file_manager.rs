@@ -84,6 +84,7 @@ impl FileManager {
         Ok(res_receiver.await??)
     }
 
+    //TODO I'm chewing on if this stream implementation is way too low level especially considering locking
     pub fn get_stream(
         &self,
         page_id: &PageId,
@@ -111,8 +112,8 @@ impl FileManager {
     pub async fn update_page(
         &self,
         page_id: &PageId,
-        page: Bytes,
         offset: &PageOffset,
+        page: Bytes,
     ) -> Result<(), FileManagerError> {
         let size = UInt12::try_from(page.len() - 1)?;
         if size != UInt12::max() {
@@ -213,7 +214,7 @@ mod tests {
         assert_eq!(test_page, test_page_get);
 
         let test_page2 = get_test_page(2);
-        fm.update_page(&page_id, test_page2.clone(), &test_page_num)
+        fm.update_page(&page_id, &test_page_num, test_page2.clone())
             .await?;
 
         let test_page_get2 = timeout(Duration::new(10, 0), fm.get_page(&page_id, &test_page_num))

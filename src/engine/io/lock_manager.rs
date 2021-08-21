@@ -64,7 +64,7 @@ impl LockManager {
 
         self.cleanup(&mut lm).await;
 
-        lock
+        lock.clone()
     }
 
     async fn cleanup(
@@ -111,7 +111,7 @@ impl LockManagerEntry {
 
         match le.get(offset) {
             Some(s) => match s.upgrade() {
-                Some(s1) => s1,
+                Some(s1) => s1.clone(),
                 None => {
                     //Weak failed, need to recreate
                     drop(le);
@@ -155,7 +155,7 @@ impl LockManagerEntry {
         };
         self.cleanup(&mut le);
 
-        lock
+        lock.clone()
     }
 
     fn cleanup(&self, le: &mut RwLockWriteGuard<HashMap<PageOffset, Weak<RwLock<u8>>>>) {

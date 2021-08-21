@@ -63,7 +63,7 @@ impl RowManager {
             page_type: PageType::Data,
         };
         self.file_manager
-            .update_page(&page_id, page.serialize(), &row_pointer.page)
+            .update_page(&page_id, &row_pointer.page, page.serialize())
             .await?;
         Ok(())
     }
@@ -107,7 +107,7 @@ impl RowManager {
             page_type: PageType::Data,
         };
         self.file_manager
-            .update_page(&page_id, old_page.serialize(), &row_pointer.page)
+            .update_page(&page_id, &row_pointer.page, old_page.serialize())
             .await?;
 
         Ok(new_row_pointer)
@@ -192,7 +192,7 @@ impl RowManager {
                         let new_row_pointer = page.insert(current_tran_id, &table, user_data)?;
                         let new_page_bytes = page.serialize();
                         self.file_manager
-                            .update_page(&page_id, new_page_bytes, &page_num)
+                            .update_page(&page_id, &page_num, new_page_bytes)
                             .await?;
                         return Ok(new_row_pointer);
                     } else {

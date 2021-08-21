@@ -82,7 +82,7 @@ impl FreeSpaceManager {
             Some(mut page) => {
                 Self::set_status_inside_page(&mut page, offset, status);
                 self.file_manager
-                    .update_page(&page_id, page.freeze(), &po)
+                    .update_page(&page_id, &po, page.freeze())
                     .await?;
                 Ok(())
             }
