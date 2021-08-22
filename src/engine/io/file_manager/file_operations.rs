@@ -40,13 +40,18 @@ impl FileOperations {
     }
 
     /// Note the File Handle AND PageOffset should point to where the add should occur
+    /// If the file is larger than requested nothing is done.
     pub async fn add_chunk(
         file: File,
         page_offset: &PageOffset,
         buffer: Bytes,
     ) -> Result<File, FileOperationsError> {
-        file.set_len(u64::try_from(page_offset.get_file_chunk_size())?)
-            .await?;
+        let metadata = file.metadata().await?;
+        let chunk_size_u64 = u64::try_from(page_offset.get_file_chunk_size())?;
+
+        if metadata.len() < chunk_size_u64 {
+            file.set_len(chunk_size_u64).await?;
+        }
 
         Self::update_chunk(file, page_offset, buffer).await
     }

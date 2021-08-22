@@ -1,7 +1,10 @@
 use feophantlib::{
     constants::Nullable,
     engine::{
-        io::{row_formats::RowData, FileManager, LockManager, RowManager, VisibleRowManager},
+        io::{
+            row_formats::RowData, FileManager, LockCacheManager, LockManager, RowManager,
+            VisibleRowManager,
+        },
         objects::{
             types::{BaseSqlTypes, BaseSqlTypesMapper},
             Attribute, SqlTuple, Table,
@@ -64,8 +67,8 @@ async fn test_row_manager_visibility() -> Result<(), Box<dyn std::error::Error>>
 
     let table = get_table();
     let mut tm = TransactionManager::new();
-    let pm = Arc::new(FileManager::new(tmp_dir)?);
-    let rm = RowManager::new(pm, LockManager::new());
+    let fm = Arc::new(FileManager::new(tmp_dir)?);
+    let rm = RowManager::new(LockCacheManager::new(fm));
     let vm = VisibleRowManager::new(rm.clone(), tm.clone());
     let row = get_row("test".to_string());
 

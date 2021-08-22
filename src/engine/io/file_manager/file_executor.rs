@@ -142,38 +142,29 @@ impl FileExecutor {
                 let mut new_request_queue = VecDeque::with_capacity(request_queue.len());
                 for (page_id, req_type) in request_queue.into_iter() {
                     match req_type {
-                        RequestType::Add((a, response)) => {
-                            let next_po = match self.get_next_po(&page_id).await {
-                                Ok(po) => po,
-                                Err(e) => {
-                                    let _ = response.send(Err(e));
-                                    continue;
-                                }
-                            };
-
-                            match file_handle_cache.pop(&(page_id, next_po.get_file_number())) {
+                        RequestType::Add((po, a, response)) => {
+                            match file_handle_cache.pop(&(page_id, po.get_file_number())) {
                                 Some(maybe_file) => match maybe_file {
                                     Some(file) => {
                                         file_handle_cache
-                                            .put((page_id, next_po.get_file_number()), None);
+                                            .put((page_id, po.get_file_number()), None);
                                         let file_handle_ret = send_completed.clone();
                                         tokio::spawn(async move {
                                             let response_f = response;
 
-                                            match FileOperations::add_chunk(file, &next_po, a).await
-                                            {
+                                            match FileOperations::add_chunk(file, &po, a).await {
                                                 Ok(o) => {
                                                     let _ = file_handle_ret.send((
                                                         page_id,
-                                                        next_po.get_file_number(),
+                                                        po.get_file_number(),
                                                         Some(o),
                                                     ));
-                                                    let _ = response_f.send(Ok(next_po));
+                                                    let _ = response_f.send(Ok(()));
                                                 }
                                                 Err(e) => {
                                                     let _ = file_handle_ret.send((
                                                         page_id,
-                                                        next_po.get_file_number(),
+                                                        po.get_file_number(),
                                                         None,
                                                     ));
                                                     let _ = response_f.send(Err(
@@ -186,16 +177,17 @@ impl FileExecutor {
                                     None => {
                                         //Request in flight, skip for now, but have to reinsert into cache
                                         file_handle_cache
-                                            .put((page_id, next_po.get_file_number()), None);
+                                            .put((page_id, po.get_file_number()), None);
 
-                                        new_request_queue
-                                            .push_back((page_id, RequestType::Add((a, response))));
+                                        new_request_queue.push_back((
+                                            page_id,
+                                            RequestType::Add((po, a, response)),
+                                        ));
                                         continue;
                                     }
                                 },
                                 None => {
-                                    file_handle_cache
-                                        .put((page_id, next_po.get_file_number()), None);
+                                    file_handle_cache.put((page_id, po.get_file_number()), None);
                                     file_handles_open = file_handles_open.saturating_add(1);
                                     let data_dir = self.data_dir.clone();
                                     let file_handle_ret = send_completed.clone();
@@ -205,7 +197,7 @@ impl FileExecutor {
                                         let file = match FileOperations::open_path(
                                             &data_dir,
                                             &page_id,
-                                            next_po.get_file_number(),
+                                            po.get_file_number(),
                                         )
                                         .await
                                         {
@@ -213,7 +205,7 @@ impl FileExecutor {
                                             Err(e) => {
                                                 let _ = file_handle_ret.send((
                                                     page_id,
-                                                    next_po.get_file_number(),
+                                                    po.get_file_number(),
                                                     None,
                                                 ));
                                                 let _ = response_f.send(Err(
@@ -223,19 +215,19 @@ impl FileExecutor {
                                             }
                                         };
 
-                                        match FileOperations::add_chunk(file, &next_po, a).await {
+                                        match FileOperations::add_chunk(file, &po, a).await {
                                             Ok(o) => {
                                                 let _ = file_handle_ret.send((
                                                     page_id,
-                                                    next_po.get_file_number(),
+                                                    po.get_file_number(),
                                                     Some(o),
                                                 ));
-                                                let _ = response_f.send(Ok(next_po));
+                                                let _ = response_f.send(Ok(()));
                                             }
                                             Err(e) => {
                                                 let _ = file_handle_ret.send((
                                                     page_id,
-                                                    next_po.get_file_number(),
+                                                    po.get_file_number(),
                                                     None,
                                                 ));
                                                 let _ = response_f.send(Err(
@@ -435,6 +427,17 @@ impl FileExecutor {
                                 }
                             }
                         }
+                        RequestType::GetOffset(response) => {
+                            match self.get_next_po(&page_id).await {
+                                Ok(po) => {
+                                    let _ = response.send(Ok(po));
+                                }
+                                Err(e) => {
+                                    let _ = response.send(Err(e));
+                                    continue;
+                                }
+                            };
+                        }
                     }
                 }
                 request_queue = new_request_queue;
@@ -592,10 +595,8 @@ pub enum FileExecutorError {
 
 #[cfg(test)]
 mod tests {
-    use std::time::Duration;
-
     use tempfile::TempDir;
-    use tokio::{io::AsyncWriteExt, time::timeout};
+    use tokio::io::AsyncWriteExt;
     use uuid::Uuid;
 
     use crate::{
@@ -637,11 +638,12 @@ mod tests {
         let fm = FileManager::new(tmp_dir.as_os_str().to_os_string())?;
 
         let test_page = get_test_page(2);
-        let test_page_num = fm.add_page(&page_id, test_page.clone()).await?;
+        let test_po = fm.get_offset(&page_id).await?;
+        fm.add_page(&page_id, &test_po, test_page.clone()).await?;
 
-        assert_eq!(test_page_num, PageOffset(2));
+        assert_eq!(test_po, PageOffset(2));
 
-        let test_page_get = fm.get_page(&page_id, &test_page_num).await?.unwrap();
+        let test_page_get = fm.get_page(&page_id, &test_po).await?.unwrap();
 
         assert_eq!(test_page, test_page_get);
 
@@ -680,17 +682,12 @@ mod tests {
         let fm = FileManager::new(tmp_dir.as_os_str().to_os_string())?;
 
         let test_page = get_test_page(2);
-        let test_page_num = timeout(
-            Duration::new(10, 0),
-            fm.add_page(&page_id, test_page.clone()),
-        )
-        .await??;
+        let test_po = fm.get_offset(&page_id).await?;
+        fm.add_page(&page_id, &test_po, test_page.clone()).await?;
 
-        assert_eq!(test_page_num, PageOffset(PAGES_PER_FILE * test_count + 2));
+        assert_eq!(test_po, PageOffset(PAGES_PER_FILE * test_count + 2));
 
-        let test_page_get = timeout(Duration::new(10, 0), fm.get_page(&page_id, &test_page_num))
-            .await??
-            .unwrap();
+        let test_page_get = fm.get_page(&page_id, &test_po).await?.unwrap();
 
         assert_eq!(test_page, test_page_get);
 

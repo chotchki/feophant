@@ -53,11 +53,21 @@ impl FileManager {
         Ok(rev_shutdown.await?)
     }
 
+    pub async fn get_offset(&self, page_id: &PageId) -> Result<PageOffset, FileManagerError> {
+        let (res_request, res_receiver) = oneshot::channel();
+
+        self.request_queue
+            .send((*page_id, RequestType::GetOffset(res_request)))?;
+
+        Ok(res_receiver.await??)
+    }
+
     pub async fn add_page(
         &self,
         page_id: &PageId,
+        offset: &PageOffset,
         page: Bytes,
-    ) -> Result<PageOffset, FileManagerError> {
+    ) -> Result<(), FileManagerError> {
         let size = UInt12::try_from(page.len() - 1)?;
         if size != UInt12::max() {
             return Err(FileManagerError::InvalidPageSize(page.len()));
@@ -66,7 +76,7 @@ impl FileManager {
         let (res_request, res_receiver) = oneshot::channel();
 
         self.request_queue
-            .send((*page_id, RequestType::Add((page, res_request))))?;
+            .send((*page_id, RequestType::Add((*offset, page, res_request))))?;
 
         Ok(res_receiver.await??)
     }
@@ -82,31 +92,6 @@ impl FileManager {
             .send((*page_id, RequestType::Read((*offset, res_request))))?;
 
         Ok(res_receiver.await??)
-    }
-
-    //TODO I'm chewing on if this stream implementation is way too low level especially considering locking
-    pub fn get_stream(
-        &self,
-        page_id: &PageId,
-    ) -> impl Stream<Item = Result<Option<BytesMut>, FileManagerError>> {
-        let request_queue = self.request_queue.clone();
-        let page_id = *page_id;
-
-        try_stream! {
-            let mut page_num = PageOffset(0);
-            loop {
-                let (res_request, res_receiver) = oneshot::channel();
-
-                request_queue
-                    .send((page_id, RequestType::Read((page_num, res_request))))?;
-
-                let page = res_receiver.await??;
-
-                yield page;
-
-                page_num += PageOffset(1);
-            }
-        }
     }
 
     pub async fn update_page(
@@ -134,7 +119,7 @@ impl Drop for FileManager {
         if !self.request_queue.is_closed() {
             return;
         }
-        error!("File Manager wasn't shutdown cleanly!");
+        error!("File Manager wasn't shutdown cleanly! This is a bug, please report!");
     }
 }
 
@@ -172,11 +157,8 @@ pub enum FileManagerError {
 
 #[cfg(test)]
 mod tests {
-    use std::time::Duration;
-
     use bytes::BytesMut;
     use tempfile::TempDir;
-    use tokio::time::timeout;
     use uuid::Uuid;
 
     use crate::{constants::PAGE_SIZE, engine::io::page_formats::PageType};
@@ -203,23 +185,20 @@ mod tests {
         };
 
         let test_page = get_test_page(1);
-        let test_page_num = fm.add_page(&page_id, test_page.clone()).await?;
+        let test_po = fm.get_offset(&page_id).await?;
+        fm.add_page(&page_id, &test_po, test_page.clone()).await?;
 
-        assert_eq!(test_page_num, PageOffset(0));
+        assert_eq!(test_po, PageOffset(0));
 
-        let test_page_get = timeout(Duration::new(10, 0), fm.get_page(&page_id, &test_page_num))
-            .await??
-            .unwrap();
+        let test_page_get = fm.get_page(&page_id, &test_po).await?.unwrap();
 
         assert_eq!(test_page, test_page_get);
 
         let test_page2 = get_test_page(2);
-        fm.update_page(&page_id, &test_page_num, test_page2.clone())
+        fm.update_page(&page_id, &test_po, test_page2.clone())
             .await?;
 
-        let test_page_get2 = timeout(Duration::new(10, 0), fm.get_page(&page_id, &test_page_num))
-            .await??
-            .unwrap();
+        let test_page_get2 = fm.get_page(&page_id, &test_po).await?.unwrap();
 
         assert_eq!(test_page2, test_page_get2);
 
@@ -227,13 +206,12 @@ mod tests {
 
         let fm2 = FileManager::new(tmp_dir.as_os_str().to_os_string())?;
         let test_page3 = get_test_page(3);
-        let test_page_num3 = fm2.add_page(&page_id, test_page3.clone()).await?;
-        println!("{0}", test_page_num3);
-        assert!(test_page_num3 > test_page_num);
+        let test_po3 = fm2.get_offset(&page_id).await?;
+        fm2.add_page(&page_id, &test_po3, test_page3.clone())
+            .await?;
+        assert!(test_po3 > test_po);
 
-        let test_page_get2 = timeout(Duration::new(10, 0), fm2.get_page(&page_id, &test_page_num))
-            .await??
-            .unwrap();
+        let test_page_get2 = fm2.get_page(&page_id, &test_po).await?.unwrap();
 
         assert_eq!(test_page2, test_page_get2);
 

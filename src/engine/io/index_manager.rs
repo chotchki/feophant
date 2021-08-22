@@ -1,8 +1,4 @@
-//! Start with a single bucket
-
-//! Insert key and pointer to record
-//!     read root
-//!         search through buckets,
+//! TODO #24 Fix the index implementation to use the locking layer
 
 use std::collections::BTreeMap;
 use std::ops::Range;
@@ -189,15 +185,11 @@ impl IndexManager {
                     nodes: BTreeMap::new(),
                 };
 
-                let page_num = self
-                    .file_manager
-                    .add_page(&page_id, root_node.serialize()?)
+                self.file_manager
+                    .add_page(&page_id, &PageOffset(1), root_node.serialize()?)
                     .await?;
-                if page_num != PageOffset(1) {
-                    return Err(IndexManagerError::ConcurrentCreationError());
-                }
 
-                Ok((BTreeNode::Leaf(root_node), page_num))
+                Ok((BTreeNode::Leaf(root_node), PageOffset(1)))
             }
             Err(e) => Err(e),
         }
@@ -207,14 +199,13 @@ impl IndexManager {
         let mut root_page_buffer = BytesMut::with_capacity(PAGE_SIZE as usize);
         let root_page = vec![0; PAGE_SIZE as usize];
         root_page_buffer.extend_from_slice(&root_page);
-        let page_num = self
-            .file_manager
-            .add_page(index, root_page_buffer.freeze())
+        self.file_manager
+            .add_page(index, &PageOffset(0), root_page_buffer.freeze())
             .await?;
 
-        if page_num != PageOffset(0) {
-            return Err(IndexManagerError::ConcurrentCreationError());
-        }
+        //if page_num != PageOffset(0) {
+        //    return Err(IndexManagerError::ConcurrentCreationError());
+        //}
 
         Ok(())
     }

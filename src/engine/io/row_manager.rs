@@ -1,11 +1,12 @@
 use super::super::objects::Table;
 use super::super::transactions::TransactionId;
-use super::lock_manager::LockManager;
 use super::page_formats::{PageData, PageDataError, PageId, PageOffset, PageType, UInt12};
 use super::row_formats::{ItemPointer, RowData, RowDataError};
-use super::{EncodedSize, FileManager, FileManagerError};
+use super::{EncodedSize, FileManagerError, LockCacheManager, LockCacheManagerError};
+use crate::constants::PAGE_SIZE;
 use crate::engine::objects::SqlTuple;
 use async_stream::try_stream;
+use bytes::BytesMut;
 use futures::stream::Stream;
 use std::sync::Arc;
 use thiserror::Error;
@@ -15,16 +16,12 @@ use thiserror::Error;
 /// It operates at the lowest level, no visibility checks are done.
 #[derive(Clone, Debug)]
 pub struct RowManager {
-    file_manager: Arc<FileManager>,
-    lock_manager: LockManager,
+    lock_cache_manager: LockCacheManager,
 }
 
 impl RowManager {
-    pub fn new(file_manager: Arc<FileManager>, lock_manager: LockManager) -> RowManager {
-        RowManager {
-            file_manager,
-            lock_manager,
-        }
+    pub fn new(lock_cache_manager: LockCacheManager) -> RowManager {
+        RowManager { lock_cache_manager }
     }
 
     pub async fn insert_row(
@@ -45,7 +42,26 @@ impl RowManager {
         table: Arc<Table>,
         row_pointer: ItemPointer,
     ) -> Result<(), RowManagerError> {
-        let (mut page, mut row) = self.get(table.clone(), row_pointer).await?;
+        let page_id = PageId {
+            resource_key: table.id,
+            page_type: PageType::Data,
+        };
+        let mut page_handle = self
+            .lock_cache_manager
+            .get_page_for_update(page_id, row_pointer.page)
+            .await?;
+        let page_buffer = page_handle
+            .as_mut()
+            .ok_or(RowManagerError::NonExistentPage(row_pointer.page))?;
+
+        let mut page = PageData::parse(table, row_pointer.page, &page_buffer)?;
+        let mut row = page
+            .get_row(row_pointer.count)
+            .ok_or(RowManagerError::NonExistentRow(
+                row_pointer.count,
+                row_pointer.page,
+            ))?
+            .clone();
 
         if row.max.is_some() {
             return Err(RowManagerError::AlreadyDeleted(
@@ -57,14 +73,13 @@ impl RowManager {
         row.max = Some(current_tran_id);
 
         page.update(row, row_pointer.count)?;
+        page_buffer.clear();
+        page.serialize(page_buffer);
 
-        let page_id = PageId {
-            resource_key: table.id,
-            page_type: PageType::Data,
-        };
-        self.file_manager
-            .update_page(&page_id, &row_pointer.page, page.serialize())
+        self.lock_cache_manager
+            .update_page(page_id, row_pointer.page, page_handle)
             .await?;
+
         Ok(())
     }
 
@@ -76,8 +91,28 @@ impl RowManager {
         row_pointer: ItemPointer,
         new_user_data: SqlTuple,
     ) -> Result<ItemPointer, RowManagerError> {
-        //First get the current row so we have it for the update/delete
-        let (mut old_page, mut old_row) = self.get(table.clone(), row_pointer).await?;
+        //First get the current row so we have it for the update
+        let page_id = PageId {
+            resource_key: table.id,
+            page_type: PageType::Data,
+        };
+        let mut old_page_handle = self
+            .lock_cache_manager
+            .get_page_for_update(page_id, row_pointer.page)
+            .await?;
+        let old_page_buffer = old_page_handle
+            .as_mut()
+            .ok_or(RowManagerError::NonExistentPage(row_pointer.page))?;
+
+        let mut old_page = PageData::parse(table.clone(), row_pointer.page, &old_page_buffer)?;
+
+        let mut old_row = old_page
+            .get_row(row_pointer.count)
+            .ok_or(RowManagerError::NonExistentRow(
+                row_pointer.count,
+                row_pointer.page,
+            ))?
+            .clone();
 
         if old_row.max.is_some() {
             return Err(RowManagerError::AlreadyDeleted(
@@ -93,6 +128,7 @@ impl RowManager {
         if old_page.can_fit(new_row_len) {
             new_row_pointer = old_page.insert(current_tran_id, &table, new_user_data)?;
         } else {
+            //TODO Possible Deadlock, when I do the freespace map should mark this page not free before doing this
             new_row_pointer = self
                 .insert_row_internal(current_tran_id, table.clone(), new_user_data)
                 .await?;
@@ -102,12 +138,11 @@ impl RowManager {
         old_row.item_pointer = new_row_pointer;
         old_page.update(old_row, row_pointer.count)?;
 
-        let page_id = PageId {
-            resource_key: table.id,
-            page_type: PageType::Data,
-        };
-        self.file_manager
-            .update_page(&page_id, &row_pointer.page, old_page.serialize())
+        old_page_buffer.clear();
+        old_page.serialize(old_page_buffer);
+
+        self.lock_cache_manager
+            .update_page(page_id, row_pointer.page, old_page_handle)
             .await?;
 
         Ok(new_row_pointer)
@@ -117,18 +152,20 @@ impl RowManager {
         &self,
         table: Arc<Table>,
         row_pointer: ItemPointer,
-    ) -> Result<(PageData, RowData), RowManagerError> {
+    ) -> Result<RowData, RowManagerError> {
         let page_id = PageId {
             resource_key: table.id,
             page_type: PageType::Data,
         };
 
-        let page_bytes = self
-            .file_manager
-            .get_page(&page_id, &row_pointer.page)
-            .await?
+        let page_handle = self
+            .lock_cache_manager
+            .get_page(page_id, row_pointer.page)
+            .await?;
+        let page_bytes = page_handle
+            .as_ref()
             .ok_or(RowManagerError::NonExistentPage(row_pointer.page))?;
-        let page = PageData::parse(table, row_pointer.page, page_bytes.freeze())?;
+        let page = PageData::parse(table, row_pointer.page, &page_bytes)?;
 
         let row = page
             .get_row(row_pointer.count)
@@ -138,7 +175,7 @@ impl RowManager {
             ))?
             .clone();
 
-        Ok((page, row))
+        Ok(row)
     }
 
     // Provides an unfiltered view of the underlying table
@@ -151,26 +188,28 @@ impl RowManager {
             page_type: PageType::Data,
         };
 
+        let lock_cache_manager = self.lock_cache_manager;
+
         try_stream! {
             let mut page_num = PageOffset(0);
-            for await page_bytes in self.file_manager.get_stream(&page_id) {
-                let page_bytes = page_bytes?;
-                match page_bytes {
+
+            loop {
+                let page_handle = lock_cache_manager.get_page(page_id, page_num).await?;
+                match page_handle.as_ref() {
                     Some(s) => {
-                        let page = PageData::parse(table.clone(), page_num, s.freeze())?;
+                        let page = PageData::parse(table.clone(), page_num, s)?;
                         for await row in page.get_stream() {
                             yield row;
                         }
                     },
                     None => {return ();}
                 }
-
                 page_num += PageOffset(1);
             }
         }
     }
 
-    // TODO implement visibility maps so I don't have to scan probable
+    // TODO implement free space maps so I don't have to scan every page
     async fn insert_row_internal(
         &self,
         current_tran_id: TransactionId,
@@ -184,15 +223,19 @@ impl RowManager {
 
         let mut page_num = PageOffset(0);
         loop {
-            let page_bytes = self.file_manager.get_page(&page_id, &page_num).await?;
-            match page_bytes {
+            let mut page_bytes = self
+                .lock_cache_manager
+                .get_page_for_update(page_id, page_num)
+                .await?;
+            match page_bytes.as_mut() {
                 Some(p) => {
-                    let mut page = PageData::parse(table.clone(), page_num, p.freeze())?;
+                    let mut page = PageData::parse(table.clone(), page_num, p)?;
                     if page.can_fit(RowData::encoded_size(&user_data)) {
+                        p.clear(); //We're going to reuse the buffer
                         let new_row_pointer = page.insert(current_tran_id, &table, user_data)?;
-                        let new_page_bytes = page.serialize();
-                        self.file_manager
-                            .update_page(&page_id, &page_num, new_page_bytes)
+                        page.serialize(p);
+                        self.lock_cache_manager
+                            .update_page(page_id, page_num, page_bytes)
                             .await?;
                         return Ok(new_row_pointer);
                     } else {
@@ -201,10 +244,25 @@ impl RowManager {
                     }
                 }
                 None => {
-                    let mut new_page = PageData::new(page_num);
+                    //We got here because we asked for an offset that didn't exist yet.
+                    drop(page_bytes);
+
+                    let new_page_offset = self.lock_cache_manager.get_offset(page_id).await?;
+                    let mut new_page_handle = self
+                        .lock_cache_manager
+                        .get_page_for_update(page_id, new_page_offset)
+                        .await?;
+
+                    let mut new_page = PageData::new(new_page_offset);
                     let new_row_pointer = new_page.insert(current_tran_id, &table, user_data)?; //TODO Will NOT handle overly large rows
-                    self.file_manager
-                        .add_page(&page_id, new_page.serialize())
+
+                    let mut buffer = BytesMut::with_capacity(PAGE_SIZE as usize);
+                    new_page.serialize(&mut buffer);
+
+                    new_page_handle.replace(buffer);
+
+                    self.lock_cache_manager
+                        .add_page(page_id, new_page_offset, new_page_handle)
                         .await?;
                     return Ok(new_row_pointer);
                 }
@@ -219,6 +277,8 @@ pub enum RowManagerError {
     PageDataError(#[from] PageDataError),
     #[error(transparent)]
     FileManagerError(#[from] FileManagerError),
+    #[error(transparent)]
+    LockCacheManagerError(#[from] LockCacheManagerError),
     #[error(transparent)]
     RowDataError(#[from] RowDataError),
     #[error("Page {0} does not exist")]
@@ -237,6 +297,7 @@ mod tests {
     use super::super::super::objects::Table;
     use super::*;
     use crate::constants::Nullable;
+    use crate::engine::io::FileManager;
     use crate::engine::objects::types::BaseSqlTypes;
     use crate::engine::objects::types::BaseSqlTypesMapper;
     use futures::pin_mut;
@@ -285,7 +346,7 @@ mod tests {
 
         let table = get_table();
         let fm = Arc::new(FileManager::new(tmp_dir.clone())?);
-        let rm = RowManager::new(fm, LockManager::new());
+        let rm = RowManager::new(LockCacheManager::new(fm));
 
         let tran_id = TransactionId::new(1);
 
@@ -299,7 +360,7 @@ mod tests {
 
         //Now let's make sure they're really in the table, persisting across restarts
         let fm = Arc::new(FileManager::new(tmp_dir)?);
-        let rm = RowManager::new(fm, LockManager::new());
+        let rm = RowManager::new(LockCacheManager::new(fm));
 
         pin_mut!(rm);
         let result_rows: Vec<RowData> = rm
@@ -325,7 +386,7 @@ mod tests {
 
         let table = get_table();
         let fm = Arc::new(FileManager::new(tmp_dir)?);
-        let rm = RowManager::new(fm, LockManager::new());
+        let rm = RowManager::new(LockCacheManager::new(fm));
 
         let tran_id = TransactionId::new(1);
 

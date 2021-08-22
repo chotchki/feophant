@@ -75,7 +75,7 @@ impl ConstraintManager {
         tran_id: TransactionId,
         table: Arc<Table>,
         row_pointer: ItemPointer,
-    ) -> Result<(PageData, RowData), ConstraintManagerError> {
+    ) -> Result<RowData, ConstraintManagerError> {
         Ok(self.vis_row_man.get(tran_id, table, row_pointer).await?)
     }
 

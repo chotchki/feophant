@@ -190,7 +190,7 @@ pub enum DefinitionLookupError {
 mod tests {
     use tempfile::TempDir;
 
-    use crate::engine::io::{FileManager, LockManager};
+    use crate::engine::io::{FileManager, LockCacheManager};
 
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::super::super::io::RowManager;
@@ -205,7 +205,7 @@ mod tests {
 
         let fm = Arc::new(FileManager::new(tmp_dir)?);
         let tm = TransactionManager::new();
-        let rm = RowManager::new(fm, LockManager::new());
+        let rm = RowManager::new(LockCacheManager::new(fm));
         let vm = VisibleRowManager::new(rm, tm);
         let dl = DefinitionLookup::new(vm);
 
@@ -224,7 +224,7 @@ mod tests {
 
         let fm = Arc::new(FileManager::new(tmp_dir)?);
         let tm = TransactionManager::new();
-        let rm = RowManager::new(fm, LockManager::new());
+        let rm = RowManager::new(LockCacheManager::new(fm));
         let vm = VisibleRowManager::new(rm, tm);
         let dl = DefinitionLookup::new(vm);
 
@@ -248,7 +248,7 @@ mod tests {
 
         let fm = Arc::new(FileManager::new(tmp_dir)?);
         let mut tm = TransactionManager::new();
-        let rm = RowManager::new(fm.clone(), LockManager::new());
+        let rm = RowManager::new(LockCacheManager::new(fm.clone()));
         let vm = VisibleRowManager::new(rm.clone(), tm.clone());
         let dl = DefinitionLookup::new(vm);
         let mut engine = Engine::new(fm, tm.clone());

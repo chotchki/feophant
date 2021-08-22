@@ -50,11 +50,11 @@ impl VisibleRowManager {
         tran_id: TransactionId,
         table: Arc<Table>,
         row_pointer: ItemPointer,
-    ) -> Result<(PageData, RowData), VisibleRowManagerError> {
-        let (page, row) = self.row_manager.get(table, row_pointer).await?;
+    ) -> Result<RowData, VisibleRowManagerError> {
+        let row = self.row_manager.get(table, row_pointer).await?;
 
         if VisibleRowManager::is_visible(self.tran_manager.clone(), tran_id, &row).await? {
-            Ok((page, row))
+            Ok(row)
         } else {
             Err(VisibleRowManagerError::NotVisibleRow(row))
         }

@@ -7,7 +7,7 @@ use crate::constants::PAGE_SIZE;
 use super::{
     file_manager,
     page_formats::{PageId, PageOffset, PageType},
-    FileManager, FileManagerError, LockManager,
+    FileManager, FileManagerError, LockCacheManager, LockCacheManagerError, LockManager,
 };
 use bytes::{Buf, Bytes, BytesMut};
 use lru::LruCache;
@@ -16,17 +16,15 @@ use thiserror::Error;
 const MAX_FREESPACE_COUNT: usize = 32;
 
 pub struct FreeSpaceManager {
-    file_manager: FileManager,
     freespace_cache: LruCache<(PageId, PageOffset), Bytes>,
-    lock_manager: LockManager,
+    lock_cache_manager: LockCacheManager,
 }
 
 impl FreeSpaceManager {
-    pub fn new(file_manager: FileManager, lock_manager: LockManager) -> FreeSpaceManager {
+    pub fn new(lock_cache_manager: LockCacheManager) -> FreeSpaceManager {
         FreeSpaceManager {
-            file_manager,
             freespace_cache: LruCache::new(MAX_FREESPACE_COUNT),
-            lock_manager,
+            lock_cache_manager,
         }
     }
 
@@ -40,32 +38,42 @@ impl FreeSpaceManager {
             page_type: PageType::FreeSpaceMap,
         };
         loop {
-            let lock = self.lock_manager.get_lock(&free_id, &offset).await;
-            let lock_read = lock.read();
-            match self.file_manager.get_page(&free_id, &offset).await? {
-                Some(mut s) => match Self::find_first_free_page_in_page(&mut s) {
-                    Some(s) => {
-                        let full_offset =
-                            PageOffset(s) + offset * PageOffset(PAGE_SIZE as usize) * PageOffset(8);
-                        return Ok(full_offset);
+            let mut page_handle = self.lock_cache_manager.get_page(free_id, offset).await?;
+            match page_handle.as_ref() {
+                Some(s) => {
+                    let mut page_frozen = s.clone().freeze();
+                    match Self::find_first_free_page_in_page(&mut page_frozen) {
+                        Some(s) => {
+                            let full_offset = PageOffset(s)
+                                + offset * PageOffset(PAGE_SIZE as usize) * PageOffset(8);
+                            return Ok(full_offset);
+                        }
+                        None => {
+                            offset += PageOffset(1);
+                            continue;
+                        }
                     }
-                    None => {
-                        offset += PageOffset(1);
-                        continue;
-                    }
-                },
+                }
                 None => {
-                    let mut buffer = BytesMut::with_capacity(PAGE_SIZE as usize);
-                    let new_page = vec![0; PAGE_SIZE as usize];
-                    buffer.extend_from_slice(&new_page);
+                    //Get the next offset, BUT since there could be a gap, we're going to blindly write all free
+                    //and loop to get it again.
+                    let next_po = self.lock_cache_manager.get_offset(free_id).await?;
 
-                    //TODO: So I have the read lock now for the add, need figure out how do this sanely in code
-                    let new_page = self
-                        .file_manager
-                        .add_page(&page_id, buffer.freeze())
+                    let mut new_page_handle = self
+                        .lock_cache_manager
+                        .get_page_for_update(free_id, next_po)
                         .await?;
-                    let new_offset = new_page * PageOffset(PAGE_SIZE as usize) * PageOffset(8);
-                    return Ok(new_offset);
+
+                    let mut buffer = BytesMut::with_capacity(PAGE_SIZE as usize);
+                    let new_page = vec![FreeStat::Free as u8; PAGE_SIZE as usize];
+                    buffer.extend_from_slice(&new_page);
+                    new_page_handle.replace(buffer);
+
+                    self.lock_cache_manager
+                        .add_page(free_id, next_po, new_page_handle)
+                        .await?;
+
+                    continue; //No increment since we could be at a gap
                 }
             }
         }
@@ -77,17 +85,24 @@ impl FreeSpaceManager {
         po: PageOffset,
         status: FreeStat,
     ) -> Result<(), FreeSpaceManagerError> {
+        let free_id = PageId {
+            resource_key: page_id.resource_key,
+            page_type: PageType::FreeSpaceMap,
+        };
         let (po, offset) = po.get_bitmask_offset();
-        match self.file_manager.get_page(&page_id, &po).await? {
-            Some(mut page) => {
-                Self::set_status_inside_page(&mut page, offset, status);
-                self.file_manager
-                    .update_page(&page_id, &po, page.freeze())
-                    .await?;
-                Ok(())
-            }
-            None => Err(FreeSpaceManagerError::PageDoesNotExist(page_id)),
-        }
+        let mut page_handle = self
+            .lock_cache_manager
+            .get_page_for_update(free_id, po)
+            .await?;
+        let mut page = page_handle
+            .as_mut()
+            .ok_or(FreeSpaceManagerError::PageDoesNotExist(page_id))?;
+        Self::set_status_inside_page(&mut page, offset, status);
+
+        Ok(self
+            .lock_cache_manager
+            .update_page(free_id, po, page_handle)
+            .await?)
     }
 
     fn find_first_free_page_in_page(buffer: &mut impl Buf) -> Option<usize> {
@@ -156,7 +171,7 @@ pub enum FreeStat {
 #[derive(Debug, Error)]
 pub enum FreeSpaceManagerError {
     #[error(transparent)]
-    FileManagerError(#[from] FileManagerError),
+    LockCacheManagerError(#[from] LockCacheManagerError),
     #[error("Page Offset {0} doesn't exist")]
     PageDoesNotExist(PageId),
 }

@@ -1,4 +1,3 @@
-use crate::constants::PAGE_SIZE;
 use crate::engine::io::{ConstEncodedSize, EncodedSize};
 use crate::engine::objects::SqlTuple;
 use crate::engine::transactions::TransactionId;
@@ -9,7 +8,7 @@ use super::{
     ItemIdData, ItemIdDataError, PageHeader, PageHeaderError, PageOffset, UInt12, UInt12Error,
 };
 use async_stream::stream;
-use bytes::{Bytes, BytesMut};
+use bytes::{BufMut, BytesMut};
 use futures::stream::Stream;
 use std::convert::TryFrom;
 use std::sync::Arc;
@@ -96,35 +95,28 @@ impl PageData {
         }
     }
 
-    pub fn serialize(&self) -> Bytes {
-        let mut buffer = BytesMut::with_capacity(PAGE_SIZE as usize);
-
-        self.page_header.serialize(&mut buffer);
+    pub fn serialize(&self, buffer: &mut impl BufMut) {
+        self.page_header.serialize(buffer);
 
         //Now write items data in order
-        self.item_ids.iter().for_each(|f| f.serialize(&mut buffer));
+        self.item_ids.iter().for_each(|f| f.serialize(buffer));
 
         //Fill the free space
         let free_space = vec![0; self.page_header.get_free_space()];
-        buffer.extend_from_slice(&free_space);
+        buffer.put_slice(&free_space);
 
         //Write items in reverse order
-        self.rows
-            .iter()
-            .rev()
-            .for_each(|r| r.serialize(&mut buffer));
-
-        buffer.freeze()
+        self.rows.iter().rev().for_each(|r| r.serialize(buffer));
     }
 
     pub fn parse(
         table: Arc<Table>,
         page: PageOffset,
-        buffer: Bytes,
+        buffer: &BytesMut,
     ) -> Result<PageData, PageDataError> {
         //Note since we need random access, everything MUST work off slices otherwise counts will be off
 
-        let mut page_header_slice = buffer.slice(0..PageHeader::encoded_size());
+        let mut page_header_slice = &buffer[0..PageHeader::encoded_size()];
         let page_header = PageHeader::parse(&mut page_header_slice)?;
 
         let mut item_ids: Vec<ItemIdData> = Vec::with_capacity(page_header.get_item_count());
@@ -133,10 +125,10 @@ impl PageData {
             let iid_lower_offset = PageHeader::encoded_size() + (ItemIdData::encoded_size() * i);
             let iid_upper_offset =
                 PageHeader::encoded_size() + (ItemIdData::encoded_size() * (i + 1));
-            let mut iid_slice = buffer.slice(iid_lower_offset..iid_upper_offset);
+            let mut iid_slice = &buffer[iid_lower_offset..iid_upper_offset];
             let iid = ItemIdData::parse(&mut iid_slice)?;
 
-            let mut row_slice = buffer.slice(iid.get_range());
+            let mut row_slice = &buffer[iid.get_range()];
             let row = RowData::parse(table.clone(), &mut row_slice)?;
             item_ids.push(iid);
             rows.push(row);
@@ -171,7 +163,7 @@ pub enum PageDataError {
 
 #[cfg(test)]
 mod tests {
-    use crate::constants::Nullable;
+    use crate::constants::{Nullable, PAGE_SIZE};
     use crate::engine::objects::SqlTuple;
 
     use super::super::super::super::objects::{
@@ -180,6 +172,7 @@ mod tests {
     };
     use super::super::super::super::transactions::TransactionId;
     use super::*;
+    use bytes::BytesMut;
     use futures::pin_mut;
     use tokio_stream::StreamExt;
 
@@ -233,10 +226,11 @@ mod tests {
         for r in rows.clone() {
             assert!(pd.insert(r.min, &table, r.user_data).is_ok());
         }
-        let serial = pd.serialize();
+        let mut serial = BytesMut::with_capacity(PAGE_SIZE as usize);
+        pd.serialize(&mut serial);
 
         assert_eq!(PAGE_SIZE as usize, serial.len());
-        let pg_parsed = PageData::parse(table.clone(), PageOffset(0), serial).unwrap();
+        let pg_parsed = PageData::parse(table.clone(), PageOffset(0), &serial).unwrap();
 
         pin_mut!(pg_parsed);
         let result_rows: Vec<RowData> = pg_parsed.get_stream().collect().await;
@@ -273,8 +267,9 @@ mod tests {
         for r in rows.clone() {
             assert!(pd.insert(r.min, &table, r.user_data).is_ok());
         }
-        let serial = pd.serialize();
-        let pg_parsed = PageData::parse(table.clone(), PageOffset(0), serial).unwrap();
+        let mut serial = BytesMut::with_capacity(PAGE_SIZE as usize);
+        pd.serialize(&mut serial);
+        let pg_parsed = PageData::parse(table.clone(), PageOffset(0), &serial).unwrap();
 
         pin_mut!(pg_parsed);
         let result_rows: Vec<RowData> = pg_parsed.get_stream().collect().await;

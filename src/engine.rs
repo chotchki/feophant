@@ -29,7 +29,7 @@ use transactions::{TransactionId, TransactionManager};
 
 use self::io::ConstraintManager;
 use self::io::FileManager;
-use self::io::LockManager;
+use self::io::LockCacheManager;
 use self::objects::QueryResult;
 use std::ops::Deref;
 use std::sync::Arc;
@@ -44,9 +44,10 @@ pub struct Engine {
 
 impl Engine {
     pub fn new(file_manager: Arc<FileManager>, tran_manager: TransactionManager) -> Engine {
-        let lock_man = LockManager::new();
-        let vis_row_man =
-            VisibleRowManager::new(RowManager::new(file_manager, lock_man), tran_manager);
+        let vis_row_man = VisibleRowManager::new(
+            RowManager::new(LockCacheManager::new(file_manager)),
+            tran_manager,
+        );
         let con_man = ConstraintManager::new(vis_row_man.clone());
         Engine {
             analyzer: Analyzer::new(vis_row_man),

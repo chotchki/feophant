@@ -6,7 +6,8 @@ use super::file_executor::FileExecutorError;
 
 #[derive(Debug)]
 pub enum RequestType {
-    Add((Bytes, Sender<Result<PageOffset, FileExecutorError>>)),
+    GetOffset(Sender<Result<PageOffset, FileExecutorError>>),
+    Add((PageOffset, Bytes, Sender<Result<(), FileExecutorError>>)),
     Read(
         (
             PageOffset,
