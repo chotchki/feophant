@@ -2,30 +2,24 @@
 //! add new tuples. It is designed to be extremely space efficent since it only uses 1 bit per
 //! page to say the space is availible. This means each page here can cover 134MB of free space.
 
-use crate::constants::PAGE_SIZE;
-
 use super::{
-    file_manager,
     page_formats::{PageId, PageOffset, PageType},
-    FileManager, FileManagerError, LockCacheManager, LockCacheManagerError, LockManager,
+    LockCacheManager, LockCacheManagerError,
 };
-use bytes::{Buf, Bytes, BytesMut};
-use lru::LruCache;
+use crate::constants::PAGE_SIZE;
+use bytes::{Buf, BytesMut};
 use thiserror::Error;
 
 const MAX_FREESPACE_COUNT: usize = 32;
 
+#[derive(Clone, Debug)]
 pub struct FreeSpaceManager {
-    freespace_cache: LruCache<(PageId, PageOffset), Bytes>,
     lock_cache_manager: LockCacheManager,
 }
 
 impl FreeSpaceManager {
     pub fn new(lock_cache_manager: LockCacheManager) -> FreeSpaceManager {
-        FreeSpaceManager {
-            freespace_cache: LruCache::new(MAX_FREESPACE_COUNT),
-            lock_cache_manager,
-        }
+        FreeSpaceManager { lock_cache_manager }
     }
 
     pub async fn get_next_free_page(
@@ -38,7 +32,7 @@ impl FreeSpaceManager {
             page_type: PageType::FreeSpaceMap,
         };
         loop {
-            let mut page_handle = self.lock_cache_manager.get_page(free_id, offset).await?;
+            let page_handle = self.lock_cache_manager.get_page(free_id, offset).await?;
             match page_handle.as_ref() {
                 Some(s) => {
                     let mut page_frozen = s.clone().freeze();
@@ -55,10 +49,10 @@ impl FreeSpaceManager {
                     }
                 }
                 None => {
+                    drop(page_handle);
                     //Get the next offset, BUT since there could be a gap, we're going to blindly write all free
                     //and loop to get it again.
                     let next_po = self.lock_cache_manager.get_offset(free_id).await?;
-
                     let mut new_page_handle = self
                         .lock_cache_manager
                         .get_page_for_update(free_id, next_po)
@@ -178,7 +172,13 @@ pub enum FreeSpaceManagerError {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use bytes::BufMut;
+    use tempfile::TempDir;
+    use uuid::Uuid;
+
+    use crate::engine::io::FileManager;
 
     use super::*;
 
@@ -224,6 +224,31 @@ mod tests {
             FreeSpaceManager::find_first_free_page_in_page(&mut test.clone()),
             None
         );
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_get_next() -> Result<(), Box<dyn std::error::Error>> {
+        let tmp = TempDir::new()?;
+        let tmp_dir = tmp.path().as_os_str().to_os_string();
+
+        let fm = Arc::new(FileManager::new(tmp_dir)?);
+        let lm = LockCacheManager::new(fm);
+        let fsm = FreeSpaceManager::new(lm);
+
+        let page_id = PageId {
+            resource_key: Uuid::new_v4(),
+            page_type: PageType::Data,
+        };
+
+        let first_free = fsm.get_next_free_page(page_id).await?;
+        assert_eq!(first_free, PageOffset(0));
+
+        fsm.mark_page(page_id, first_free, FreeStat::InUse).await?;
+
+        let second_free = fsm.get_next_free_page(page_id).await?;
+        assert_eq!(second_free, PageOffset(1));
 
         Ok(())
     }

@@ -1,8 +1,11 @@
 use super::super::objects::Table;
 use super::super::transactions::TransactionId;
+use super::free_space_manager::{FreeSpaceManagerError, FreeStat};
 use super::page_formats::{PageData, PageDataError, PageId, PageOffset, PageType, UInt12};
 use super::row_formats::{ItemPointer, RowData, RowDataError};
-use super::{EncodedSize, FileManagerError, LockCacheManager, LockCacheManagerError};
+use super::{
+    EncodedSize, FileManagerError, FreeSpaceManager, LockCacheManager, LockCacheManagerError,
+};
 use crate::constants::PAGE_SIZE;
 use crate::engine::objects::SqlTuple;
 use async_stream::try_stream;
@@ -16,12 +19,16 @@ use thiserror::Error;
 /// It operates at the lowest level, no visibility checks are done.
 #[derive(Clone, Debug)]
 pub struct RowManager {
+    free_space_manager: FreeSpaceManager,
     lock_cache_manager: LockCacheManager,
 }
 
 impl RowManager {
     pub fn new(lock_cache_manager: LockCacheManager) -> RowManager {
-        RowManager { lock_cache_manager }
+        RowManager {
+            free_space_manager: FreeSpaceManager::new(lock_cache_manager.clone()),
+            lock_cache_manager,
+        }
     }
 
     pub async fn insert_row(
@@ -221,25 +228,27 @@ impl RowManager {
             page_type: PageType::Data,
         };
 
-        let mut page_num = PageOffset(0);
         loop {
+            let next_free_page = self.free_space_manager.get_next_free_page(page_id).await?;
             let mut page_bytes = self
                 .lock_cache_manager
-                .get_page_for_update(page_id, page_num)
+                .get_page_for_update(page_id, next_free_page)
                 .await?;
             match page_bytes.as_mut() {
                 Some(p) => {
-                    let mut page = PageData::parse(table.clone(), page_num, p)?;
+                    let mut page = PageData::parse(table.clone(), next_free_page, p)?;
                     if page.can_fit(RowData::encoded_size(&user_data)) {
                         p.clear(); //We're going to reuse the buffer
                         let new_row_pointer = page.insert(current_tran_id, &table, user_data)?;
                         page.serialize(p);
                         self.lock_cache_manager
-                            .update_page(page_id, page_num, page_bytes)
+                            .update_page(page_id, next_free_page, page_bytes)
                             .await?;
                         return Ok(new_row_pointer);
                     } else {
-                        page_num += PageOffset(1);
+                        self.free_space_manager
+                            .mark_page(page_id, next_free_page, FreeStat::InUse)
+                            .await?;
                         continue;
                     }
                 }
@@ -277,6 +286,8 @@ pub enum RowManagerError {
     PageDataError(#[from] PageDataError),
     #[error(transparent)]
     FileManagerError(#[from] FileManagerError),
+    #[error(transparent)]
+    FreeSpaceManagerError(#[from] FreeSpaceManagerError),
     #[error(transparent)]
     LockCacheManagerError(#[from] LockCacheManagerError),
     #[error(transparent)]
