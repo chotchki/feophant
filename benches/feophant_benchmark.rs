@@ -1,15 +1,10 @@
-use std::sync::Arc;
-use std::time::Duration;
-
 use criterion::BenchmarkId;
 use criterion::Criterion;
 use criterion::{criterion_group, criterion_main};
-
 use feophantlib::constants::Nullable;
 use feophantlib::engine::io::row_formats::RowData;
 use feophantlib::engine::io::FileManager;
 use feophantlib::engine::io::LockCacheManager;
-use feophantlib::engine::io::LockManager;
 use feophantlib::engine::io::RowManager;
 use feophantlib::engine::objects::types::BaseSqlTypes;
 use feophantlib::engine::objects::types::BaseSqlTypesMapper;
@@ -18,6 +13,7 @@ use feophantlib::engine::objects::SqlTuple;
 use feophantlib::engine::objects::Table;
 use feophantlib::engine::transactions::TransactionId;
 use futures::pin_mut;
+use std::sync::Arc;
 use tempfile::TempDir;
 use tokio::runtime::Builder;
 use tokio_stream::StreamExt;

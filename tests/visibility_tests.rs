@@ -1,10 +1,7 @@
 use feophantlib::{
     constants::Nullable,
     engine::{
-        io::{
-            row_formats::RowData, FileManager, LockCacheManager, LockManager, RowManager,
-            VisibleRowManager,
-        },
+        io::{row_formats::RowData, FileManager, LockCacheManager, RowManager, VisibleRowManager},
         objects::{
             types::{BaseSqlTypes, BaseSqlTypesMapper},
             Attribute, SqlTuple, Table,

@@ -10,8 +10,6 @@ use crate::constants::PAGE_SIZE;
 use bytes::{Buf, BytesMut};
 use thiserror::Error;
 
-const MAX_FREESPACE_COUNT: usize = 32;
-
 #[derive(Clone, Debug)]
 pub struct FreeSpaceManager {
     lock_cache_manager: LockCacheManager,
@@ -120,6 +118,7 @@ impl FreeSpaceManager {
 
     /// Gets the status of a field inside a page, you MUST pass an offset
     /// that fits in the buffer.
+    //TODO Decide if I end up keeping this or maybe move it to the unit test section?
     fn get_status_inside_page(buffer: &BytesMut, offset: usize) -> FreeStat {
         let offset_index = offset / 8;
         let offset_subindex = offset % 8;

@@ -23,9 +23,6 @@ mod lock_cache_manager;
 pub use lock_cache_manager::LockCacheManager;
 pub use lock_cache_manager::LockCacheManagerError;
 
-mod lock_manager;
-pub use lock_manager::LockManager;
-
 pub mod page_formats;
 
 pub mod row_formats;
