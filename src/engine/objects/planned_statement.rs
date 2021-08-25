@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use super::{types::SqlTypeDefinition, Attribute, SqlTuple, Table};
+use super::{types::SqlTypeDefinition, SqlTuple, Table};
 
 pub struct PlannedStatement {
     pub common: PlannedCommon,

@@ -1,11 +1,8 @@
 //!Postgres Doc: https://www.postgresql.org/docs/current/catalog-pg-attribute.html
 
-use std::fmt;
-
-use crate::constants::Nullable;
-use uuid::Uuid;
-
 use super::types::BaseSqlTypesMapper;
+use crate::constants::Nullable;
+use std::fmt;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Attribute {

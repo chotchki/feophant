@@ -1,13 +1,9 @@
 //! TODO #24 Fix the index implementation to use the locking layer
 
-use std::collections::BTreeMap;
-use std::ops::Range;
-use std::sync::Arc;
-
 use super::index_formats::{BTreeLeafError, BTreeNode, BTreeNodeError};
 use super::page_formats::PageOffset;
 use super::page_formats::{ItemIdData, PageId, PageType};
-use super::{FileManager, FileManagerError};
+use super::{FileManager, FileManagerError, LockCacheManager, LockCacheManagerError};
 use crate::engine::io::SelfEncodedSize;
 use crate::{
     constants::PAGE_SIZE,
@@ -16,21 +12,26 @@ use crate::{
         objects::{Index, SqlTuple},
     },
 };
-use bytes::BytesMut;
+use bytes::{Buf, BufMut, BytesMut};
+use std::collections::BTreeMap;
+use std::convert::TryFrom;
+use std::mem::size_of;
+use std::num::TryFromIntError;
+use std::ops::Range;
+use std::sync::Arc;
 use thiserror::Error;
-use uuid::Uuid;
 
 //TODO Support something other than btrees
 //TODO Support searching on a non primary index column
 
 #[derive(Clone, Debug)]
 pub struct IndexManager {
-    file_manager: Arc<FileManager>,
+    lock_cache_manager: LockCacheManager,
 }
 
 impl IndexManager {
-    pub fn new(file_manager: Arc<FileManager>) -> IndexManager {
-        IndexManager { file_manager }
+    pub fn new(lock_cache_manager: LockCacheManager) -> IndexManager {
+        IndexManager { lock_cache_manager }
     }
 
     pub async fn add(
@@ -90,10 +91,11 @@ impl IndexManager {
                     };
 
                     if l.can_fit(&new_key) {
-                        return Ok(self
-                            .file_manager
-                            .update_page(&page_id, &current_node.1, l.serialize()?)
-                            .await?);
+
+                        //return Ok(self
+                        //    .file_manager
+                        //    .update_page(&page_id, &current_node.1, l.serialize()?)
+                        //    .await?);
                     }
 
                     //If we're here, we have a key that doesn't fit into the leaf so we need to split it.
@@ -154,8 +156,11 @@ impl IndexManager {
             page_type: PageType::Data,
         };
 
-        match self.file_manager.get_page(&page_id, offset).await? {
-            Some(mut page) => Ok(BTreeNode::parse(&mut page, index_def)?),
+        let page_handle = self.lock_cache_manager.get_page(page_id, *offset).await?;
+        let page_buffer = page_handle.clone();
+
+        match page_buffer {
+            Some(page) => Ok(BTreeNode::parse(&mut page.freeze(), index_def)?),
             None => Err(IndexManagerError::NoSuchNode(*offset)),
         }
     }
@@ -167,47 +172,87 @@ impl IndexManager {
         &self,
         index_def: &Index,
     ) -> Result<(BTreeNode, PageOffset), IndexManagerError> {
-        match self.get_node(index_def, &PageOffset(1)).await {
-            Ok(o) => Ok((o, PageOffset(1))),
-            Err(IndexManagerError::NoSuchNode(_)) => {
-                let page_id = PageId {
-                    resource_key: index_def.id,
-                    page_type: PageType::Data,
-                };
-
-                //Page zero with no data in it
-                self.make_root_page(&page_id).await?;
-
-                let root_node = BTreeLeaf {
-                    parent_node: None,
-                    left_node: None,
-                    right_node: None,
-                    nodes: BTreeMap::new(),
-                };
-
-                self.file_manager
-                    .add_page(&page_id, &PageOffset(1), root_node.serialize()?)
-                    .await?;
-
-                Ok((BTreeNode::Leaf(root_node), PageOffset(1)))
-            }
-            Err(e) => Err(e),
-        }
-    }
-
-    async fn make_root_page(&self, index: &PageId) -> Result<(), IndexManagerError> {
-        let mut root_page_buffer = BytesMut::with_capacity(PAGE_SIZE as usize);
-        let root_page = vec![0; PAGE_SIZE as usize];
-        root_page_buffer.extend_from_slice(&root_page);
-        self.file_manager
-            .add_page(index, &PageOffset(0), root_page_buffer.freeze())
+        let page_id = PageId {
+            resource_key: index_def.id,
+            page_type: PageType::Data,
+        };
+        let first_page_handle = self
+            .lock_cache_manager
+            .get_page(page_id, PageOffset(0))
             .await?;
 
-        //if page_num != PageOffset(0) {
-        //    return Err(IndexManagerError::ConcurrentCreationError());
-        //}
+        if let Some(s) = first_page_handle.as_ref() {
+            let mut first_page = s.clone();
+            return self
+                .parse_root_page(index_def, &mut first_page, page_id)
+                .await;
+        }
 
-        Ok(())
+        //We have to make it and handle the race window
+        drop(first_page_handle);
+
+        let mut new_first_page_handle = self
+            .lock_cache_manager
+            .get_page_for_update(page_id, PageOffset(0))
+            .await?;
+
+        if let Some(s) = new_first_page_handle.as_mut() {
+            return self.parse_root_page(index_def, s, page_id).await;
+        }
+
+        let root_offset = self.lock_cache_manager.get_offset(page_id).await?;
+
+        let mut new_page_buffer = BytesMut::with_capacity(PAGE_SIZE as usize);
+        new_page_buffer.put_uint_le(u64::try_from(root_offset.0)?, size_of::<usize>());
+        let new_page = vec![0; PAGE_SIZE as usize - size_of::<usize>()];
+
+        new_page_buffer.extend_from_slice(&new_page);
+        new_first_page_handle.replace(new_page_buffer);
+        self.lock_cache_manager
+            .add_page(page_id, PageOffset(0), new_first_page_handle)
+            .await?;
+
+        //Now make the root node and save it
+        let mut root_handle = self
+            .lock_cache_manager
+            .get_page_for_update(page_id, root_offset)
+            .await?;
+        if let Some(s) = root_handle.as_mut() {
+            return self.parse_root_page(index_def, s, page_id).await;
+        }
+
+        let root_node = BTreeLeaf::new();
+
+        let mut root_buffer = BytesMut::with_capacity(PAGE_SIZE as usize);
+        root_node.serialize(&mut root_buffer)?;
+        root_handle.replace(root_buffer);
+
+        self.lock_cache_manager
+            .update_page(page_id, root_offset, root_handle)
+            .await?;
+        return Ok((BTreeNode::Leaf(root_node), root_offset));
+    }
+
+    async fn parse_root_page(
+        &self,
+        index_def: &Index,
+        first_page: &mut BytesMut,
+        page_id: PageId,
+    ) -> Result<(BTreeNode, PageOffset), IndexManagerError> {
+        let root_offset = usize::try_from(first_page.get_uint_le(size_of::<usize>()))?;
+        let root_handle = self
+            .lock_cache_manager
+            .get_page(page_id, PageOffset(root_offset))
+            .await?;
+        let mut root_page = root_handle
+            .as_ref()
+            .ok_or(IndexManagerError::RootNodeEmpty())?
+            .clone()
+            .freeze();
+        return Ok((
+            BTreeNode::parse(&mut root_page, index_def)?,
+            PageOffset(root_offset),
+        ));
     }
 }
 
@@ -221,14 +266,18 @@ pub enum IndexManagerError {
         "Another process made the root index page first, maybe the developer should make locking."
     )]
     ConcurrentCreationError(),
-    #[error(transparent)]
-    FileManagerError(#[from] FileManagerError),
     #[error("Key too large size: {0}, maybe the developer should fix this.")]
     KeyTooLarge(usize),
+    #[error(transparent)]
+    LockCacheManagerError(#[from] LockCacheManagerError),
     #[error("Node does not exists {0}")]
     NoSuchNode(PageOffset),
+    #[error("Root Node Empty")]
+    RootNodeEmpty(),
     #[error("Unable to search, the stack is empty")]
     StackEmpty(),
+    #[error(transparent)]
+    TryFromIntError(#[from] TryFromIntError),
     #[error("Unable to split a node of size {0}")]
     UnableToSplit(usize),
 }

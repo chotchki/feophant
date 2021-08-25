@@ -1,4 +1,3 @@
-use feophantlib::engine::{transactions::TransactionManager, Engine};
 use feophantlib::feophant::FeOphant;
 use tempfile::TempDir;
 use tokio::sync::oneshot;

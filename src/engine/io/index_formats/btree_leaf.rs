@@ -14,7 +14,7 @@ use crate::{
         objects::{types::BaseSqlTypesError, SqlTuple},
     },
 };
-use bytes::{BufMut, Bytes, BytesMut};
+use bytes::{BufMut, BytesMut};
 use std::{collections::BTreeMap, num::TryFromIntError};
 use thiserror::Error;
 
@@ -27,6 +27,15 @@ pub struct BTreeLeaf {
 }
 
 impl BTreeLeaf {
+    pub fn new() -> BTreeLeaf {
+        BTreeLeaf {
+            parent_node: None,
+            left_node: None,
+            right_node: None,
+            nodes: BTreeMap::new(),
+        }
+    }
+
     pub fn add(&mut self, key: SqlTuple, item_ptr: ItemIdData) -> Result<(), BTreeLeafError> {
         if !self.can_fit(&key) {
             return Err(BTreeLeafError::KeyTooLarge(key.encoded_size()));
@@ -75,22 +84,21 @@ impl BTreeLeaf {
         new_size <= PAGE_SIZE as usize
     }
 
-    pub fn serialize(&self) -> Result<Bytes, BTreeLeafError> {
-        let mut buffer = BytesMut::with_capacity(PAGE_SIZE as usize);
+    pub fn serialize(&self, buffer: &mut BytesMut) -> Result<(), BTreeLeafError> {
         buffer.put_u8(NodeType::Leaf as u8);
 
-        BTreeNode::write_node(&mut buffer, self.parent_node)?;
-        BTreeNode::write_node(&mut buffer, self.left_node)?;
-        BTreeNode::write_node(&mut buffer, self.right_node)?;
+        BTreeNode::write_node(buffer, self.parent_node)?;
+        BTreeNode::write_node(buffer, self.left_node)?;
+        BTreeNode::write_node(buffer, self.right_node)?;
 
-        encode_size(&mut buffer, self.nodes.len());
+        encode_size(buffer, self.nodes.len());
 
         for (key, iids) in self.nodes.iter() {
-            BTreeNode::write_sql_tuple(&mut buffer, key);
+            BTreeNode::write_sql_tuple(buffer, key);
 
-            encode_size(&mut buffer, iids.len());
+            encode_size(buffer, iids.len());
             for iid in iids {
-                iid.serialize(&mut buffer);
+                iid.serialize(buffer);
             }
         }
 
@@ -100,7 +108,7 @@ impl BTreeLeaf {
             buffer.extend_from_slice(&free_space);
         }
 
-        Ok(buffer.freeze())
+        Ok(())
     }
 }
 
@@ -191,7 +199,8 @@ mod tests {
             nodes,
         };
 
-        let mut test_serial = test.clone().serialize()?;
+        let mut test_serial = BytesMut::with_capacity(PAGE_SIZE as usize);
+        test.serialize(&mut test_serial)?;
         let test_parse = BTreeNode::parse(&mut test_serial, &get_index())?;
 
         match test_parse {
