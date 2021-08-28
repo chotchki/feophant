@@ -18,6 +18,7 @@ pub struct RawColumn {
     pub name: String,
     pub sql_type: String,
     pub null: bool,
+    pub primary_key: bool,
 }
 
 #[derive(Clone, Debug, PartialEq)]

@@ -6,12 +6,14 @@ async fn create_table_with_nullable() -> Result<(), Box<dyn std::error::Error>> 
     client
         .batch_execute(
             "create table foo (
-            bar text, 
+            bar text primary key, 
             baz text not null, 
             another text null
         )",
         )
         .await?;
 
-    common::_request_shutdown(request_shutdown).await
+    common::_request_shutdown(request_shutdown).await?;
+    
+    Ok(())
 }

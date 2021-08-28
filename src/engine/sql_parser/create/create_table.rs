@@ -57,13 +57,15 @@ fn match_columns<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
 fn match_column_attribute<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
     input: &'a str,
 ) -> IResult<&'a str, RawColumn, E> {
-    let (input, (_, name, _, sql_type, _, is_null, _)) = tuple((
+    let (input, (_, name, _, sql_type, _, is_null, _, is_primary_key, _)) = tuple((
         maybe_take_whitespace,
         parse_sql_identifier,
         take_whitespace,
         parse_sql_identifier,
         maybe_take_whitespace,
         is_null,
+        maybe_take_whitespace,
+        is_primary_key,
         maybe_take_whitespace,
     ))(input)?;
     Ok((
@@ -72,6 +74,7 @@ fn match_column_attribute<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
             name: name.to_string(),
             sql_type: sql_type.to_string(),
             null: is_null,
+            primary_key: is_primary_key,
         },
     ))
 }
@@ -90,6 +93,16 @@ fn is_null<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
     Ok((input, true))
 }
 
+fn is_primary_key<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
+    input: &'a str,
+) -> IResult<&'a str, bool, E> {
+    let (input, primary_key) = opt(match_primary_key)(input)?;
+    match primary_key {
+        Some(()) => Ok((input, true)),
+        None => Ok((input, false)),
+    }
+}
+
 fn match_not_null<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
     input: &'a str,
 ) -> IResult<&'a str, (), E> {
@@ -105,6 +118,14 @@ fn match_null<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
     Ok((input, ()))
 }
 
+fn match_primary_key<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
+    input: &'a str,
+) -> IResult<&'a str, (), E> {
+    let (input, (_, _, _)) =
+        tuple((tag_no_case("primary"), take_whitespace, tag_no_case("key")))(input)?;
+    Ok((input, ()))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -112,7 +133,7 @@ mod tests {
 
     #[test]
     fn test_simple_table() -> Result<(), Box<dyn std::error::Error>> {
-        let test_string = "create table foo (bar text, baz text not null)";
+        let test_string = "create table foo (bar text primary key, baz text not null)";
 
         let (_, result) = parse_create_table::<VerboseError<&str>>(test_string)?;
 
@@ -128,11 +149,13 @@ mod tests {
                 name: "bar".to_string(),
                 sql_type: "text".to_string(),
                 null: true,
+                primary_key: true,
             },
             RawColumn {
                 name: "baz".to_string(),
                 sql_type: "text".to_string(),
                 null: false,
+                primary_key: false,
             },
         ];
         assert_eq!(columns, result.provided_columns);
