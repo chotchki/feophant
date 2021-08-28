@@ -14,6 +14,6 @@ async fn create_table_with_nullable() -> Result<(), Box<dyn std::error::Error>> 
         .await?;
 
     common::_request_shutdown(request_shutdown).await?;
-    
+
     Ok(())
 }
