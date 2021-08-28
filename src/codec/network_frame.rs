@@ -93,7 +93,7 @@ impl NetworkFrame {
 
     //Valid severities can be found here: https://www.postgresql.org/docs/current/protocol-error-fields.html
     //Valid error codes can be found here: https://www.postgresql.org/docs/current/errcodes-appendix.html
-    //TODO need to figure out a better error method to show errors
+    //TODO #26 need to figure out a better error method to show errors
     pub fn error_response(
         severity: PgErrorLevels,
         code: PgErrorCodes,
