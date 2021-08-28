@@ -6,6 +6,7 @@ use crate::constants::PAGE_SIZE;
 use crate::engine::io::file_manager::ResourceFormatter;
 use crate::engine::io::page_formats::{PageId, PageOffset};
 use bytes::{Bytes, BytesMut};
+use futures::SinkExt;
 use lru::LruCache;
 use std::collections::{HashMap, VecDeque};
 use std::convert::TryFrom;
@@ -112,7 +113,7 @@ impl FileExecutor {
                     if let Some(sender) = shut_sender {
                         shutdown_sender = Some(sender);
                         self.receive_queue.close();
-                        info!("Got shutdown request");
+                        debug!("File Executor: Got shutdown request");
                     } else {}
                 }
                 recv_completed = receive_completed.recv() => {
@@ -125,9 +126,7 @@ impl FileExecutor {
                                 file_handles_open = file_handles_open.saturating_sub(1);
                             }
                         }
-                    } else {
-                        break;
-                    }
+                    } else {}
                 }
                 maybe_recv = self.receive_queue.recv(), if request_queue.len() < MAX_FILE_HANDLE_COUNT => {
                     if let Some((page_id, req_type)) = maybe_recv {

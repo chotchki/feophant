@@ -116,7 +116,7 @@ impl FileManager {
 
 impl Drop for FileManager {
     fn drop(&mut self) {
-        if !self.request_queue.is_closed() {
+        if self.request_queue.is_closed() {
             return;
         }
         error!("File Manager wasn't shutdown cleanly! This is a bug, please report!");

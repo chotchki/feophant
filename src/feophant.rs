@@ -106,7 +106,7 @@ impl FeOphant {
 
         //Clean up
         match self.file_manager.shutdown().await {
-            Ok(_) => {}
+            Ok(_) => info!("File Manager shutdown!"),
             Err(e) => error!("Had an error shutting down I/O {0}", e),
         }
 
