@@ -1,4 +1,6 @@
 use feophantlib::feophant::FeOphant;
+use log::LevelFilter;
+use simplelog::{ColorChoice, CombinedLogger, Config, TermLogger, TerminalMode};
 use tempfile::TempDir;
 use tokio::sync::oneshot;
 use tokio::sync::{
@@ -9,6 +11,13 @@ use tokio_postgres::{Client, NoTls};
 
 pub async fn _create_server_and_client(
 ) -> Result<(UnboundedSender<Sender<()>>, Client), Box<dyn std::error::Error>> {
+    CombinedLogger::init(vec![TermLogger::new(
+        LevelFilter::Debug,
+        Config::default(),
+        TerminalMode::Mixed,
+        ColorChoice::Auto,
+    )])?;
+
     let tmp = TempDir::new()?;
 
     let (request_shutdown, receive_shutdown): (
