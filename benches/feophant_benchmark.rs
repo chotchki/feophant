@@ -2,56 +2,18 @@ use criterion::BenchmarkId;
 use criterion::Criterion;
 use criterion::{criterion_group, criterion_main};
 use feophantlib::constants::Nullable;
+use feophantlib::engine::get_row;
+use feophantlib::engine::get_table;
 use feophantlib::engine::io::row_formats::RowData;
 use feophantlib::engine::io::FileManager;
 use feophantlib::engine::io::LockCacheManager;
 use feophantlib::engine::io::RowManager;
-use feophantlib::engine::objects::types::BaseSqlTypes;
-use feophantlib::engine::objects::types::BaseSqlTypesMapper;
-use feophantlib::engine::objects::Attribute;
-use feophantlib::engine::objects::SqlTuple;
-use feophantlib::engine::objects::Table;
 use feophantlib::engine::transactions::TransactionId;
 use futures::pin_mut;
 use std::sync::Arc;
 use tempfile::TempDir;
 use tokio::runtime::Builder;
 use tokio_stream::StreamExt;
-
-fn get_table() -> Arc<Table> {
-    Arc::new(Table::new(
-        uuid::Uuid::new_v4(),
-        "test_table".to_string(),
-        vec![
-            Attribute::new(
-                "header".to_string(),
-                BaseSqlTypesMapper::Text,
-                Nullable::NotNull,
-                None,
-            ),
-            Attribute::new(
-                "id".to_string(),
-                BaseSqlTypesMapper::Uuid,
-                Nullable::Null,
-                None,
-            ),
-            Attribute::new(
-                "header3".to_string(),
-                BaseSqlTypesMapper::Text,
-                Nullable::NotNull,
-                None,
-            ),
-        ],
-    ))
-}
-
-fn get_row(input: String) -> SqlTuple {
-    SqlTuple(vec![
-            Some(BaseSqlTypes::Text(input)),
-            None,
-            Some(BaseSqlTypes::Text("blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah".to_string())),
-        ])
-}
 
 // Here we have an async function to benchmark
 async fn row_manager_mass_insert(row_count: usize) -> Result<(), Box<dyn std::error::Error>> {

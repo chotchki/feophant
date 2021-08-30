@@ -238,6 +238,8 @@ mod tests {
                 Nullable::NotNull,
                 None,
             )],
+            vec![],
+            vec![],
         ));
 
         let test = RowData::new(
@@ -277,6 +279,8 @@ mod tests {
                     None,
                 ),
             ],
+            vec![],
+            vec![],
         ));
 
         let test = RowData::new(
@@ -311,6 +315,8 @@ mod tests {
                 Nullable::NotNull,
                 None,
             )],
+            vec![],
+            vec![],
         ));
 
         let test = RowData::new(
@@ -350,6 +356,8 @@ mod tests {
                     None,
                 ),
             ],
+            vec![],
+            vec![],
         ));
 
         let test = RowData::new(
@@ -392,6 +400,8 @@ mod tests {
                     None,
                 ),
             ],
+            vec![],
+            vec![],
         ));
 
         let test = RowData::new(
@@ -438,6 +448,8 @@ mod tests {
                     None,
                 ),
             ],
+            vec![],
+            vec![],
         ));
 
         let test = RowData::new(table.sql_type.clone(),

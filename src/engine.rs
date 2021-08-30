@@ -24,6 +24,12 @@ pub mod sql_parser;
 pub use sql_parser::SqlParser;
 pub use sql_parser::SqlParserError;
 
+//This module is solely to reduce code duplication in tests.
+//I was conditionally compliling it but that breaks benchmarks and integration tests
+pub mod test_objects;
+pub use test_objects::get_row;
+pub use test_objects::get_table;
+
 pub mod transactions;
 use transactions::{TransactionId, TransactionManager};
 

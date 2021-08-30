@@ -1,13 +1,7 @@
-use feophantlib::{
-    constants::Nullable,
-    engine::{
-        io::{row_formats::RowData, FileManager, LockCacheManager, RowManager, VisibleRowManager},
-        objects::{
-            types::{BaseSqlTypes, BaseSqlTypesMapper},
-            Attribute, SqlTuple, Table,
-        },
-        transactions::TransactionManager,
-    },
+use feophantlib::engine::{
+    get_row, get_table,
+    io::{row_formats::RowData, FileManager, LockCacheManager, RowManager, VisibleRowManager},
+    transactions::TransactionManager,
 };
 use futures::stream::StreamExt;
 use log::{debug, info};
@@ -15,40 +9,6 @@ use simplelog::{ColorChoice, CombinedLogger, Config, LevelFilter, TermLogger, Te
 use std::sync::Arc;
 use tempfile::TempDir;
 mod common;
-
-fn get_row(input: String) -> SqlTuple {
-    SqlTuple(vec![
-        Some(BaseSqlTypes::Text(input)),
-        None,
-        Some(BaseSqlTypes::Text("blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah".to_string())),
-    ])
-}
-fn get_table() -> Arc<Table> {
-    Arc::new(Table::new(
-        uuid::Uuid::new_v4(),
-        "test_table".to_string(),
-        vec![
-            Attribute::new(
-                "header".to_string(),
-                BaseSqlTypesMapper::Text,
-                Nullable::NotNull,
-                None,
-            ),
-            Attribute::new(
-                "id".to_string(),
-                BaseSqlTypesMapper::Uuid,
-                Nullable::Null,
-                None,
-            ),
-            Attribute::new(
-                "header3".to_string(),
-                BaseSqlTypesMapper::Text,
-                Nullable::NotNull,
-                None,
-            ),
-        ],
-    ))
-}
 
 #[tokio::test]
 async fn test_row_manager_visibility() -> Result<(), Box<dyn std::error::Error>> {

@@ -1,3 +1,5 @@
+use crate::engine::objects::Attribute;
+
 use super::base_sql_types::BaseSqlTypesMapper;
 use std::{
     fmt::{self, Display, Formatter},
@@ -8,6 +10,17 @@ use std::{
 #[derive(Clone, Debug, PartialEq)]
 // TODO I'm not super happy with the use of Vec but I need the order preseved and easy acess to the offset.
 pub struct SqlTypeDefinition(pub Vec<(String, BaseSqlTypesMapper)>);
+
+impl SqlTypeDefinition {
+    pub fn new(attributes: &[Attribute]) -> SqlTypeDefinition {
+        SqlTypeDefinition(
+            attributes
+                .iter()
+                .map(|a| (a.name.clone(), a.sql_type.clone()))
+                .collect(),
+        )
+    }
+}
 
 impl Deref for SqlTypeDefinition {
     type Target = Vec<(String, BaseSqlTypesMapper)>;

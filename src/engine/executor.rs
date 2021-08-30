@@ -1,7 +1,7 @@
+use crate::constants::SystemTables;
 use crate::engine::objects::types::BaseSqlTypes;
 use crate::engine::objects::SqlTuple;
 
-use super::super::constants::TableDefinitions;
 use super::io::{ConstraintManager, ConstraintManagerError};
 use super::objects::types::SqlTypeDefinition;
 use super::objects::{ParseTree, Plan, PlannedStatement, SqlTupleError, Table};
@@ -141,7 +141,7 @@ impl Executor {
         };
 
         let table_id = Uuid::new_v4();
-        let pg_class = TableDefinitions::PgClass.value();
+        let pg_class = SystemTables::PgClass.value();
         let table_row = SqlTuple(vec![
             Some(BaseSqlTypes::Uuid(table_id)),
             Some(BaseSqlTypes::Text(create_table.table_name.clone())),
@@ -149,7 +149,7 @@ impl Executor {
 
         cm.insert_row(tran_id, pg_class, table_row).await?;
 
-        let pg_attribute = TableDefinitions::PgAttribute.value();
+        let pg_attribute = SystemTables::PgAttribute.value();
         for i in 0..create_table.provided_columns.len() {
             let cm = self.cons_man.clone();
             let i_u32 = u32::try_from(i).map_err(ExecutorError::ConversionError)?;

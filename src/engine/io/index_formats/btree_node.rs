@@ -166,7 +166,7 @@ impl BTreeNode {
             if nulls[c] {
                 bucket.push(None);
             } else {
-                let key = BaseSqlTypes::deserialize(&index_def.columns[c].sql_type, buffer)?;
+                let key = BaseSqlTypes::deserialize(&index_def.columns[c].1, buffer)?;
                 bucket.push(Some(key));
             }
         }

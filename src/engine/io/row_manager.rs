@@ -304,51 +304,13 @@ pub enum RowManagerError {
 
 #[cfg(test)]
 mod tests {
-    use super::super::super::objects::Attribute;
-    use super::super::super::objects::Table;
     use super::*;
-    use crate::constants::Nullable;
+    use crate::engine::get_row;
+    use crate::engine::get_table;
     use crate::engine::io::FileManager;
-    use crate::engine::objects::types::BaseSqlTypes;
-    use crate::engine::objects::types::BaseSqlTypesMapper;
     use futures::pin_mut;
     use tempfile::TempDir;
     use tokio_stream::StreamExt;
-
-    fn get_table() -> Arc<Table> {
-        Arc::new(Table::new(
-            uuid::Uuid::new_v4(),
-            "test_table".to_string(),
-            vec![
-                Attribute::new(
-                    "header".to_string(),
-                    BaseSqlTypesMapper::Text,
-                    Nullable::NotNull,
-                    None,
-                ),
-                Attribute::new(
-                    "id".to_string(),
-                    BaseSqlTypesMapper::Uuid,
-                    Nullable::Null,
-                    None,
-                ),
-                Attribute::new(
-                    "header3".to_string(),
-                    BaseSqlTypesMapper::Text,
-                    Nullable::NotNull,
-                    None,
-                ),
-            ],
-        ))
-    }
-
-    fn get_row(input: String) -> SqlTuple {
-        SqlTuple(vec![
-                Some(BaseSqlTypes::Text(input)),
-                None,
-                Some(BaseSqlTypes::Text("blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah".to_string())),
-            ])
-    }
 
     #[tokio::test]
     async fn test_row_manager_mass_insert() -> Result<(), Box<dyn std::error::Error>> {

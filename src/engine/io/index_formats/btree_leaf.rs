@@ -138,13 +138,15 @@ pub enum BTreeLeafError {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use super::*;
     use crate::{
-        constants::{Nullable, TableDefinitions},
+        constants::Nullable,
         engine::{
             io::page_formats::UInt12,
             objects::{
-                types::{BaseSqlTypes, BaseSqlTypesMapper},
+                types::{BaseSqlTypes, BaseSqlTypesMapper, SqlTypeDefinition},
                 Attribute, Index, Table,
             },
         },
@@ -168,14 +170,10 @@ mod tests {
             ),
         ];
 
-        let tbl = Table::new(tbl_uuid, "Test Table".to_string(), attrs);
-
         Index {
             id: Uuid::new_v4(),
-            pg_class_id: Uuid::new_v4(),
             name: "TestIndex".to_string(),
-            table: TableDefinitions::VALUES[0].value(),
-            columns: tbl.attributes,
+            columns: Arc::new(SqlTypeDefinition::new(&attrs)),
             unique: true,
         }
     }

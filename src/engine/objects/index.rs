@@ -1,14 +1,12 @@
 use uuid::Uuid;
 
-use super::{Attribute, Table};
+use super::types::SqlTypeDefinition;
 use std::sync::Arc;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Index {
     pub id: Uuid,
-    pub pg_class_id: Uuid,
     pub name: String,
-    pub table: Arc<Table>,
-    pub columns: Vec<Attribute>,
+    pub columns: Arc<SqlTypeDefinition>,
     pub unique: bool,
 }

@@ -1,7 +1,6 @@
 //! This command will look up ONLY hardcoded table definitions first,
 //! should be able to fallback to reading new ones off disk
-
-use super::super::super::constants::TableDefinitions;
+//TODO we should use the existing sql query functionality instead of this handcoded stuff
 use super::super::io::row_formats::{RowData, RowDataError};
 use super::super::io::{VisibleRowManager, VisibleRowManagerError};
 use super::super::objects::{
@@ -9,8 +8,10 @@ use super::super::objects::{
     Attribute, Table, TableError,
 };
 use super::super::transactions::TransactionId;
-use crate::constants::Nullable;
-use crate::engine::objects::types::BaseSqlTypesError;
+use crate::constants::system_tables::{pg_attribute, pg_class, pg_constraint, pg_index};
+use crate::constants::{Nullable, SystemTables};
+use crate::engine::objects::types::{BaseSqlTypesError, SqlTypeDefinition};
+use crate::engine::objects::{Constraint, Index, PrimaryKeyConstraint};
 use std::convert::TryFrom;
 use std::num::TryFromIntError;
 use std::str::FromStr;
@@ -36,37 +37,32 @@ impl DefinitionLookup {
         name: String,
     ) -> Result<Arc<Table>, DefinitionLookupError> {
         //System Tables always load
-        let system_tables = TableDefinitions::VALUES;
+        let system_tables = SystemTables::VALUES;
         for i in &system_tables {
             if i.value().name == name {
                 return Ok(i.value());
             }
         }
 
-        //TODO not happy with how many strings there are
-        let tbl_row = self.get_table_row(tran_id, name).await?;
-        let table_id = match tbl_row.get_column_not_null("id")? {
+        let pg_class_entry = self.get_table_row(tran_id, name.clone()).await?;
+        let table_id = match pg_class_entry.get_column_not_null(pg_class::column_id)? {
             BaseSqlTypes::Uuid(u) => u,
-            _ => return Err(DefinitionLookupError::ColumnWrongType()),
-        };
-        let table_name = match tbl_row.get_column_not_null("name")? {
-            BaseSqlTypes::Text(t) => t,
             _ => return Err(DefinitionLookupError::ColumnWrongType()),
         };
 
         let tbl_columns = self.get_table_columns(tran_id, table_id).await?;
         let mut tbl_attrs = vec![];
         for c in tbl_columns {
-            let c_name = match c.get_column_not_null("attname")? {
+            let c_name = match c.get_column_not_null(pg_attribute::column_name)? {
                 BaseSqlTypes::Text(t) => t,
                 _ => return Err(DefinitionLookupError::ColumnWrongType()),
             };
-            let c_type = match c.get_column_not_null("atttypid")? {
+            let c_type = match c.get_column_not_null(pg_attribute::column_sql_type)? {
                 BaseSqlTypes::Text(t) => t,
                 _ => return Err(DefinitionLookupError::ColumnWrongType()),
             };
 
-            let c_null = match c.get_column_not_null("attnotnull")? {
+            let c_null = match c.get_column_not_null(pg_attribute::column_nullable)? {
                 BaseSqlTypes::Bool(b) => Nullable::from(b),
                 _ => return Err(DefinitionLookupError::ColumnWrongType()),
             };
@@ -79,7 +75,20 @@ impl DefinitionLookup {
             ));
         }
 
-        Ok(Arc::new(Table::new(table_id, table_name, tbl_attrs)))
+        let indexes = self
+            .get_table_indexes(tran_id, table_id, &tbl_attrs)
+            .await?;
+        let constraints = self
+            .get_table_constraints(tran_id, table_id, &indexes)
+            .await?;
+
+        Ok(Arc::new(Table::new(
+            table_id,
+            name,
+            tbl_attrs,
+            constraints,
+            indexes,
+        )))
     }
 
     async fn get_table_row(
@@ -87,13 +96,14 @@ impl DefinitionLookup {
         tran_id: TransactionId,
         name: String,
     ) -> Result<RowData, DefinitionLookupError> {
-        //Now we have to search
-        let pg_class = TableDefinitions::PgClass.value();
-        let row_stream = self.vis_row_man.clone().get_stream(tran_id, pg_class);
+        let row_stream = self
+            .vis_row_man
+            .clone()
+            .get_stream(tran_id, SystemTables::PgClass.value().clone());
         pin!(row_stream);
         while let Some(row_res) = row_stream.next().await {
             let row = row_res?;
-            if row.get_column_not_null("name")? == BaseSqlTypes::Text(name.clone()) {
+            if row.get_column_not_null(pg_class::column_name)? == BaseSqlTypes::Text(name.clone()) {
                 return Ok(row);
             }
         }
@@ -104,10 +114,10 @@ impl DefinitionLookup {
     async fn get_table_columns(
         &self,
         tran_id: TransactionId,
-        attrelid: Uuid,
+        class_id: Uuid,
     ) -> Result<Vec<RowData>, DefinitionLookupError> {
         let mut columns = vec![];
-        let pg_attr = TableDefinitions::PgAttribute.value();
+        let pg_attr = SystemTables::PgAttribute.value();
         let row_stream = self
             .vis_row_man
             .clone()
@@ -115,7 +125,9 @@ impl DefinitionLookup {
         pin!(row_stream);
         while let Some(row_res) = row_stream.next().await {
             let row = row_res?;
-            if row.get_column_not_null("attrelid")? == BaseSqlTypes::Uuid(attrelid) {
+            if row.get_column_not_null(pg_attribute::column_class_id)?
+                == BaseSqlTypes::Uuid(class_id)
+            {
                 columns.push(row);
             }
         }
@@ -125,7 +137,7 @@ impl DefinitionLookup {
         }
 
         //Figure out what column we're dealing with
-        let col_offset = pg_attr.get_column_index("attnum".to_string())?;
+        let col_offset = pg_attr.get_column_index(pg_attribute::column_column_num)?;
 
         //Extract column number into tuples so we can sort
         let mut column_tuples = vec![];
@@ -158,6 +170,126 @@ impl DefinitionLookup {
 
         Ok(columns)
     }
+
+    async fn get_table_indexes(
+        &self,
+        tran_id: TransactionId,
+        class_id: Uuid,
+        attributes: &Vec<Attribute>,
+    ) -> Result<Vec<Arc<Index>>, DefinitionLookupError> {
+        let mut rows = vec![];
+        let row_stream = self
+            .vis_row_man
+            .clone()
+            .get_stream(tran_id, SystemTables::PgIndex.value().clone());
+        pin!(row_stream);
+        while let Some(row_res) = row_stream.next().await {
+            let row = row_res?;
+            if row.get_column_not_null(pg_index::column_class_id)? == BaseSqlTypes::Uuid(class_id) {
+                rows.push(row);
+            }
+        }
+
+        if rows.is_empty() {
+            return Ok(vec![]);
+        }
+
+        let mut indexes = vec![];
+        for r in rows.iter() {
+            let id = match r.get_column_not_null(pg_index::column_id)? {
+                BaseSqlTypes::Uuid(u) => u,
+                _ => return Err(DefinitionLookupError::ColumnWrongType()),
+            };
+            let name = match r.get_column_not_null(pg_index::column_name)? {
+                BaseSqlTypes::Text(t) => t,
+                _ => return Err(DefinitionLookupError::ColumnWrongType()),
+            };
+            let columns = match r.get_column_not_null(pg_index::column_attributes)? {
+                BaseSqlTypes::Array(a) => {
+                    let mut cols = vec![];
+                    for col in a {
+                        match col {
+                            BaseSqlTypes::Integer(i) => {
+                                let i_usize = usize::try_from(i)?;
+                                cols.push(
+                                    attributes
+                                        .get(i_usize)
+                                        .ok_or_else(|| {
+                                            DefinitionLookupError::WrongColumnIndex(i_usize)
+                                        })?
+                                        .clone(),
+                                );
+                            }
+                            _ => {
+                                return Err(DefinitionLookupError::ColumnWrongType());
+                            }
+                        }
+                    }
+                    cols
+                }
+                _ => return Err(DefinitionLookupError::ColumnWrongType()),
+            };
+            let unique = match r.get_column_not_null(pg_index::column_unique)? {
+                BaseSqlTypes::Bool(b) => b,
+                _ => return Err(DefinitionLookupError::ColumnWrongType()),
+            };
+
+            indexes.push(Arc::new(Index {
+                id,
+                name,
+                columns: Arc::new(SqlTypeDefinition::new(&columns)),
+                unique,
+            }));
+        }
+
+        Ok(indexes)
+    }
+
+    async fn get_table_constraints(
+        &self,
+        tran_id: TransactionId,
+        class_id: Uuid,
+        indexes: &Vec<Arc<Index>>,
+    ) -> Result<Vec<Constraint>, DefinitionLookupError> {
+        let mut rows = vec![];
+        let row_stream = self
+            .vis_row_man
+            .clone()
+            .get_stream(tran_id, SystemTables::PgConstraint.value().clone());
+        pin!(row_stream);
+        while let Some(row_res) = row_stream.next().await {
+            let row = row_res?;
+            if row.get_column_not_null(pg_constraint::column_class_id)?
+                == BaseSqlTypes::Uuid(class_id)
+            {
+                rows.push(row);
+            }
+        }
+
+        let mut constraints = vec![];
+        for r in rows.iter() {
+            let name = match r.get_column_not_null(pg_constraint::column_name)? {
+                BaseSqlTypes::Text(t) => t,
+                _ => return Err(DefinitionLookupError::ColumnWrongType()),
+            };
+            let index_id = match r.get_column_not_null(pg_constraint::column_index_id)? {
+                BaseSqlTypes::Uuid(u) => u,
+                _ => return Err(DefinitionLookupError::ColumnWrongType()),
+            };
+
+            for i in indexes {
+                if i.id == index_id {
+                    constraints.push(Constraint::PrimaryKey(PrimaryKeyConstraint {
+                        name,
+                        index: i.clone(),
+                    }));
+                    break;
+                }
+            }
+            return Err(DefinitionLookupError::IndexDoesNotExist(index_id));
+        }
+        Ok(constraints)
+    }
 }
 
 #[derive(Debug, Error)]
@@ -176,6 +308,8 @@ pub enum DefinitionLookupError {
     ColumnWrongType(),
     #[error("Gap in columns found at {0}")]
     ColumnGap(usize),
+    #[error("Index {0} does not exist")]
+    IndexDoesNotExist(Uuid),
     #[error(transparent)]
     RowDataError(#[from] RowDataError),
     #[error(transparent)]

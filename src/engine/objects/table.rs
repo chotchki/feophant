@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use super::{types::SqlTypeDefinition, Attribute};
+use super::{types::SqlTypeDefinition, Attribute, Constraint, Index};
 use thiserror::Error;
 use uuid::Uuid;
 
@@ -11,35 +11,39 @@ pub struct Table {
     pub id: Uuid,
     pub name: String,
     pub attributes: Vec<Attribute>,
+    pub constraints: Vec<Constraint>,
+    pub indexes: Vec<Arc<Index>>,
     pub sql_type: Arc<SqlTypeDefinition>,
 }
 
 impl Table {
-    pub fn new(id: Uuid, name: String, attributes: Vec<Attribute>) -> Table {
-        let sql_type = SqlTypeDefinition(
-            attributes
-                .iter()
-                .map(|a| (a.name.clone(), a.sql_type.clone()))
-                .collect(),
-        );
-
+    pub fn new(
+        id: Uuid,
+        name: String,
+        attributes: Vec<Attribute>,
+        constraints: Vec<Constraint>,
+        indexes: Vec<Arc<Index>>,
+    ) -> Table {
+        let sql_type = Arc::new(SqlTypeDefinition::new(&attributes));
         Table {
             id,
             name,
             attributes,
-            sql_type: Arc::new(sql_type),
+            constraints,
+            indexes,
+            sql_type,
         }
     }
 
     //TODO might not be need any more with the type
-    pub fn get_column_index(&self, name: String) -> Result<usize, TableError> {
+    pub fn get_column_index(&self, name: &str) -> Result<usize, TableError> {
         for i in 0..self.attributes.len() {
             if self.attributes[i].name == name {
                 return Ok(i);
             }
         }
 
-        Err(TableError::ColumnDoesNotExist(name))
+        Err(TableError::ColumnDoesNotExist(name.to_string()))
     }
 }
 

@@ -1,6 +1,10 @@
 mod attribute;
 pub use attribute::Attribute;
 
+mod constraint;
+pub use constraint::Constraint;
+pub use constraint::PrimaryKeyConstraint;
+
 mod index;
 pub use index::Index;
 

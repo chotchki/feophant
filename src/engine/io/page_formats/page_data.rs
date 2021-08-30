@@ -164,6 +164,7 @@ pub enum PageDataError {
 #[cfg(test)]
 mod tests {
     use crate::constants::{Nullable, PAGE_SIZE};
+    use crate::engine::get_table;
     use crate::engine::objects::SqlTuple;
 
     use super::super::super::super::objects::{
@@ -178,33 +179,6 @@ mod tests {
 
     fn get_item_pointer(row_num: usize) -> ItemPointer {
         ItemPointer::new(PageOffset(0), UInt12::new(row_num as u16).unwrap())
-    }
-
-    fn get_table() -> Arc<Table> {
-        Arc::new(Table::new(
-            uuid::Uuid::new_v4(),
-            "test_table".to_string(),
-            vec![
-                Attribute::new(
-                    "header".to_string(),
-                    BaseSqlTypesMapper::Text,
-                    Nullable::NotNull,
-                    None,
-                ),
-                Attribute::new(
-                    "id".to_string(),
-                    BaseSqlTypesMapper::Uuid,
-                    Nullable::Null,
-                    None,
-                ),
-                Attribute::new(
-                    "header3".to_string(),
-                    BaseSqlTypesMapper::Text,
-                    Nullable::NotNull,
-                    None,
-                ),
-            ],
-        ))
     }
 
     #[tokio::test]
