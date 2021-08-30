@@ -267,7 +267,7 @@ impl DefinitionLookup {
         }
 
         let mut constraints = vec![];
-        for r in rows.iter() {
+        'outer: for r in rows.iter() {
             let name = match r.get_column_not_null(pg_constraint::column_name)? {
                 BaseSqlTypes::Text(t) => t,
                 _ => return Err(DefinitionLookupError::ColumnWrongType()),
@@ -283,7 +283,7 @@ impl DefinitionLookup {
                         name,
                         index: i.clone(),
                     }));
-                    break;
+                    break 'outer;
                 }
             }
             return Err(DefinitionLookupError::IndexDoesNotExist(index_id));
