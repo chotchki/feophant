@@ -1,6 +1,6 @@
 theme: jekyll-theme-minimal
 title: FeOphant
 description: A database server written in Rust and inspired by PostreSQL
-logo: /feophant_logo.svg
+logo: /feophant_logo_v2.svg
 show_downloads: false
 google_analytics: G-GBPHN9NF6R
