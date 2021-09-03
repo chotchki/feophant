@@ -283,7 +283,7 @@ impl DefinitionLookup {
                         name,
                         index: i.clone(),
                     }));
-                    break 'outer;
+                    continue 'outer;
                 }
             }
             return Err(DefinitionLookupError::IndexDoesNotExist(index_id));
