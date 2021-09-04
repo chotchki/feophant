@@ -468,7 +468,7 @@ mod tests {
         let mut buffer = buffer.freeze();
 
         let test_parse = RowData::parse(table, &mut buffer)?;
-        assert_eq!(test, test_parse.clone());
+        assert_eq!(test, test_parse);
 
         let column_val = test_parse.get_column_not_null("header")?;
         assert_eq!(column_val, BaseSqlTypes::Text("this is a test".to_string()));

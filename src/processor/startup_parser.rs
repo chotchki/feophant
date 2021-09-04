@@ -65,13 +65,11 @@ mod tests {
     }
 
     #[test]
+    #[should_panic]
     fn test_invalid_utf8_till_null() {
         let test_string = b"\xc3\x28\0";
 
-        match till_null(test_string) {
-            Ok(_) => assert!(false),
-            Err(_) => assert!(true),
-        }
+        till_null(test_string).unwrap();
     }
 
     #[test]

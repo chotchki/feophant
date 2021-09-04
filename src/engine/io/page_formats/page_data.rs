@@ -163,14 +163,11 @@ pub enum PageDataError {
 
 #[cfg(test)]
 mod tests {
-    use crate::constants::{Nullable, PAGE_SIZE};
+    use crate::constants::PAGE_SIZE;
     use crate::engine::get_table;
     use crate::engine::objects::SqlTuple;
 
-    use super::super::super::super::objects::{
-        types::{BaseSqlTypes, BaseSqlTypesMapper},
-        Attribute, Table,
-    };
+    use super::super::super::super::objects::types::BaseSqlTypes;
     use super::super::super::super::transactions::TransactionId;
     use super::*;
     use bytes::BytesMut;

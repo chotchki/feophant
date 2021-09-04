@@ -61,7 +61,7 @@ impl LockCacheManager {
     ) -> Result<Arc<RwLock<Option<BytesMut>>>, LockCacheManagerError> {
         let mut cache = self.cache.lock().await;
         match cache.get(&(page_id, offset)) {
-            Some(s) => return Ok(s.clone()),
+            Some(s) => Ok(s.clone()),
             None => {
                 //Cache miss, let's make the RwLock and drop the mutex
                 let page_lock = Arc::new(RwLock::new(None));
@@ -70,12 +70,9 @@ impl LockCacheManager {
                 drop(cache);
 
                 //Now we can load the underlying page without blocking everyone
-                match self.file_manager.get_page(&page_id, &offset).await? {
-                    Some(s) => {
-                        page_lock_write.replace(s);
-                    }
-                    None => {}
-                };
+                if let Some(s) = self.file_manager.get_page(&page_id, &offset).await? {
+                    page_lock_write.replace(s);
+                }
                 drop(page_lock_write);
 
                 Ok(page_lock)

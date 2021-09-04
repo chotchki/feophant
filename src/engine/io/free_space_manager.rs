@@ -116,22 +116,6 @@ impl FreeSpaceManager {
         None
     }
 
-    /// Gets the status of a field inside a page, you MUST pass an offset
-    /// that fits in the buffer.
-    //TODO Decide if I end up keeping this or maybe move it to the unit test section?
-    fn get_status_inside_page(buffer: &BytesMut, offset: usize) -> FreeStat {
-        let offset_index = offset / 8;
-        let offset_subindex = offset % 8;
-
-        let offset_value = buffer[offset_index];
-        let bit_value = (offset_value >> offset_subindex) & 0x1;
-        if bit_value == 0 {
-            FreeStat::Free
-        } else {
-            FreeStat::InUse
-        }
-    }
-
     /// Sets the status of a field inside a page, you MUST pass an offset
     /// that fits in the buffer.
     fn set_status_inside_page(buffer: &mut BytesMut, offset: usize, status: FreeStat) {
@@ -181,6 +165,22 @@ mod tests {
 
     use super::*;
 
+    /// Gets the status of a field inside a page, you MUST pass an offset
+    /// that fits in the buffer.
+    //This was in the implementation, I just only needed it for unit tests
+    fn get_status_inside_page(buffer: &BytesMut, offset: usize) -> FreeStat {
+        let offset_index = offset / 8;
+        let offset_subindex = offset % 8;
+
+        let offset_value = buffer[offset_index];
+        let bit_value = (offset_value >> offset_subindex) & 0x1;
+        if bit_value == 0 {
+            FreeStat::Free
+        } else {
+            FreeStat::InUse
+        }
+    }
+
     ///This test works by toggling each bit repeatedly and making sure it gives the correct result each time.
     #[test]
     fn test_get_and_set() -> Result<(), Box<dyn std::error::Error>> {
@@ -188,20 +188,11 @@ mod tests {
         test.put_u16(0x0);
 
         for i in 0..test.capacity() * 8 {
-            assert_eq!(
-                FreeSpaceManager::get_status_inside_page(&test, i),
-                FreeStat::Free
-            );
+            assert_eq!(get_status_inside_page(&test, i), FreeStat::Free);
             FreeSpaceManager::set_status_inside_page(&mut test, i, FreeStat::InUse);
-            assert_eq!(
-                FreeSpaceManager::get_status_inside_page(&test, i),
-                FreeStat::InUse
-            );
+            assert_eq!(get_status_inside_page(&test, i), FreeStat::InUse);
             FreeSpaceManager::set_status_inside_page(&mut test, i, FreeStat::Free);
-            assert_eq!(
-                FreeSpaceManager::get_status_inside_page(&test, i),
-                FreeStat::Free
-            );
+            assert_eq!(get_status_inside_page(&test, i), FreeStat::Free);
         }
 
         Ok(())
@@ -220,7 +211,7 @@ mod tests {
             FreeSpaceManager::set_status_inside_page(&mut test, i, FreeStat::InUse);
         }
         assert_eq!(
-            FreeSpaceManager::find_first_free_page_in_page(&mut test.clone()),
+            FreeSpaceManager::find_first_free_page_in_page(&mut test),
             None
         );
 

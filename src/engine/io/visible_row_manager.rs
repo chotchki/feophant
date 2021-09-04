@@ -9,7 +9,6 @@ use super::super::transactions::{
     TransactionId, TransactionManager, TransactionManagerError, TransactionStatus,
 };
 use super::{
-    page_formats::PageData,
     row_formats::{ItemPointer, RowData},
     RowManager, RowManagerError,
 };

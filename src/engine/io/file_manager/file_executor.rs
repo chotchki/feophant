@@ -6,7 +6,6 @@ use crate::constants::PAGE_SIZE;
 use crate::engine::io::file_manager::ResourceFormatter;
 use crate::engine::io::page_formats::{PageId, PageOffset};
 use bytes::{Bytes, BytesMut};
-use futures::SinkExt;
 use lru::LruCache;
 use std::collections::{HashMap, VecDeque};
 use std::convert::TryFrom;
@@ -628,9 +627,9 @@ mod tests {
         let mut test_file =
             FileOperations::open_path(tmp_dir, &page_id, PageOffset(0).get_file_number()).await?;
 
-        let mut test_page = get_test_page(1);
+        let test_page = get_test_page(1);
 
-        test_file.write_all(&mut test_page).await?;
+        test_file.write_all(&test_page).await?;
         drop(test_file);
 
         //Now let's test add
@@ -672,9 +671,9 @@ mod tests {
         )
         .await?;
 
-        let mut test_page = get_test_page(1);
+        let test_page = get_test_page(1);
 
-        test_file.write_all(&mut test_page).await?;
+        test_file.write_all(&test_page).await?;
         drop(test_file);
 
         //Now let's test add

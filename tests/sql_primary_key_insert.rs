@@ -1,4 +1,4 @@
-use tokio_postgres::{SimpleQueryMessage, SimpleQueryRow};
+use tokio_postgres::SimpleQueryMessage;
 
 mod common;
 
@@ -24,7 +24,7 @@ async fn primary_key_insert() -> Result<(), Box<dyn std::error::Error>> {
 
     let row_count = rows.into_iter().fold(0, |acc, x| -> usize {
         if let SimpleQueryMessage::Row(_) = x {
-            return acc + 1;
+            acc + 1
         } else {
             acc
         }

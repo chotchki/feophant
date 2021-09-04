@@ -25,7 +25,7 @@ async fn simple_select() -> Result<(), Box<dyn std::error::Error>> {
             assert_eq!(s.get(1).unwrap(), "three");
             assert_eq!(s.get(2), None);
         }
-        _ => assert!(false),
+        _ => panic!("Shouldn't get here"),
     }
 
     common::_request_shutdown(request_shutdown).await

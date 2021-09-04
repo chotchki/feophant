@@ -203,27 +203,15 @@ mod tests {
 
     #[test]
     fn test_is_same_file() -> Result<(), Box<dyn std::error::Error>> {
-        assert_eq!(
-            PageOffset(0).is_same_file(&PageOffset(PAGES_PER_FILE)),
-            false
-        );
-        assert_eq!(PageOffset(0).is_same_file(&PageOffset(0)), true);
-        assert_eq!(
-            PageOffset(0).is_same_file(&PageOffset(PAGES_PER_FILE - 1)),
-            true
-        );
-
-        assert_eq!(
-            PageOffset(PAGES_PER_FILE).is_same_file(&PageOffset(0)),
-            false
-        );
-        assert_eq!(
-            PageOffset(PAGES_PER_FILE - 1).is_same_file(&PageOffset(0)),
-            true
-        );
+        assert!(!PageOffset(0).is_same_file(&PageOffset(PAGES_PER_FILE)));
+        assert!(PageOffset(0).is_same_file(&PageOffset(0)));
+        assert!(PageOffset(0).is_same_file(&PageOffset(PAGES_PER_FILE - 1)));
+        assert!(!PageOffset(PAGES_PER_FILE).is_same_file(&PageOffset(0)));
+        assert!(PageOffset(PAGES_PER_FILE - 1).is_same_file(&PageOffset(0)));
 
         Ok(())
     }
+
     #[test]
     fn test_increment_and_hash_map() -> Result<(), Box<dyn std::error::Error>> {
         let test = PageOffset(0);

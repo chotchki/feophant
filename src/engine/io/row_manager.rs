@@ -61,7 +61,7 @@ impl RowManager {
             .as_mut()
             .ok_or(RowManagerError::NonExistentPage(row_pointer.page))?;
 
-        let mut page = PageData::parse(table, row_pointer.page, &page_buffer)?;
+        let mut page = PageData::parse(table, row_pointer.page, page_buffer)?;
         let mut row = page
             .get_row(row_pointer.count)
             .ok_or(RowManagerError::NonExistentRow(
@@ -111,7 +111,7 @@ impl RowManager {
             .as_mut()
             .ok_or(RowManagerError::NonExistentPage(row_pointer.page))?;
 
-        let mut old_page = PageData::parse(table.clone(), row_pointer.page, &old_page_buffer)?;
+        let mut old_page = PageData::parse(table.clone(), row_pointer.page, old_page_buffer)?;
 
         let mut old_row = old_page
             .get_row(row_pointer.count)
@@ -172,7 +172,7 @@ impl RowManager {
         let page_bytes = page_handle
             .as_ref()
             .ok_or(RowManagerError::NonExistentPage(row_pointer.page))?;
-        let page = PageData::parse(table, row_pointer.page, &page_bytes)?;
+        let page = PageData::parse(table, row_pointer.page, page_bytes)?;
 
         let row = page
             .get_row(row_pointer.count)
@@ -344,10 +344,15 @@ mod tests {
             .await;
 
         assert_eq!(result_rows.len(), 50);
-        for i in 0..50 {
-            let sample_row = get_row(i.to_string());
-            assert_eq!(result_rows[i].user_data, sample_row);
-        }
+        result_rows
+            .iter()
+            .enumerate()
+            .take(50)
+            .map(|(i, row)| {
+                let sample_row = get_row(i.to_string());
+                assert_eq!(row.user_data, sample_row);
+            })
+            .for_each(drop);
 
         Ok(())
     }

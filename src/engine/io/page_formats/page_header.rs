@@ -69,6 +69,12 @@ impl PageHeader {
     }
 }
 
+impl Default for PageHeader {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ConstEncodedSize for PageHeader {
     fn encoded_size() -> usize {
         3

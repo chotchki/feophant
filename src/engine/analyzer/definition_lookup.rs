@@ -99,7 +99,7 @@ impl DefinitionLookup {
         let row_stream = self
             .vis_row_man
             .clone()
-            .get_stream(tran_id, SystemTables::PgClass.value().clone());
+            .get_stream(tran_id, SystemTables::PgClass.value());
         pin!(row_stream);
         while let Some(row_res) = row_stream.next().await {
             let row = row_res?;
@@ -175,13 +175,13 @@ impl DefinitionLookup {
         &self,
         tran_id: TransactionId,
         class_id: Uuid,
-        attributes: &Vec<Attribute>,
+        attributes: &[Attribute],
     ) -> Result<Vec<Arc<Index>>, DefinitionLookupError> {
         let mut rows = vec![];
         let row_stream = self
             .vis_row_man
             .clone()
-            .get_stream(tran_id, SystemTables::PgIndex.value().clone());
+            .get_stream(tran_id, SystemTables::PgIndex.value());
         pin!(row_stream);
         while let Some(row_res) = row_stream.next().await {
             let row = row_res?;
@@ -214,9 +214,7 @@ impl DefinitionLookup {
                                 cols.push(
                                     attributes
                                         .get(i_usize)
-                                        .ok_or_else(|| {
-                                            DefinitionLookupError::WrongColumnIndex(i_usize)
-                                        })?
+                                        .ok_or(DefinitionLookupError::WrongColumnIndex(i_usize))?
                                         .clone(),
                                 );
                             }
@@ -249,13 +247,13 @@ impl DefinitionLookup {
         &self,
         tran_id: TransactionId,
         class_id: Uuid,
-        indexes: &Vec<Arc<Index>>,
+        indexes: &[Arc<Index>],
     ) -> Result<Vec<Constraint>, DefinitionLookupError> {
         let mut rows = vec![];
         let row_stream = self
             .vis_row_man
             .clone()
-            .get_stream(tran_id, SystemTables::PgConstraint.value().clone());
+            .get_stream(tran_id, SystemTables::PgConstraint.value());
         pin!(row_stream);
         while let Some(row_res) = row_stream.next().await {
             let row = row_res?;
@@ -368,9 +366,8 @@ mod tests {
             .get_definition(tran_id, "something_random".to_string())
             .await;
         match pg_class_def {
-            Ok(_) => assert!(false),
-            Err(DefinitionLookupError::TableDoesNotExist(_)) => assert!(true),
-            _ => assert!(false),
+            Err(DefinitionLookupError::TableDoesNotExist(_)) => {}
+            _ => panic!("Should not have gotten here!"),
         }
         Ok(())
     }
@@ -397,7 +394,6 @@ mod tests {
         dl.get_definition(tran, "foo".to_string()).await?;
         tm.commit_trans(tran).await?;
 
-        assert!(true);
         Ok(())
     }
 }

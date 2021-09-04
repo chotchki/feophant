@@ -69,7 +69,7 @@ impl Analyzer {
             //Insert columns will be the target
             targets: Arc::new(output_type),
             range_tables: vec![target_tbl.clone(), anon_tbl.clone()],
-            joins: vec![((JoinType::Inner, target_tbl, anon_tbl))],
+            joins: vec![(JoinType::Inner, target_tbl, anon_tbl)],
         })
     }
 

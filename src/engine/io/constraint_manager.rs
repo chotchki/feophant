@@ -15,7 +15,6 @@ use crate::{
 };
 
 use super::{
-    page_formats::PageData,
     row_formats::{ItemPointer, RowData},
     VisibleRowManager, VisibleRowManagerError,
 };

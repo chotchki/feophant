@@ -1,7 +1,6 @@
 use criterion::BenchmarkId;
 use criterion::Criterion;
 use criterion::{criterion_group, criterion_main};
-use feophantlib::constants::Nullable;
 use feophantlib::engine::get_row;
 use feophantlib::engine::get_table;
 use feophantlib::engine::io::row_formats::RowData;
@@ -47,10 +46,15 @@ async fn row_manager_mass_insert(row_count: usize) -> Result<(), Box<dyn std::er
         .await;
 
     assert_eq!(result_rows.len(), row_count);
-    for i in 0..row_count {
-        let sample_row = get_row(i.to_string());
-        assert_eq!(result_rows[i].user_data, sample_row);
-    }
+    result_rows
+        .iter()
+        .enumerate()
+        .take(row_count)
+        .map(|(i, row)| {
+            let sample_row = get_row(i.to_string());
+            assert_eq!(row.user_data, sample_row);
+        })
+        .for_each(drop);
 
     Ok(())
 }

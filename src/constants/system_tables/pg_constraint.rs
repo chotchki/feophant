@@ -51,7 +51,7 @@ pub fn get_columns() -> Vec<Attribute> {
     ]
 }
 
-pub fn get_index(attrs: &Vec<Attribute>) -> Arc<Index> {
+pub fn get_index(attrs: &[Attribute]) -> Arc<Index> {
     Arc::new(Index {
         id: Uuid::from_bytes(hex!("27182DE783AB42D8B5DD43BFC0154F0F")),
         name: NAME.to_string() + "_name_index",
