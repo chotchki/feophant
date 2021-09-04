@@ -45,7 +45,7 @@ impl DefinitionLookup {
         }
 
         let pg_class_entry = self.get_table_row(tran_id, name.clone()).await?;
-        let table_id = match pg_class_entry.get_column_not_null(pg_class::column_id)? {
+        let table_id = match pg_class_entry.get_column_not_null(pg_class::COLUMN_ID)? {
             BaseSqlTypes::Uuid(u) => u,
             _ => return Err(DefinitionLookupError::ColumnWrongType()),
         };
@@ -53,16 +53,16 @@ impl DefinitionLookup {
         let tbl_columns = self.get_table_columns(tran_id, table_id).await?;
         let mut tbl_attrs = vec![];
         for c in tbl_columns {
-            let c_name = match c.get_column_not_null(pg_attribute::column_name)? {
+            let c_name = match c.get_column_not_null(pg_attribute::COLUMN_NAME)? {
                 BaseSqlTypes::Text(t) => t,
                 _ => return Err(DefinitionLookupError::ColumnWrongType()),
             };
-            let c_type = match c.get_column_not_null(pg_attribute::column_sql_type)? {
+            let c_type = match c.get_column_not_null(pg_attribute::COLUMN_SQL_TYPE)? {
                 BaseSqlTypes::Text(t) => t,
                 _ => return Err(DefinitionLookupError::ColumnWrongType()),
             };
 
-            let c_null = match c.get_column_not_null(pg_attribute::column_nullable)? {
+            let c_null = match c.get_column_not_null(pg_attribute::COLUMN_NULLABLE)? {
                 BaseSqlTypes::Bool(b) => Nullable::from(b),
                 _ => return Err(DefinitionLookupError::ColumnWrongType()),
             };
@@ -103,7 +103,7 @@ impl DefinitionLookup {
         pin!(row_stream);
         while let Some(row_res) = row_stream.next().await {
             let row = row_res?;
-            if row.get_column_not_null(pg_class::column_name)? == BaseSqlTypes::Text(name.clone()) {
+            if row.get_column_not_null(pg_class::COLUMN_NAME)? == BaseSqlTypes::Text(name.clone()) {
                 return Ok(row);
             }
         }
@@ -125,7 +125,7 @@ impl DefinitionLookup {
         pin!(row_stream);
         while let Some(row_res) = row_stream.next().await {
             let row = row_res?;
-            if row.get_column_not_null(pg_attribute::column_class_id)?
+            if row.get_column_not_null(pg_attribute::COLUMN_CLASS_ID)?
                 == BaseSqlTypes::Uuid(class_id)
             {
                 columns.push(row);
@@ -137,7 +137,7 @@ impl DefinitionLookup {
         }
 
         //Figure out what column we're dealing with
-        let col_offset = pg_attr.get_column_index(pg_attribute::column_column_num)?;
+        let col_offset = pg_attr.get_column_index(pg_attribute::COLUMN_COLUMN_NUM)?;
 
         //Extract column number into tuples so we can sort
         let mut column_tuples = vec![];
@@ -185,7 +185,7 @@ impl DefinitionLookup {
         pin!(row_stream);
         while let Some(row_res) = row_stream.next().await {
             let row = row_res?;
-            if row.get_column_not_null(pg_index::column_class_id)? == BaseSqlTypes::Uuid(class_id) {
+            if row.get_column_not_null(pg_index::COLUMN_CLASS_ID)? == BaseSqlTypes::Uuid(class_id) {
                 rows.push(row);
             }
         }
@@ -196,15 +196,15 @@ impl DefinitionLookup {
 
         let mut indexes = vec![];
         for r in rows.iter() {
-            let id = match r.get_column_not_null(pg_index::column_id)? {
+            let id = match r.get_column_not_null(pg_index::COLUMN_ID)? {
                 BaseSqlTypes::Uuid(u) => u,
                 _ => return Err(DefinitionLookupError::ColumnWrongType()),
             };
-            let name = match r.get_column_not_null(pg_index::column_name)? {
+            let name = match r.get_column_not_null(pg_index::COLUMN_NAME)? {
                 BaseSqlTypes::Text(t) => t,
                 _ => return Err(DefinitionLookupError::ColumnWrongType()),
             };
-            let columns = match r.get_column_not_null(pg_index::column_attributes)? {
+            let columns = match r.get_column_not_null(pg_index::COLUMN_ATTRIBUTES)? {
                 BaseSqlTypes::Array(a) => {
                     let mut cols = vec![];
                     for col in a {
@@ -229,7 +229,7 @@ impl DefinitionLookup {
                 }
                 _ => return Err(DefinitionLookupError::ColumnWrongType()),
             };
-            let unique = match r.get_column_not_null(pg_index::column_unique)? {
+            let unique = match r.get_column_not_null(pg_index::COLUMN_UNIQUE)? {
                 BaseSqlTypes::Bool(b) => b,
                 _ => return Err(DefinitionLookupError::ColumnWrongType()),
             };
@@ -259,7 +259,7 @@ impl DefinitionLookup {
         pin!(row_stream);
         while let Some(row_res) = row_stream.next().await {
             let row = row_res?;
-            if row.get_column_not_null(pg_constraint::column_class_id)?
+            if row.get_column_not_null(pg_constraint::COLUMN_CLASS_ID)?
                 == BaseSqlTypes::Uuid(class_id)
             {
                 rows.push(row);
@@ -268,11 +268,11 @@ impl DefinitionLookup {
 
         let mut constraints = vec![];
         'outer: for r in rows.iter() {
-            let name = match r.get_column_not_null(pg_constraint::column_name)? {
+            let name = match r.get_column_not_null(pg_constraint::COLUMN_NAME)? {
                 BaseSqlTypes::Text(t) => t,
                 _ => return Err(DefinitionLookupError::ColumnWrongType()),
             };
-            let index_id = match r.get_column_not_null(pg_constraint::column_index_id)? {
+            let index_id = match r.get_column_not_null(pg_constraint::COLUMN_INDEX_ID)? {
                 BaseSqlTypes::Uuid(u) => u,
                 _ => return Err(DefinitionLookupError::ColumnWrongType()),
             };
