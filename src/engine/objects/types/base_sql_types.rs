@@ -31,7 +31,7 @@ pub enum BaseSqlTypes {
 
 /// BaseSqlTypesMapper exists to map to SqlType without imposing the cost of an empty version
 ///
-/// This will exist until this RFC is fixed: https://github.com/rust-lang/rfcs/pull/2593
+/// This will exist until this RFC is brought back: https://github.com/rust-lang/rfcs/pull/2593
 #[derive(Clone, Debug, PartialEq)]
 pub enum BaseSqlTypesMapper {
     Array(Arc<BaseSqlTypesMapper>),
@@ -240,7 +240,9 @@ impl SelfEncodedSize for BaseSqlTypes {
     /// is not needed to find space.
     fn encoded_size(&self) -> usize {
         match self {
-            Self::Array(ref a) => a.iter().fold(0, |acc, x| acc + x.encoded_size()),
+            Self::Array(ref a) => {
+                expected_encoded_size(a.len()) + a.iter().fold(0, |acc, x| acc + x.encoded_size())
+            }
             Self::Bool(_) => size_of::<bool>(),
             Self::Integer(_) => size_of::<u32>(),
             Self::Uuid(_) => size_of::<Uuid>(),
@@ -373,6 +375,25 @@ mod tests {
     }
 
     #[test]
+    fn test_array_roundtrip() -> Result<(), Box<dyn std::error::Error>> {
+        let array = BaseSqlTypes::Array(vec![BaseSqlTypes::Integer(1), BaseSqlTypes::Integer(2)]);
+
+        let mut buffer = BytesMut::new();
+        array.serialize(&mut buffer);
+
+        let mut buffer = buffer.freeze();
+
+        let parse = BaseSqlTypes::deserialize(
+            &BaseSqlTypesMapper::Array(Arc::new(BaseSqlTypesMapper::Integer)),
+            &mut buffer,
+        )?;
+
+        assert_eq!(parse, array);
+
+        Ok(())
+    }
+
+    #[test]
     //Used to map if we have the types linked up right
     pub fn test_type_matches() {
         assert!(BaseSqlTypes::Bool(true).type_matches(&BaseSqlTypesMapper::Bool));
@@ -396,5 +417,26 @@ mod tests {
         assert!(!BaseSqlTypes::Text("foo".to_string()).type_matches(&BaseSqlTypesMapper::Integer));
         assert!(!BaseSqlTypes::Text("foo".to_string()).type_matches(&BaseSqlTypesMapper::Uuid));
         assert!(BaseSqlTypes::Text("foo".to_string()).type_matches(&BaseSqlTypesMapper::Text));
+    }
+
+    #[test]
+    pub fn test_encoded_size() {
+        assert_eq!(
+            BaseSqlTypes::Array(vec![BaseSqlTypes::Integer(1), BaseSqlTypes::Integer(2)])
+                .encoded_size(),
+            9
+        );
+        assert_eq!(
+            BaseSqlTypes::Array(vec![
+                BaseSqlTypes::Text("Test".to_string()),
+                BaseSqlTypes::Text("Test".to_string())
+            ])
+            .encoded_size(),
+            11
+        );
+        assert_eq!(BaseSqlTypes::Bool(true).encoded_size(), 1);
+        assert_eq!(BaseSqlTypes::Integer(1).encoded_size(), 4);
+        assert_eq!(BaseSqlTypes::Text("Test".to_string()).encoded_size(), 5);
+        assert_eq!(BaseSqlTypes::Uuid(Uuid::new_v4()).encoded_size(), 16);
     }
 }

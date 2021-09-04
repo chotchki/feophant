@@ -53,7 +53,8 @@ Reasonable application error type creation: https://github.com/dtolnay/anyhow
 
 Library Errors: https://github.com/dtolnay/thiserror
 
-Rust's inability to treat enum variants as a type is a HUGE pain. I cheated and separated serialization from deserialization.
+Rust's inability to treat enum variants as a type is a HUGE pain. I end up having an enum to hold data and another enum to validate and match the sub type. The [RFC](https://github.com/rust-lang/rfcs/pull/2593) to fix this was postponed indefinately.
+
 
 ## Legal Stuff (Note I'm not a lawyer!)
 

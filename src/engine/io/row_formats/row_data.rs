@@ -443,7 +443,7 @@ mod tests {
                 ),
                 Attribute::new(
                     "header3".to_string(),
-                    BaseSqlTypesMapper::Text,
+                    BaseSqlTypesMapper::Array(Arc::new(BaseSqlTypesMapper::Integer)),
                     Nullable::NotNull,
                     None,
                 ),
@@ -452,14 +452,18 @@ mod tests {
             vec![],
         ));
 
-        let test = RowData::new(table.sql_type.clone(),
+        let test = RowData::new(
+            table.sql_type.clone(),
             TransactionId::new(1),
             None,
             get_item_pointer(),
             SqlTuple(vec![
                 Some(BaseSqlTypes::Text("this is a test".to_string())),
                 None,
-                Some(BaseSqlTypes::Text("blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah".to_string())),
+                Some(BaseSqlTypes::Array(vec![
+                    BaseSqlTypes::Integer(1),
+                    BaseSqlTypes::Integer(2),
+                ])),
             ]),
         );
 

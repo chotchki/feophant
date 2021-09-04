@@ -1,6 +1,6 @@
 use crate::constants::SystemTables;
 use crate::engine::objects::types::BaseSqlTypes;
-use crate::engine::objects::SqlTuple;
+use crate::engine::objects::{ConstraintMapper, SqlTuple};
 
 use super::io::{ConstraintManager, ConstraintManagerError};
 use super::objects::types::SqlTypeDefinition;
@@ -149,6 +149,8 @@ impl Executor {
 
         cm.insert_row(tran_id, pg_class, table_row).await?;
 
+        let mut primary_key_cols = vec![];
+
         let pg_attribute = SystemTables::PgAttribute.value();
         for i in 0..create_table.provided_columns.len() {
             let cm = self.cons_man.clone();
@@ -168,7 +170,49 @@ impl Executor {
             cm.clone()
                 .insert_row(tran_id, pg_attribute.clone(), table_row)
                 .await?;
+
+            if create_table.provided_columns[i].primary_key {
+                primary_key_cols.push(BaseSqlTypes::Integer(i_u32));
+            }
         }
+
+        if !primary_key_cols.is_empty() {
+            //We assume the the order that columns with primary key were defined are the order desired
+            let pk_id = Uuid::new_v4();
+            let primary_key_index = SqlTuple(vec![
+                Some(BaseSqlTypes::Uuid(pk_id)),
+                Some(BaseSqlTypes::Uuid(table_id)),
+                Some(BaseSqlTypes::Text(format!(
+                    "{}_primary_key_index",
+                    create_table.table_name
+                ))),
+                Some(BaseSqlTypes::Array(primary_key_cols)),
+                Some(BaseSqlTypes::Bool(true)),
+            ]);
+            let pg_index = SystemTables::PgIndex.value();
+            self.cons_man
+                .clone()
+                .insert_row(tran_id, pg_index, primary_key_index)
+                .await?;
+
+            //Now we can insert the constraint
+            let primary_key_constraint = SqlTuple(vec![
+                Some(BaseSqlTypes::Uuid(Uuid::new_v4())),
+                Some(BaseSqlTypes::Uuid(table_id)),
+                Some(BaseSqlTypes::Uuid(pk_id)),
+                Some(BaseSqlTypes::Text(format!(
+                    "{}_primary_key",
+                    create_table.table_name
+                ))),
+                Some(BaseSqlTypes::Text(ConstraintMapper::PrimaryKey.to_string())),
+            ]);
+            let pg_constraint = SystemTables::PgConstraint.value();
+            self.cons_man
+                .clone()
+                .insert_row(tran_id, pg_constraint, primary_key_constraint)
+                .await?;
+        }
+
         Ok(vec![])
     }
 }

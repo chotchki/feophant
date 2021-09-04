@@ -1,9 +1,10 @@
 mod attribute;
 pub use attribute::Attribute;
 
-mod constraint;
-pub use constraint::Constraint;
-pub use constraint::PrimaryKeyConstraint;
+mod constraints;
+pub use constraints::Constraint;
+pub use constraints::ConstraintMapper;
+pub use constraints::PrimaryKeyConstraint;
 
 mod index;
 pub use index::Index;
