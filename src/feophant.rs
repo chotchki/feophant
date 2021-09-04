@@ -50,7 +50,7 @@ impl FeOphant {
     /// Starts up the actual server, should be started as its own task
     /// Send on the shutdown_recv to shut it down.
     pub async fn start(&self, shutdown_recv: UnboundedReceiver<Sender<()>>) {
-        let mut shutdown_sender: Option<Sender<()>> = None;
+        let shutdown_sender: Option<Sender<()>>;
         info!("Up and listening on port {}", self.port);
 
         let listen = &self.listener;
