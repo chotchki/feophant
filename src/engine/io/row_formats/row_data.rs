@@ -64,8 +64,7 @@ impl RowData {
     pub fn serialize(&self, buffer: &mut impl BufMut) {
         buffer.put_u64_le(self.min.get_u64());
         buffer.put_u64_le(self.max.unwrap_or_else(|| TransactionId::new(0)).get_u64());
-
-        buffer.put(self.item_pointer.serialize());
+        self.item_pointer.serialize(buffer);
 
         //If there is null we add it to the flags and write a nullmask
         let mut mask = InfoMask::empty();

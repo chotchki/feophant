@@ -3,7 +3,7 @@
 //!
 //! We will be treating this a little different since our size will be based on usize
 
-use crate::engine::io::page_formats::PageOffset;
+use crate::engine::io::page_formats::{PageOffset, PageOffsetError};
 use crate::engine::io::ConstEncodedSize;
 
 use super::super::page_formats::{UInt12, UInt12Error};
@@ -25,28 +25,15 @@ impl ItemPointer {
         ItemPointer { page, count }
     }
 
-    pub fn serialize(&self) -> Bytes {
-        let mut buffer = BytesMut::with_capacity(size_of::<ItemPointer>());
-
-        buffer.put_slice(&self.page.0.to_le_bytes());
-        UInt12::serialize_packed(&mut buffer, &[self.count]);
-
-        buffer.freeze()
+    pub fn serialize(&self, buffer: &mut impl BufMut) {
+        self.page.serialize(buffer);
+        UInt12::serialize_packed(buffer, &[self.count]);
     }
 
     pub fn parse(buffer: &mut impl Buf) -> Result<Self, ItemPointerError> {
-        if buffer.remaining() < size_of::<usize>() {
-            return Err(ItemPointerError::BufferTooShort(
-                size_of::<usize>(),
-                buffer.remaining(),
-            ));
-        }
-
-        let value = buffer.get_uint_le(size_of::<usize>());
-        let page = usize::try_from(value)?;
-
+        let po = PageOffset::parse(buffer)?;
         let items = UInt12::parse_packed(buffer, 1)?;
-        Ok(ItemPointer::new(PageOffset(page), items[0]))
+        Ok(ItemPointer::new(po, items[0]))
     }
 }
 
@@ -66,8 +53,8 @@ impl ConstEncodedSize for ItemPointer {
 
 #[derive(Debug, Error, PartialEq)]
 pub enum ItemPointerError {
-    #[error("Not enough space to parse usize need {0} got {1}")]
-    BufferTooShort(usize, usize),
+    #[error(transparent)]
+    PageOffsetError(#[from] PageOffsetError),
     #[error(transparent)]
     TryFromIntError(#[from] TryFromIntError),
     #[error(transparent)]
@@ -84,8 +71,9 @@ mod tests {
     fn test_item_pointer_roundtrip() -> Result<(), Box<dyn std::error::Error>> {
         let test = ItemPointer::new(PageOffset(1), UInt12::new(1).unwrap());
 
-        let mut test_serial = test.clone().serialize();
-        let test_reparse = ItemPointer::parse(&mut test_serial)?;
+        let mut buffer = BytesMut::new();
+        test.serialize(&mut buffer);
+        let test_reparse = ItemPointer::parse(&mut buffer.freeze())?;
 
         assert_eq!(test, test_reparse);
         Ok(())
@@ -96,7 +84,9 @@ mod tests {
         let parse = ItemPointer::parse(&mut Bytes::new());
 
         assert_eq!(
-            Err(ItemPointerError::BufferTooShort(size_of::<usize>(), 0)),
+            Err(ItemPointerError::PageOffsetError(
+                PageOffsetError::BufferTooShort(size_of::<usize>(), 0)
+            )),
             parse
         );
 

@@ -2,7 +2,9 @@ use crate::{
     constants::{PAGES_PER_FILE, PAGE_SIZE},
     engine::io::ConstEncodedSize,
 };
+use bytes::{Buf, BufMut};
 use std::{
+    convert::TryFrom,
     fmt,
     mem::size_of,
     num::TryFromIntError,
@@ -14,6 +16,26 @@ use thiserror::Error;
 pub struct PageOffset(pub usize);
 
 impl PageOffset {
+    pub fn serialize(&self, buffer: &mut impl BufMut) {
+        //TODO switch this and other serialize calls to usize based once my pull request is accepted
+        //https://github.com/tokio-rs/bytes/pull/511
+        buffer.put_uint_le(self.0 as u64, size_of::<usize>());
+    }
+
+    pub fn parse(buffer: &mut impl Buf) -> Result<Self, PageOffsetError> {
+        if buffer.remaining() < size_of::<usize>() {
+            return Err(PageOffsetError::BufferTooShort(
+                size_of::<usize>(),
+                buffer.remaining(),
+            ));
+        }
+
+        let value = buffer.get_uint_le(size_of::<usize>());
+        let page = usize::try_from(value)?;
+
+        Ok(PageOffset(page))
+    }
+
     /// This will calculate a page offset based on the max file count and the offset from the first
     /// non-zero page in a file.
     ///
@@ -101,8 +123,10 @@ impl Mul for PageOffset {
     }
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, PartialEq)]
 pub enum PageOffsetError {
+    #[error("Not enough space to parse usize need {0} got {1}")]
+    BufferTooShort(usize, usize),
     #[error(transparent)]
     TryFromIntError(#[from] TryFromIntError),
 }
