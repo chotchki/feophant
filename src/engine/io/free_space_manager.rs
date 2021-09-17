@@ -30,7 +30,7 @@ impl FreeSpaceManager {
             page_type: PageType::FreeSpaceMap,
         };
         loop {
-            let page_handle = self.lock_cache_manager.get_page(free_id, offset).await?;
+            let page_handle = self.lock_cache_manager.get_page(free_id, &offset).await?;
             match page_handle.as_ref() {
                 Some(s) => {
                     let mut page_frozen = s.clone().freeze();
@@ -53,7 +53,7 @@ impl FreeSpaceManager {
                     let next_po = self.lock_cache_manager.get_offset(free_id).await?;
                     let mut new_page_handle = self
                         .lock_cache_manager
-                        .get_page_for_update(free_id, next_po)
+                        .get_page_for_update(free_id, &next_po)
                         .await?;
 
                     let mut buffer = BytesMut::with_capacity(PAGE_SIZE as usize);
@@ -84,7 +84,7 @@ impl FreeSpaceManager {
         let (po, offset) = po.get_bitmask_offset();
         let mut page_handle = self
             .lock_cache_manager
-            .get_page_for_update(free_id, po)
+            .get_page_for_update(free_id, &po)
             .await?;
         let mut page = page_handle
             .as_mut()

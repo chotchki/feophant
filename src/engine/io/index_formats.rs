@@ -1,3 +1,7 @@
+mod split_branch;
+pub use split_branch::split_branch;
+pub use split_branch::SplitBranchError;
+
 mod btree_branch;
 pub use btree_branch::BTreeBranch;
 pub use btree_branch::BTreeBranchError;
@@ -9,3 +13,7 @@ pub use btree_leaf::BTreeLeafError;
 mod btree_node;
 pub use btree_node::BTreeNode;
 pub use btree_node::BTreeNodeError;
+
+mod index_search;
+pub use index_search::index_search_start;
+pub use index_search::IndexSearchError;

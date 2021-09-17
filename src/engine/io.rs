@@ -12,6 +12,9 @@ mod index_formats;
 mod index_manager;
 pub use index_manager::IndexManager;
 
+mod index_row_manager;
+pub use index_row_manager::IndexRowManager;
+
 mod file_manager;
 pub use file_manager::FileManager;
 pub use file_manager::FileManagerError;

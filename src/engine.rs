@@ -35,6 +35,7 @@ use transactions::{TransactionId, TransactionManager};
 
 use self::io::ConstraintManager;
 use self::io::FileManager;
+use self::io::IndexManager;
 use self::io::LockCacheManager;
 use self::objects::QueryResult;
 use std::ops::Deref;
@@ -50,11 +51,10 @@ pub struct Engine {
 
 impl Engine {
     pub fn new(file_manager: Arc<FileManager>, tran_manager: TransactionManager) -> Engine {
-        let vis_row_man = VisibleRowManager::new(
-            RowManager::new(LockCacheManager::new(file_manager)),
-            tran_manager,
-        );
-        let con_man = ConstraintManager::new(vis_row_man.clone());
+        let lock_cache = LockCacheManager::new(file_manager);
+        let vis_row_man = VisibleRowManager::new(RowManager::new(lock_cache.clone()), tran_manager);
+        let index_manager = IndexManager::new(lock_cache);
+        let con_man = ConstraintManager::new(index_manager, vis_row_man.clone());
         Engine {
             analyzer: Analyzer::new(vis_row_man),
             executor: Executor::new(con_man),

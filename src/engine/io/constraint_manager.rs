@@ -16,7 +16,7 @@ use crate::{
 
 use super::{
     row_formats::{ItemPointer, RowData},
-    VisibleRowManager, VisibleRowManagerError,
+    IndexManager, VisibleRowManager, VisibleRowManagerError,
 };
 
 /// The goal of the constraint manager is to ensure all constrainst are satisfied
@@ -24,12 +24,16 @@ use super::{
 /// of RowData
 #[derive(Clone, Debug)]
 pub struct ConstraintManager {
+    index_manager: IndexManager,
     vis_row_man: VisibleRowManager,
 }
 
 impl ConstraintManager {
-    pub fn new(vis_row_man: VisibleRowManager) -> ConstraintManager {
-        ConstraintManager { vis_row_man }
+    pub fn new(index_manager: IndexManager, vis_row_man: VisibleRowManager) -> ConstraintManager {
+        ConstraintManager {
+            index_manager,
+            vis_row_man,
+        }
     }
 
     pub async fn insert_row(
@@ -38,12 +42,15 @@ impl ConstraintManager {
         table: Arc<Table>,
         user_data: SqlTuple,
     ) -> Result<ItemPointer, ConstraintManagerError> {
+        //column count check
         if table.attributes.len() != user_data.0.len() {
             return Err(ConstraintManagerError::TableRowSizeMismatch(
                 table.attributes.len(),
                 user_data.0.len(),
             ));
         }
+
+        //null checks
         for (data, column) in user_data.0.iter().zip(table.attributes.clone()) {
             match data {
                 Some(d) => {
@@ -58,6 +65,17 @@ impl ConstraintManager {
                     if column.nullable != Nullable::Null {
                         return Err(ConstraintManagerError::UnexpectedNull(column.name));
                     }
+                }
+            }
+        }
+
+        //constraint check
+        for c in &table.constraints {
+            match c {
+                crate::engine::objects::Constraint::PrimaryKey(p) => {
+                    //So for a primary key we have to check for no other dups in the table
+
+                    //So what I want to do is ask the index manager to to get active rows matching the key
                 }
             }
         }

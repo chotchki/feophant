@@ -20,12 +20,12 @@
 //! Note: Min size for all indexes is 2x PAGE_SIZE since the root page is used to mean None. This will change
 //! since the root page will have a pointer so we can lock and split the root node.
 
-use crate::engine::io::page_formats::{ItemIdDataError, PageOffset};
-use crate::engine::io::row_formats::NullMaskError;
+use crate::engine::io::page_formats::PageOffset;
+use crate::engine::io::row_formats::{ItemPointer, ItemPointerError, NullMaskError};
 use crate::engine::io::{parse_size, ConstEncodedSize, SizeError};
 use crate::engine::objects::types::{BaseSqlTypes, BaseSqlTypesError};
 use crate::engine::{
-    io::{page_formats::ItemIdData, row_formats::NullMask},
+    io::row_formats::NullMask,
     objects::{Index, SqlTuple},
 };
 use bytes::{Buf, BufMut};
@@ -80,10 +80,11 @@ impl BTreeNode {
         let node_type = buffer.get_u8();
 
         let parent_node = Self::parse_page(buffer)?;
-        let left_node = Self::parse_page(buffer)?;
-        let right_node = Self::parse_page(buffer)?;
 
         if node_type == NodeType::Leaf as u8 {
+            let left_node = Self::parse_page(buffer)?;
+            let right_node = Self::parse_page(buffer)?;
+
             let bucket_count = parse_size(buffer)?;
             let mut buckets = BTreeMap::new();
 
@@ -93,8 +94,8 @@ impl BTreeNode {
                 let item_count = parse_size(buffer)?;
                 let mut items = vec![];
                 for _ in 0..item_count {
-                    let item_id = ItemIdData::parse(buffer)?;
-                    items.push(item_id);
+                    let item_ptr = ItemPointer::parse(buffer)?;
+                    items.push(item_ptr);
                 }
 
                 buckets.insert(bucket, items);
@@ -107,6 +108,8 @@ impl BTreeNode {
                 nodes: buckets,
             }));
         } else {
+            let parent = parent_node.ok_or_else(BTreeNodeError::ParentNull)?;
+
             let keys_count = parse_size(buffer)?;
             let mut keys = Vec::with_capacity(keys_count);
 
@@ -132,9 +135,7 @@ impl BTreeNode {
             }
 
             return Ok(BTreeNode::Branch(BTreeBranch {
-                parent_node,
-                left_node,
-                right_node,
+                parent_node: parent,
                 keys,
                 pointers,
             }));
@@ -182,7 +183,7 @@ pub enum BTreeNodeError {
     #[error("Buffer too short to parse")]
     BufferTooShort(),
     #[error(transparent)]
-    ItemIdDataError(#[from] ItemIdDataError),
+    ItemPointerError(#[from] ItemPointerError),
     #[error("Key too large size: {0}")]
     KeyTooLarge(usize),
     #[error("Missing Data for Node Type need {0}, have {1}")]
@@ -191,6 +192,8 @@ pub enum BTreeNodeError {
     MissingPointerData(usize, usize),
     #[error(transparent)]
     NullMaskError(#[from] NullMaskError),
+    #[error("Parent cannot be 0")]
+    ParentNull(),
     #[error(transparent)]
     SizeError(#[from] SizeError),
     #[error(transparent)]

@@ -30,10 +30,21 @@ impl LockCacheManager {
         Ok(self.file_manager.get_offset(&page_id).await?)
     }
 
+    pub async fn get_offset_non_zero(
+        &self,
+        page_id: PageId,
+    ) -> Result<PageOffset, LockCacheManagerError> {
+        let mut offset = PageOffset(0);
+        while offset == PageOffset(0) {
+            offset = self.file_manager.get_offset(&page_id).await?;
+        }
+        Ok(offset)
+    }
+
     pub async fn get_page(
         &self,
         page_id: PageId,
-        offset: PageOffset,
+        offset: &PageOffset,
     ) -> Result<OwnedRwLockReadGuard<Option<BytesMut>>, LockCacheManagerError> {
         Ok(self
             .get_page_internal(page_id, offset)
@@ -45,7 +56,7 @@ impl LockCacheManager {
     pub async fn get_page_for_update(
         &self,
         page_id: PageId,
-        offset: PageOffset,
+        offset: &PageOffset,
     ) -> Result<OwnedRwLockWriteGuard<Option<BytesMut>>, LockCacheManagerError> {
         Ok(self
             .get_page_internal(page_id, offset)
@@ -57,16 +68,16 @@ impl LockCacheManager {
     async fn get_page_internal(
         &self,
         page_id: PageId,
-        offset: PageOffset,
+        offset: &PageOffset,
     ) -> Result<Arc<RwLock<Option<BytesMut>>>, LockCacheManagerError> {
         let mut cache = self.cache.lock().await;
-        match cache.get(&(page_id, offset)) {
+        match cache.get(&(page_id, *offset)) {
             Some(s) => Ok(s.clone()),
             None => {
                 //Cache miss, let's make the RwLock and drop the mutex
                 let page_lock = Arc::new(RwLock::new(None));
                 let mut page_lock_write = page_lock.write().await;
-                cache.put((page_id, offset), page_lock.clone());
+                cache.put((page_id, *offset), page_lock.clone());
                 drop(cache);
 
                 //Now we can load the underlying page without blocking everyone
@@ -157,11 +168,11 @@ mod tests {
         let first_offset = lm.get_offset(page_id).await?;
         assert_eq!(first_offset, PageOffset(0));
 
-        let first_handle = lm.get_page(page_id, first_offset).await?;
+        let first_handle = lm.get_page(page_id, &first_offset).await?;
         assert_eq!(first_handle.as_ref(), None);
         drop(first_handle);
 
-        let mut second_handle = lm.get_page_for_update(page_id, first_offset).await?;
+        let mut second_handle = lm.get_page_for_update(page_id, &first_offset).await?;
         assert_eq!(second_handle.as_ref(), None);
 
         let page = get_test_page(1);
@@ -169,21 +180,21 @@ mod tests {
 
         lm.update_page(page_id, first_offset, second_handle).await?;
 
-        let third_handle = lm.get_page(page_id, first_offset).await?;
+        let third_handle = lm.get_page(page_id, &first_offset).await?;
         let page2 = get_test_page(1);
         assert_eq!(third_handle.as_ref(), Some(&page2));
 
         let fourth_offset = lm.get_offset(page_id).await?;
         assert_eq!(fourth_offset, PageOffset(1));
 
-        let mut fourth_handle = lm.get_page_for_update(page_id, fourth_offset).await?;
+        let mut fourth_handle = lm.get_page_for_update(page_id, &fourth_offset).await?;
         assert_eq!(fourth_handle.as_ref(), None);
 
         let page3 = get_test_page(2);
         fourth_handle.replace(page3);
         lm.add_page(page_id, fourth_offset, fourth_handle).await?;
 
-        let mut fifth_handle = lm.get_page_for_update(page_id, fourth_offset).await?;
+        let mut fifth_handle = lm.get_page_for_update(page_id, &fourth_offset).await?;
         let fifth_page = fifth_handle
             .as_mut()
             .ok_or(LockCacheManagerError::PageMissing())?;
@@ -193,13 +204,32 @@ mod tests {
         fifth_page.extend_from_slice(&page4[0..page4.len()]);
         lm.update_page(page_id, fourth_offset, fifth_handle).await?;
 
-        let mut sixth_handle = lm.get_page_for_update(page_id, fourth_offset).await?;
+        let mut sixth_handle = lm.get_page_for_update(page_id, &fourth_offset).await?;
         let sixth_page = sixth_handle
             .as_mut()
             .ok_or(LockCacheManagerError::PageMissing())?;
 
         let test_page = get_test_page(3);
         assert_eq!(sixth_page, &test_page);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_nonzero() -> Result<(), Box<dyn std::error::Error>> {
+        let tmp = TempDir::new()?;
+        let tmp_dir = tmp.path().as_os_str().to_os_string();
+
+        let fm = Arc::new(FileManager::new(tmp_dir)?);
+        let lm = LockCacheManager::new(fm);
+
+        let page_id = PageId {
+            resource_key: Uuid::new_v4(),
+            page_type: PageType::Data,
+        };
+
+        let offset = lm.get_offset_non_zero(page_id).await?;
+        assert_ne!(offset, PageOffset(0));
 
         Ok(())
     }

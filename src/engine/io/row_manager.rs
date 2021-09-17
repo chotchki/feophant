@@ -55,7 +55,7 @@ impl RowManager {
         };
         let mut page_handle = self
             .lock_cache_manager
-            .get_page_for_update(page_id, row_pointer.page)
+            .get_page_for_update(page_id, &row_pointer.page)
             .await?;
         let page_buffer = page_handle
             .as_mut()
@@ -105,7 +105,7 @@ impl RowManager {
         };
         let mut old_page_handle = self
             .lock_cache_manager
-            .get_page_for_update(page_id, row_pointer.page)
+            .get_page_for_update(page_id, &row_pointer.page)
             .await?;
         let old_page_buffer = old_page_handle
             .as_mut()
@@ -167,7 +167,7 @@ impl RowManager {
 
         let page_handle = self
             .lock_cache_manager
-            .get_page(page_id, row_pointer.page)
+            .get_page(page_id, &row_pointer.page)
             .await?;
         let page_bytes = page_handle
             .as_ref()
@@ -201,7 +201,7 @@ impl RowManager {
             let mut page_num = PageOffset(0);
 
             loop {
-                let page_handle = lock_cache_manager.get_page(page_id, page_num).await?;
+                let page_handle = lock_cache_manager.get_page(page_id, &page_num).await?;
                 match page_handle.as_ref() {
                     Some(s) => {
                         let page = PageData::parse(table.clone(), page_num, s)?;
@@ -232,7 +232,7 @@ impl RowManager {
             let next_free_page = self.free_space_manager.get_next_free_page(page_id).await?;
             let mut page_bytes = self
                 .lock_cache_manager
-                .get_page_for_update(page_id, next_free_page)
+                .get_page_for_update(page_id, &next_free_page)
                 .await?;
             match page_bytes.as_mut() {
                 Some(p) => {
@@ -259,7 +259,7 @@ impl RowManager {
                     let new_page_offset = self.lock_cache_manager.get_offset(page_id).await?;
                     let mut new_page_handle = self
                         .lock_cache_manager
-                        .get_page_for_update(page_id, new_page_offset)
+                        .get_page_for_update(page_id, &new_page_offset)
                         .await?;
 
                     let mut new_page = PageData::new(new_page_offset);
