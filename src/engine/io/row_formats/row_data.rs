@@ -5,6 +5,7 @@ use super::super::super::objects::Table;
 use super::super::super::transactions::TransactionId;
 use super::null_mask::NullMaskError;
 use super::{InfoMask, ItemPointer, ItemPointerError, NullMask};
+use crate::engine::io::format_traits::{Parseable, Serializable};
 use crate::engine::io::{ConstEncodedSize, EncodedSize, SelfEncodedSize};
 use crate::engine::objects::types::{BaseSqlTypes, BaseSqlTypesError, SqlTypeDefinition};
 use crate::engine::objects::SqlTuple;
@@ -59,24 +60,6 @@ impl RowData {
     pub fn get_column_not_null(&self, name: &str) -> Result<BaseSqlTypes, RowDataError> {
         self.get_column(name)?
             .ok_or_else(|| RowDataError::UnexpectedNull(name.to_string()))
-    }
-
-    pub fn serialize(&self, buffer: &mut impl BufMut) {
-        buffer.put_u64_le(self.min.get_u64());
-        buffer.put_u64_le(self.max.unwrap_or_else(|| TransactionId::new(0)).get_u64());
-        self.item_pointer.serialize(buffer);
-
-        //If there is null we add it to the flags and write a nullmask
-        let mut mask = InfoMask::empty();
-        if self.user_data.iter().any(|x| x.is_none()) {
-            mask = InfoMask::HAS_NULL;
-            buffer.put_u8(mask.bits());
-            buffer.put(NullMask::serialize(&self.user_data));
-        } else {
-            buffer.put_u8(mask.bits());
-        }
-
-        self.user_data.serialize(buffer);
     }
 
     pub fn parse(table: Arc<Table>, row_buffer: &mut impl Buf) -> Result<RowData, RowDataError> {
@@ -183,6 +166,26 @@ impl EncodedSize<&SqlTuple> for RowData {
             + InfoMask::encoded_size()
             + NullMask::encoded_size(input)
             + input.encoded_size()
+    }
+}
+
+impl Serializable for RowData {
+    fn serialize(&self, buffer: &mut impl BufMut) {
+        buffer.put_u64_le(self.min.get_u64());
+        buffer.put_u64_le(self.max.unwrap_or_else(|| TransactionId::new(0)).get_u64());
+        self.item_pointer.serialize(buffer);
+
+        //If there is null we add it to the flags and write a nullmask
+        let mut mask = InfoMask::empty();
+        if self.user_data.iter().any(|x| x.is_none()) {
+            mask = InfoMask::HAS_NULL;
+            buffer.put_u8(mask.bits());
+            buffer.put(NullMask::serialize(&self.user_data));
+        } else {
+            buffer.put_u8(mask.bits());
+        }
+
+        self.user_data.serialize(buffer);
     }
 }
 
