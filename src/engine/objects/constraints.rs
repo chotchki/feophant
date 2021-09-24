@@ -21,11 +21,7 @@ pub enum ConstraintMapper {
 
 impl Display for ConstraintMapper {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            PrimaryKey => {
-                write!(f, "PrimaryKey")
-            }
-        }
+        write!(f, "PrimaryKey")
     }
 }
 
