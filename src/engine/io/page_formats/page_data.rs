@@ -1,3 +1,4 @@
+use crate::engine::io::format_traits::{Parseable, Serializable};
 use crate::engine::io::{ConstEncodedSize, EncodedSize};
 use crate::engine::objects::SqlTuple;
 use crate::engine::transactions::TransactionId;
@@ -95,20 +96,6 @@ impl PageData {
         }
     }
 
-    pub fn serialize(&self, buffer: &mut impl BufMut) {
-        self.page_header.serialize(buffer);
-
-        //Now write items data in order
-        self.item_ids.iter().for_each(|f| f.serialize(buffer));
-
-        //Fill the free space
-        let free_space = vec![0; self.page_header.get_free_space()];
-        buffer.put_slice(&free_space);
-
-        //Write items in reverse order
-        self.rows.iter().rev().for_each(|r| r.serialize(buffer));
-    }
-
     pub fn parse(
         table: Arc<Table>,
         page: PageOffset,
@@ -141,8 +128,22 @@ impl PageData {
             rows,
         })
     }
+}
 
-    //Todo implement updates, just unsure if it should be here
+impl Serializable for PageData {
+    fn serialize(&self, buffer: &mut impl BufMut) {
+        self.page_header.serialize(buffer);
+
+        //Now write items data in order
+        self.item_ids.iter().for_each(|f| f.serialize(buffer));
+
+        //Fill the free space
+        let free_space = vec![0; self.page_header.get_free_space()];
+        buffer.put_slice(&free_space);
+
+        //Write items in reverse order
+        self.rows.iter().rev().for_each(|r| r.serialize(buffer));
+    }
 }
 
 #[derive(Debug, Error)]

@@ -1,6 +1,9 @@
 //! Pointer type to indicate where an item is inside a page
 //! See here for doc: https://www.postgresql.org/docs/current/storage-page-layout.html
-use crate::engine::io::ConstEncodedSize;
+use crate::engine::io::{
+    format_traits::{Parseable, Serializable},
+    ConstEncodedSize,
+};
 
 use super::{UInt12, UInt12Error};
 use bytes::{Buf, BufMut};
@@ -23,20 +26,25 @@ impl ItemIdData {
         let length_usize = self.length.to_u16() as usize;
         offset_usize..(offset_usize + length_usize)
     }
-
-    pub fn serialize(&self, buffer: &mut impl BufMut) {
-        UInt12::serialize_packed(buffer, &[self.offset, self.length]);
-    }
-
-    pub fn parse(buffer: &mut impl Buf) -> Result<Self, ItemIdDataError> {
-        let items = UInt12::parse_packed(buffer, 2)?;
-        Ok(ItemIdData::new(items[0], items[1]))
-    }
 }
 
 impl ConstEncodedSize for ItemIdData {
     fn encoded_size() -> usize {
         3
+    }
+}
+
+impl Parseable<ItemIdDataError> for ItemIdData {
+    type Output = Self;
+    fn parse(buffer: &mut impl Buf) -> Result<Self, ItemIdDataError> {
+        let items = UInt12::parse_packed(buffer, 2)?;
+        Ok(ItemIdData::new(items[0], items[1]))
+    }
+}
+
+impl Serializable for ItemIdData {
+    fn serialize(&self, buffer: &mut impl BufMut) {
+        UInt12::serialize_packed(buffer, &[self.offset, self.length]);
     }
 }
 
@@ -46,4 +54,28 @@ pub enum ItemIdDataError {
     InsufficentData(usize),
     #[error(transparent)]
     UInt12Error(#[from] UInt12Error),
+}
+
+#[cfg(test)]
+mod tests {
+    use bytes::BytesMut;
+
+    use crate::constants::PAGE_SIZE;
+
+    use super::*;
+
+    #[test]
+    fn test_roundtrip() -> Result<(), Box<dyn std::error::Error>> {
+        let iid = ItemIdData::new(UInt12::new(1)?, UInt12::new(2)?);
+
+        let mut buffer = BytesMut::with_capacity(PAGE_SIZE as usize);
+        iid.serialize(&mut buffer);
+
+        let mut buffer = buffer.freeze();
+        let result = ItemIdData::parse(&mut buffer)?;
+
+        assert_eq!(iid, result);
+
+        Ok(())
+    }
 }

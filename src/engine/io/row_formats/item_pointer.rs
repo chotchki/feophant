@@ -3,6 +3,7 @@
 //!
 //! We will be treating this a little different since our size will be based on usize
 
+use crate::engine::io::format_traits::{Parseable, Serializable};
 use crate::engine::io::page_formats::{PageOffset, PageOffsetError};
 use crate::engine::io::ConstEncodedSize;
 
@@ -24,16 +25,11 @@ impl ItemPointer {
     pub fn new(page: PageOffset, count: UInt12) -> ItemPointer {
         ItemPointer { page, count }
     }
+}
 
-    pub fn serialize(&self, buffer: &mut impl BufMut) {
-        self.page.serialize(buffer);
-        UInt12::serialize_packed(buffer, &[self.count]);
-    }
-
-    pub fn parse(buffer: &mut impl Buf) -> Result<Self, ItemPointerError> {
-        let po = PageOffset::parse(buffer)?;
-        let items = UInt12::parse_packed(buffer, 1)?;
-        Ok(ItemPointer::new(po, items[0]))
+impl ConstEncodedSize for ItemPointer {
+    fn encoded_size() -> usize {
+        size_of::<usize>() + UInt12::encoded_size()
     }
 }
 
@@ -45,9 +41,19 @@ impl fmt::Display for ItemPointer {
     }
 }
 
-impl ConstEncodedSize for ItemPointer {
-    fn encoded_size() -> usize {
-        size_of::<usize>() + UInt12::encoded_size()
+impl Parseable<ItemPointerError> for ItemPointer {
+    type Output = Self;
+    fn parse(buffer: &mut impl Buf) -> Result<Self, ItemPointerError> {
+        let po = PageOffset::parse(buffer)?;
+        let items = UInt12::parse_packed(buffer, 1)?;
+        Ok(ItemPointer::new(po, items[0]))
+    }
+}
+
+impl Serializable for ItemPointer {
+    fn serialize(&self, buffer: &mut impl BufMut) {
+        self.page.serialize(buffer);
+        UInt12::serialize_packed(buffer, &[self.count]);
     }
 }
 

@@ -1,6 +1,6 @@
 //! See https://www.postgresql.org/docs/current/storage-page-layout.html for reference documentation
 //! I'm only implementing enough for my needs until proven otherwise
-use crate::engine::io::ConstEncodedSize;
+use crate::engine::io::{format_traits::Parseable, ConstEncodedSize};
 
 use super::{ItemIdData, UInt12, UInt12Error};
 use bytes::{Buf, BufMut};
@@ -59,14 +59,6 @@ impl PageHeader {
     pub fn serialize(&self, buffer: &mut impl BufMut) {
         UInt12::serialize_packed(buffer, &[self.pd_lower, self.pd_upper]);
     }
-
-    pub fn parse(buffer: &mut impl Buf) -> Result<Self, PageHeaderError> {
-        let items = UInt12::parse_packed(buffer, 2)?;
-        Ok(PageHeader {
-            pd_lower: items[0],
-            pd_upper: items[1],
-        })
-    }
 }
 
 impl Default for PageHeader {
@@ -78,6 +70,17 @@ impl Default for PageHeader {
 impl ConstEncodedSize for PageHeader {
     fn encoded_size() -> usize {
         3
+    }
+}
+
+impl Parseable<PageHeaderError> for PageHeader {
+    type Output = Self;
+    fn parse(buffer: &mut impl Buf) -> Result<Self, PageHeaderError> {
+        let items = UInt12::parse_packed(buffer, 2)?;
+        Ok(PageHeader {
+            pd_lower: items[0],
+            pd_upper: items[1],
+        })
     }
 }
 

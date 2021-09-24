@@ -1,6 +1,9 @@
 use crate::{
     constants::{PAGES_PER_FILE, PAGE_SIZE},
-    engine::io::ConstEncodedSize,
+    engine::io::{
+        format_traits::{Parseable, Serializable},
+        ConstEncodedSize,
+    },
 };
 use bytes::{Buf, BufMut};
 use std::{
@@ -9,6 +12,7 @@ use std::{
     mem::size_of,
     num::TryFromIntError,
     ops::{Add, AddAssign, Mul},
+    process::Output,
 };
 use thiserror::Error;
 
@@ -16,26 +20,6 @@ use thiserror::Error;
 pub struct PageOffset(pub usize);
 
 impl PageOffset {
-    pub fn serialize(&self, buffer: &mut impl BufMut) {
-        //TODO switch this and other serialize calls to usize based once my pull request is accepted
-        //https://github.com/tokio-rs/bytes/pull/511
-        buffer.put_uint_le(self.0 as u64, size_of::<usize>());
-    }
-
-    pub fn parse(buffer: &mut impl Buf) -> Result<Self, PageOffsetError> {
-        if buffer.remaining() < size_of::<usize>() {
-            return Err(PageOffsetError::BufferTooShort(
-                size_of::<usize>(),
-                buffer.remaining(),
-            ));
-        }
-
-        let value = buffer.get_uint_le(size_of::<usize>());
-        let page = usize::try_from(value)?;
-
-        Ok(PageOffset(page))
-    }
-
     /// This will calculate a page offset based on the max file count and the offset from the first
     /// non-zero page in a file.
     ///
@@ -115,11 +99,36 @@ impl fmt::Display for PageOffset {
     }
 }
 
+impl Parseable<PageOffsetError> for PageOffset {
+    type Output = Self;
+    fn parse(buffer: &mut impl Buf) -> Result<Self, PageOffsetError> {
+        if buffer.remaining() < size_of::<usize>() {
+            return Err(PageOffsetError::BufferTooShort(
+                size_of::<usize>(),
+                buffer.remaining(),
+            ));
+        }
+
+        let value = buffer.get_uint_le(size_of::<usize>());
+        let page = usize::try_from(value)?;
+
+        Ok(PageOffset(page))
+    }
+}
+
 impl Mul for PageOffset {
     type Output = PageOffset;
 
     fn mul(self, rhs: Self) -> Self::Output {
         PageOffset(self.0 * rhs.0)
+    }
+}
+
+impl Serializable for PageOffset {
+    fn serialize(&self, buffer: &mut impl BufMut) {
+        //TODO switch this and other serialize calls to usize based once my pull request is accepted
+        //https://github.com/tokio-rs/bytes/pull/511
+        buffer.put_uint_le(self.0 as u64, size_of::<usize>());
     }
 }
 
