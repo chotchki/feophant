@@ -6,6 +6,10 @@ mod btree_branch;
 pub use btree_branch::BTreeBranch;
 pub use btree_branch::BTreeBranchError;
 
+mod btree_first_page;
+pub use btree_first_page::BTreeFirstPage;
+pub use btree_first_page::BTreeFirstPageError;
+
 mod btree_leaf;
 pub use btree_leaf::BTreeLeaf;
 pub use btree_leaf::BTreeLeafError;
