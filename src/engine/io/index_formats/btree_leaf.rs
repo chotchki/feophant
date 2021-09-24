@@ -7,6 +7,7 @@ use crate::{
     engine::{
         io::{
             encode_size, expected_encoded_size,
+            format_traits::Serializable,
             page_formats::{ItemIdData, ItemIdDataError, PageOffset},
             row_formats::{ItemPointer, NullMask, NullMaskError},
             ConstEncodedSize, EncodedSize, SelfEncodedSize, SizeError,
@@ -14,22 +15,22 @@ use crate::{
         objects::{types::BaseSqlTypesError, SqlTuple},
     },
 };
-use bytes::{BufMut, BytesMut};
+use bytes::BufMut;
 use std::{collections::BTreeMap, num::TryFromIntError, ops::RangeBounds};
 use thiserror::Error;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct BTreeLeaf {
-    pub parent_node: Option<PageOffset>,
+    pub parent_node: PageOffset,
     pub left_node: Option<PageOffset>,
     pub right_node: Option<PageOffset>,
     pub nodes: BTreeMap<SqlTuple, Vec<ItemPointer>>,
 }
 
 impl BTreeLeaf {
-    pub fn new() -> BTreeLeaf {
+    pub fn new(parent_node: PageOffset) -> BTreeLeaf {
         BTreeLeaf {
-            parent_node: None,
+            parent_node,
             left_node: None,
             right_node: None,
             nodes: BTreeMap::new(),
@@ -145,33 +146,6 @@ impl BTreeLeaf {
             .flat_map(|(k, v)| v.clone())
             .collect()
     }
-
-    pub fn serialize(&self, buffer: &mut BytesMut) -> Result<(), BTreeLeafError> {
-        buffer.put_u8(NodeType::Leaf as u8);
-
-        BTreeNode::write_node(buffer, self.parent_node)?;
-        BTreeNode::write_node(buffer, self.left_node)?;
-        BTreeNode::write_node(buffer, self.right_node)?;
-
-        encode_size(buffer, self.nodes.len());
-
-        for (key, iids) in self.nodes.iter() {
-            BTreeNode::write_sql_tuple(buffer, key);
-
-            encode_size(buffer, iids.len());
-            for iid in iids {
-                iid.serialize(buffer);
-            }
-        }
-
-        //Zero pad to page size
-        if buffer.len() < PAGE_SIZE as usize {
-            let free_space = vec![0; PAGE_SIZE as usize - buffer.len()];
-            buffer.extend_from_slice(&free_space);
-        }
-
-        Ok(())
-    }
 }
 
 impl SelfEncodedSize for BTreeLeaf {
@@ -189,6 +163,27 @@ impl SelfEncodedSize for BTreeLeaf {
         }
 
         new_size
+    }
+}
+
+impl Serializable for BTreeLeaf {
+    fn serialize(&self, buffer: &mut impl BufMut) {
+        buffer.put_u8(NodeType::Leaf as u8);
+
+        self.parent_node.serialize(buffer);
+        BTreeNode::write_node(buffer, self.left_node);
+        BTreeNode::write_node(buffer, self.right_node);
+
+        encode_size(buffer, self.nodes.len());
+
+        for (key, iids) in self.nodes.iter() {
+            BTreeNode::write_sql_tuple(buffer, key);
+
+            encode_size(buffer, iids.len());
+            for iid in iids {
+                iid.serialize(buffer);
+            }
+        }
     }
 }
 
@@ -222,6 +217,7 @@ pub enum BTreeLeafError {
 
 #[cfg(test)]
 mod tests {
+    use core::slice::SplitInclusiveMut;
     use std::sync::Arc;
 
     use super::*;
@@ -235,6 +231,7 @@ mod tests {
             },
         },
     };
+    use bytes::BytesMut;
     use uuid::Uuid;
 
     fn get_index() -> Index {
@@ -261,12 +258,20 @@ mod tests {
         }
     }
 
+    //Super unsafe function to get test data, just don't count too high
+    fn get_key(index: usize) -> (SqlTuple, ItemPointer) {
+        (
+            SqlTuple(vec![Some(BaseSqlTypes::Integer(index as u32))]),
+            ItemPointer::new(PageOffset(index), UInt12::new(index as u16).unwrap()),
+        )
+    }
+
     #[test]
     fn test_btree_leaf_roundtrip() -> Result<(), Box<dyn std::error::Error>> {
         let mut test = BTreeLeaf {
-            parent_node: None,
-            left_node: Some(PageOffset(1)),
-            right_node: Some(PageOffset(2)),
+            parent_node: PageOffset(1),
+            left_node: Some(PageOffset(2)),
+            right_node: Some(PageOffset(3)),
             nodes: BTreeMap::new(),
         };
         let first_key = SqlTuple(vec![None, Some(BaseSqlTypes::Text("Test".to_string()))]);
@@ -288,7 +293,7 @@ mod tests {
         );
 
         let mut test_serial = BytesMut::with_capacity(PAGE_SIZE as usize);
-        test.serialize(&mut test_serial)?;
+        test.serialize(&mut test_serial);
         let test_parse = match BTreeNode::parse(&mut test_serial, &get_index())? {
             BTreeNode::Leaf(l) => l,
             _ => {
@@ -297,6 +302,44 @@ mod tests {
         };
 
         assert_eq!(test, test_parse);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_btree_leaf_split() -> Result<(), Box<dyn std::error::Error>> {
+        let mut leaf = BTreeLeaf::new(PageOffset(1));
+
+        let mut i = 0;
+        loop {
+            let (key, ptr) = get_key(i);
+            if leaf.can_fit(&key) {
+                leaf.add(key, ptr)?;
+            } else {
+                break;
+            }
+            i += 1;
+        }
+
+        //Now let's split
+        let leaf_size = leaf.nodes.len();
+        let (key, ptr) = get_key(i);
+        let (split_key, split_right) =
+            leaf.add_and_split(PageOffset(2), PageOffset(3), key, ptr)?;
+
+        assert_eq!(leaf_size + 1, leaf.nodes.len() + split_right.nodes.len());
+        assert!(leaf_size > leaf.nodes.len());
+        assert!(leaf_size > split_right.nodes.len());
+
+        for n in leaf.nodes {
+            assert!(n.0 <= split_key);
+        }
+        for n in split_right.nodes {
+            assert!(n.0 > split_key);
+        }
+
+        assert_eq!(leaf.right_node, Some(PageOffset(3)));
+        assert_eq!(split_right.left_node, Some(PageOffset(2)));
 
         Ok(())
     }
