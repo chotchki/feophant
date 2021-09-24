@@ -1,5 +1,6 @@
 use super::super::objects::Table;
 use super::super::transactions::TransactionId;
+use super::format_traits::Serializable;
 use super::free_space_manager::{FreeSpaceManagerError, FreeStat};
 use super::page_formats::{PageData, PageDataError, PageId, PageOffset, PageType, UInt12};
 use super::row_formats::{ItemPointer, RowData, RowDataError};
