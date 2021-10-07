@@ -33,10 +33,10 @@ pub use test_objects::get_table;
 pub mod transactions;
 use transactions::{TransactionId, TransactionManager};
 
+use self::io::block_layer::file_manager::FileManager;
+use self::io::block_layer::lock_cache_manager::LockCacheManager;
 use self::io::ConstraintManager;
-use self::io::FileManager;
 use self::io::IndexManager;
-use self::io::LockCacheManager;
 use self::objects::QueryResult;
 use std::ops::Deref;
 use std::sync::Arc;

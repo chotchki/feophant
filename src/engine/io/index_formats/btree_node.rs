@@ -20,7 +20,8 @@
 //! Note: Min size for all indexes is 2x PAGE_SIZE since the root page is used to mean None. This will change
 //! since the root page will have a pointer so we can lock and split the root node.
 
-use crate::engine::io::page_formats::PageOffset;
+use crate::engine::io::format_traits::{Parseable, Serializable};
+use crate::engine::io::page_formats::{PageOffset, PageOffsetError};
 use crate::engine::io::row_formats::{ItemPointer, ItemPointerError, NullMaskError};
 use crate::engine::io::{parse_size, ConstEncodedSize, SizeError};
 use crate::engine::objects::types::{BaseSqlTypes, BaseSqlTypesError};
@@ -49,18 +50,11 @@ pub enum NodeType {
 }
 
 impl BTreeNode {
-    pub fn write_node(
-        buffer: &mut impl BufMut,
-        node: Option<PageOffset>,
-    ) -> Result<(), BTreeNodeError> {
+    pub fn write_node(buffer: &mut impl BufMut, node: Option<PageOffset>) {
         match node {
-            Some(pn) => {
-                let pn_u64 = u64::try_from(pn.0)?;
-                buffer.put_uint_le(pn_u64, size_of::<usize>())
-            }
+            Some(pn) => pn.serialize(buffer),
             None => buffer.put_uint_le(0, size_of::<usize>()),
         }
-        Ok(())
     }
 
     pub fn write_sql_tuple(buffer: &mut impl BufMut, tuple: &SqlTuple) {
@@ -79,7 +73,7 @@ impl BTreeNode {
         }
         let node_type = buffer.get_u8();
 
-        let parent_node = Self::parse_page(buffer)?;
+        let parent_node = PageOffset::parse(buffer)?;
 
         if node_type == NodeType::Leaf as u8 {
             let left_node = Self::parse_page(buffer)?;
@@ -108,8 +102,6 @@ impl BTreeNode {
                 nodes: buckets,
             }));
         } else {
-            let parent = parent_node.ok_or_else(BTreeNodeError::ParentNull)?;
-
             let keys_count = parse_size(buffer)?;
             let mut keys = Vec::with_capacity(keys_count);
 
@@ -135,7 +127,7 @@ impl BTreeNode {
             }
 
             return Ok(BTreeNode::Branch(BTreeBranch {
-                parent_node: parent,
+                parent_node,
                 keys,
                 pointers,
             }));
@@ -192,6 +184,8 @@ pub enum BTreeNodeError {
     MissingPointerData(usize, usize),
     #[error(transparent)]
     NullMaskError(#[from] NullMaskError),
+    #[error(transparent)]
+    PageOffsetError(#[from] PageOffsetError),
     #[error("Parent cannot be 0")]
     ParentNull(),
     #[error(transparent)]

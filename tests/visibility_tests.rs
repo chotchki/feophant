@@ -1,6 +1,10 @@
 use feophantlib::engine::{
     get_row, get_table,
-    io::{row_formats::RowData, FileManager, LockCacheManager, RowManager, VisibleRowManager},
+    io::{
+        block_layer::{file_manager::FileManager, lock_cache_manager::LockCacheManager},
+        row_formats::RowData,
+        RowManager, VisibleRowManager,
+    },
     transactions::TransactionManager,
 };
 use futures::stream::StreamExt;

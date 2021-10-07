@@ -1,3 +1,5 @@
+pub mod block_layer;
+
 mod constraint_manager;
 pub use constraint_manager::ConstraintManager;
 pub use constraint_manager::ConstraintManagerError;
@@ -14,17 +16,6 @@ pub use index_manager::IndexManager;
 
 mod index_row_manager;
 pub use index_row_manager::IndexRowManager;
-
-mod file_manager;
-pub use file_manager::FileManager;
-pub use file_manager::FileManagerError;
-
-mod free_space_manager;
-pub use free_space_manager::FreeSpaceManager;
-
-mod lock_cache_manager;
-pub use lock_cache_manager::LockCacheManager;
-pub use lock_cache_manager::LockCacheManagerError;
 
 pub mod page_formats;
 

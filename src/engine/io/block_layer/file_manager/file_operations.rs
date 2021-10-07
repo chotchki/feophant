@@ -14,7 +14,7 @@ use tokio::{
 };
 
 use crate::constants::PAGE_SIZE;
-use crate::engine::io::file_manager::ResourceFormatter;
+use crate::engine::io::block_layer::file_manager::ResourceFormatter;
 use crate::engine::io::page_formats::{PageId, PageOffset};
 pub struct FileOperations {}
 
@@ -74,7 +74,7 @@ impl FileOperations {
     pub async fn read_chunk(
         mut file: File,
         page_offset: &PageOffset,
-    ) -> Result<(File, Option<BytesMut>), FileOperationsError> {
+    ) -> Result<(File, Option<Bytes>), FileOperationsError> {
         let mut buffer = BytesMut::with_capacity(PAGE_SIZE as usize);
 
         let file_meta = file.metadata().await?;
@@ -94,7 +94,7 @@ impl FileOperations {
             }
         }
 
-        Ok((file, Some(buffer)))
+        Ok((file, Some(buffer.freeze())))
     }
 
     pub async fn update_chunk(

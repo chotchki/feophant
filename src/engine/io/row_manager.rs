@@ -1,16 +1,14 @@
 use super::super::objects::Table;
 use super::super::transactions::TransactionId;
+use super::block_layer::file_manager::FileManagerError;
+use super::block_layer::free_space_manager::{FreeSpaceManager, FreeSpaceManagerError, FreeStat};
+use super::block_layer::lock_cache_manager::{LockCacheManager, LockCacheManagerError};
 use super::format_traits::Serializable;
-use super::free_space_manager::{FreeSpaceManagerError, FreeStat};
 use super::page_formats::{PageData, PageDataError, PageId, PageOffset, PageType, UInt12};
 use super::row_formats::{ItemPointer, RowData, RowDataError};
-use super::{
-    EncodedSize, FileManagerError, FreeSpaceManager, LockCacheManager, LockCacheManagerError,
-};
-use crate::constants::PAGE_SIZE;
+use super::EncodedSize;
 use crate::engine::objects::SqlTuple;
 use async_stream::try_stream;
-use bytes::BytesMut;
 use futures::stream::Stream;
 use std::sync::Arc;
 use thiserror::Error;
@@ -60,9 +58,10 @@ impl RowManager {
             .await?;
         let page_buffer = page_handle
             .as_mut()
-            .ok_or(RowManagerError::NonExistentPage(row_pointer.page))?;
+            .ok_or(RowManagerError::NonExistentPage(row_pointer.page))?
+            .clone();
 
-        let mut page = PageData::parse(table, row_pointer.page, page_buffer)?;
+        let mut page = PageData::parse(table, row_pointer.page, &page_buffer)?;
         let mut row = page
             .get_row(row_pointer.count)
             .ok_or(RowManagerError::NonExistentRow(
@@ -81,8 +80,7 @@ impl RowManager {
         row.max = Some(current_tran_id);
 
         page.update(row, row_pointer.count)?;
-        page_buffer.clear();
-        page.serialize(page_buffer);
+        page.serialize_and_pad(&mut page_handle);
 
         self.lock_cache_manager
             .update_page(page_id, row_pointer.page, page_handle)
@@ -110,9 +108,10 @@ impl RowManager {
             .await?;
         let old_page_buffer = old_page_handle
             .as_mut()
-            .ok_or(RowManagerError::NonExistentPage(row_pointer.page))?;
+            .ok_or(RowManagerError::NonExistentPage(row_pointer.page))?
+            .clone();
 
-        let mut old_page = PageData::parse(table.clone(), row_pointer.page, old_page_buffer)?;
+        let mut old_page = PageData::parse(table.clone(), row_pointer.page, &old_page_buffer)?;
 
         let mut old_row = old_page
             .get_row(row_pointer.count)
@@ -145,9 +144,7 @@ impl RowManager {
         old_row.max = Some(current_tran_id);
         old_row.item_pointer = new_row_pointer;
         old_page.update(old_row, row_pointer.count)?;
-
-        old_page_buffer.clear();
-        old_page.serialize(old_page_buffer);
+        old_page.serialize_and_pad(&mut old_page_handle);
 
         self.lock_cache_manager
             .update_page(page_id, row_pointer.page, old_page_handle)
@@ -239,9 +236,8 @@ impl RowManager {
                 Some(p) => {
                     let mut page = PageData::parse(table.clone(), next_free_page, p)?;
                     if page.can_fit(RowData::encoded_size(&user_data)) {
-                        p.clear(); //We're going to reuse the buffer
                         let new_row_pointer = page.insert(current_tran_id, &table, user_data)?;
-                        page.serialize(p);
+                        page.serialize_and_pad(&mut page_bytes);
                         self.lock_cache_manager
                             .update_page(page_id, next_free_page, page_bytes)
                             .await?;
@@ -266,10 +262,7 @@ impl RowManager {
                     let mut new_page = PageData::new(new_page_offset);
                     let new_row_pointer = new_page.insert(current_tran_id, &table, user_data)?; //TODO Will NOT handle overly large rows
 
-                    let mut buffer = BytesMut::with_capacity(PAGE_SIZE as usize);
-                    new_page.serialize(&mut buffer);
-
-                    new_page_handle.replace(buffer);
+                    new_page.serialize_and_pad(&mut new_page_handle);
 
                     self.lock_cache_manager
                         .add_page(page_id, new_page_offset, new_page_handle)
@@ -308,7 +301,7 @@ mod tests {
     use super::*;
     use crate::engine::get_row;
     use crate::engine::get_table;
-    use crate::engine::io::FileManager;
+    use crate::engine::io::block_layer::file_manager::FileManager;
     use futures::pin_mut;
     use tempfile::TempDir;
     use tokio_stream::StreamExt;

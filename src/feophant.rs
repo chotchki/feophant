@@ -1,7 +1,7 @@
 use crate::{
     codec::{NetworkFrame, PgCodec},
     engine::{
-        io::{FileManager, FileManagerError},
+        io::block_layer::file_manager::{FileManager, FileManagerError},
         transactions::TransactionManager,
         Engine,
     },

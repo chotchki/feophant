@@ -322,7 +322,8 @@ pub enum DefinitionLookupError {
 mod tests {
     use tempfile::TempDir;
 
-    use crate::engine::io::{FileManager, LockCacheManager};
+    use crate::engine::io::block_layer::file_manager::FileManager;
+    use crate::engine::io::block_layer::lock_cache_manager::LockCacheManager;
 
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::super::super::io::RowManager;

@@ -1,8 +1,6 @@
-use super::{
-    page_formats::{PageId, PageOffset},
-    FileManager, FileManagerError,
-};
-use bytes::BytesMut;
+use super::file_manager::{FileManager, FileManagerError};
+use crate::engine::io::page_formats::{PageId, PageOffset};
+use bytes::Bytes;
 use lru::LruCache;
 use std::sync::Arc;
 use thiserror::Error;
@@ -13,7 +11,7 @@ pub struct LockCacheManager {
     //TODO I don't like these massive single hashes protected with a single lock
     //     Long term I need to make a fixed hashmap and evict them myself.
     //     Holding on this since I might be able to work around it
-    cache: Arc<Mutex<LruCache<(PageId, PageOffset), Arc<RwLock<Option<BytesMut>>>>>>,
+    cache: Arc<Mutex<LruCache<(PageId, PageOffset), Arc<RwLock<Option<Bytes>>>>>>,
     file_manager: Arc<FileManager>,
 }
 
@@ -45,7 +43,7 @@ impl LockCacheManager {
         &self,
         page_id: PageId,
         offset: &PageOffset,
-    ) -> Result<OwnedRwLockReadGuard<Option<BytesMut>>, LockCacheManagerError> {
+    ) -> Result<OwnedRwLockReadGuard<Option<Bytes>>, LockCacheManagerError> {
         Ok(self
             .get_page_internal(page_id, offset)
             .await?
@@ -57,7 +55,7 @@ impl LockCacheManager {
         &self,
         page_id: PageId,
         offset: &PageOffset,
-    ) -> Result<OwnedRwLockWriteGuard<Option<BytesMut>>, LockCacheManagerError> {
+    ) -> Result<OwnedRwLockWriteGuard<Option<Bytes>>, LockCacheManagerError> {
         Ok(self
             .get_page_internal(page_id, offset)
             .await?
@@ -69,7 +67,7 @@ impl LockCacheManager {
         &self,
         page_id: PageId,
         offset: &PageOffset,
-    ) -> Result<Arc<RwLock<Option<BytesMut>>>, LockCacheManagerError> {
+    ) -> Result<Arc<RwLock<Option<Bytes>>>, LockCacheManagerError> {
         let mut cache = self.cache.lock().await;
         match cache.get(&(page_id, *offset)) {
             Some(s) => Ok(s.clone()),
@@ -95,7 +93,7 @@ impl LockCacheManager {
         &self,
         page_id: PageId,
         offset: PageOffset,
-        guard: OwnedRwLockWriteGuard<Option<BytesMut>>,
+        guard: OwnedRwLockWriteGuard<Option<Bytes>>,
     ) -> Result<(), LockCacheManagerError> {
         let page = match guard.as_ref() {
             Some(s) => s.clone(),
@@ -105,7 +103,7 @@ impl LockCacheManager {
         };
         Ok(self
             .file_manager
-            .update_page(&page_id, &offset, page.freeze())
+            .update_page(&page_id, &offset, page)
             .await?)
     }
 
@@ -113,7 +111,7 @@ impl LockCacheManager {
         &self,
         page_id: PageId,
         offset: PageOffset,
-        guard: OwnedRwLockWriteGuard<Option<BytesMut>>,
+        guard: OwnedRwLockWriteGuard<Option<Bytes>>,
     ) -> Result<(), LockCacheManagerError> {
         let page = match guard.as_ref() {
             Some(s) => s.clone(),
@@ -121,10 +119,7 @@ impl LockCacheManager {
                 return Err(LockCacheManagerError::PageMissing());
             }
         };
-        Ok(self
-            .file_manager
-            .add_page(&page_id, &offset, page.freeze())
-            .await?)
+        Ok(self.file_manager.add_page(&page_id, &offset, page).await?)
     }
 }
 
@@ -138,18 +133,26 @@ pub enum LockCacheManagerError {
 
 #[cfg(test)]
 mod tests {
+    use bytes::BytesMut;
     use tempfile::TempDir;
     use uuid::Uuid;
 
-    use crate::{constants::PAGE_SIZE, engine::io::page_formats::PageType};
+    use crate::{
+        constants::PAGE_SIZE,
+        engine::io::{
+            format_traits::{Parseable, Serializable},
+            index_formats::BTreeFirstPage,
+            page_formats::PageType,
+        },
+    };
 
     use super::*;
 
-    fn get_test_page(fill: u8) -> BytesMut {
+    fn get_test_page(fill: u8) -> Bytes {
         let mut test_page = BytesMut::with_capacity(PAGE_SIZE as usize);
         let free_space = vec![fill; PAGE_SIZE as usize];
         test_page.extend_from_slice(&free_space);
-        test_page
+        test_page.freeze()
     }
 
     #[tokio::test]
@@ -198,10 +201,9 @@ mod tests {
         let fifth_page = fifth_handle
             .as_mut()
             .ok_or(LockCacheManagerError::PageMissing())?;
-        fifth_page.clear();
 
         let page4 = get_test_page(3);
-        fifth_page.extend_from_slice(&page4[0..page4.len()]);
+        fifth_handle.replace(page4);
         lm.update_page(page_id, fourth_offset, fifth_handle).await?;
 
         let mut sixth_handle = lm.get_page_for_update(page_id, &fourth_offset).await?;
@@ -230,6 +232,51 @@ mod tests {
 
         let offset = lm.get_offset_non_zero(page_id).await?;
         assert_ne!(offset, PageOffset(0));
+
+        Ok(())
+    }
+
+    /// This is reproducing an interesting bug that the cache seems to be remembering
+    /// that someone had previously read data out of the buffer. I think a clone is
+    /// missing.
+    #[tokio::test]
+    async fn test_repeated_read() -> Result<(), Box<dyn std::error::Error>> {
+        let tmp = TempDir::new()?;
+        let tmp_dir = tmp.path().as_os_str().to_os_string();
+
+        let fm = Arc::new(FileManager::new(tmp_dir)?);
+        let lm = LockCacheManager::new(fm);
+
+        let page_id = PageId {
+            resource_key: Uuid::new_v4(),
+            page_type: PageType::Data,
+        };
+
+        let offset = lm.get_offset_non_zero(page_id).await?;
+        let mut page = lm.get_page_for_update(page_id, &offset).await?;
+
+        let first = BTreeFirstPage {
+            root_offset: PageOffset(4000),
+        };
+        first.serialize_and_pad(&mut page);
+        assert_eq!(page.as_ref().unwrap().len(), PAGE_SIZE as usize);
+        lm.update_page(page_id, offset, page).await?;
+
+        let mut page2 = lm.get_page_for_update(page_id, &offset).await?;
+        assert_eq!(page2.as_ref().unwrap().len(), PAGE_SIZE as usize);
+        match page2.as_mut() {
+            Some(mut s) => {
+                let mut change = BTreeFirstPage::parse(&mut s)?;
+            }
+            None => panic!("Foo"),
+        }
+        drop(page2);
+
+        let mut page3 = lm.get_page_for_update(page_id, &offset).await?;
+        assert_eq!(page3.as_ref().unwrap().len(), PAGE_SIZE as usize);
+        let node3 = BTreeFirstPage::parse(&mut page3.as_ref().unwrap().clone())?;
+        assert_eq!(node3.root_offset, PageOffset(4000));
+        drop(page3);
 
         Ok(())
     }

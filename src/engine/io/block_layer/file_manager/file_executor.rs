@@ -2,8 +2,8 @@ use super::file_operations::{FileOperations, FileOperationsError};
 /// Inner type that implements the actual I/O operations so the outter type can
 /// handle queue management.
 use super::request_type::RequestType;
+use super::ResourceFormatter;
 use crate::constants::PAGE_SIZE;
-use crate::engine::io::file_manager::ResourceFormatter;
 use crate::engine::io::page_formats::{PageId, PageOffset};
 use bytes::{Bytes, BytesMut};
 use lru::LruCache;
@@ -599,7 +599,7 @@ mod tests {
 
     use crate::{
         constants::PAGES_PER_FILE,
-        engine::io::{page_formats::PageType, FileManager},
+        engine::io::{block_layer::file_manager::FileManager, page_formats::PageType},
     };
 
     use super::*;

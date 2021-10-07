@@ -9,7 +9,7 @@ use super::{
     ItemIdData, ItemIdDataError, PageHeader, PageHeaderError, PageOffset, UInt12, UInt12Error,
 };
 use async_stream::stream;
-use bytes::{BufMut, BytesMut};
+use bytes::{BufMut, Bytes};
 use futures::stream::Stream;
 use std::convert::TryFrom;
 use std::sync::Arc;
@@ -99,7 +99,7 @@ impl PageData {
     pub fn parse(
         table: Arc<Table>,
         page: PageOffset,
-        buffer: &BytesMut,
+        buffer: &Bytes,
     ) -> Result<PageData, PageDataError> {
         //Note since we need random access, everything MUST work off slices otherwise counts will be off
 
@@ -202,7 +202,7 @@ mod tests {
         pd.serialize(&mut serial);
 
         assert_eq!(PAGE_SIZE as usize, serial.len());
-        let pg_parsed = PageData::parse(table.clone(), PageOffset(0), &serial).unwrap();
+        let pg_parsed = PageData::parse(table.clone(), PageOffset(0), &serial.freeze()).unwrap();
 
         pin_mut!(pg_parsed);
         let result_rows: Vec<RowData> = pg_parsed.get_stream().collect().await;
@@ -241,7 +241,7 @@ mod tests {
         }
         let mut serial = BytesMut::with_capacity(PAGE_SIZE as usize);
         pd.serialize(&mut serial);
-        let pg_parsed = PageData::parse(table.clone(), PageOffset(0), &serial).unwrap();
+        let pg_parsed = PageData::parse(table.clone(), PageOffset(0), &serial.freeze()).unwrap();
 
         pin_mut!(pg_parsed);
         let result_rows: Vec<RowData> = pg_parsed.get_stream().collect().await;

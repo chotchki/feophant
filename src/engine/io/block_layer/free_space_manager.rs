@@ -3,11 +3,11 @@
 //! page to say the space is availible. This means each page here can cover 134MB of free space.
 
 use super::{
-    page_formats::{PageId, PageOffset, PageType},
-    LockCacheManager, LockCacheManagerError,
+    super::page_formats::{PageId, PageOffset, PageType},
+    lock_cache_manager::{LockCacheManager, LockCacheManagerError},
 };
 use crate::constants::PAGE_SIZE;
-use bytes::{Buf, BytesMut};
+use bytes::{Buf, Bytes, BytesMut};
 use thiserror::Error;
 
 #[derive(Clone, Debug)]
@@ -33,7 +33,7 @@ impl FreeSpaceManager {
             let page_handle = self.lock_cache_manager.get_page(free_id, &offset).await?;
             match page_handle.as_ref() {
                 Some(s) => {
-                    let mut page_frozen = s.clone().freeze();
+                    let mut page_frozen = s.clone();
                     match Self::find_first_free_page_in_page(&mut page_frozen) {
                         Some(s) => {
                             let full_offset = PageOffset(s)
@@ -59,7 +59,7 @@ impl FreeSpaceManager {
                     let mut buffer = BytesMut::with_capacity(PAGE_SIZE as usize);
                     let new_page = vec![FreeStat::Free as u8; PAGE_SIZE as usize];
                     buffer.extend_from_slice(&new_page);
-                    new_page_handle.replace(buffer);
+                    new_page_handle.replace(buffer.freeze());
 
                     self.lock_cache_manager
                         .add_page(free_id, next_po, new_page_handle)
@@ -86,10 +86,11 @@ impl FreeSpaceManager {
             .lock_cache_manager
             .get_page_for_update(free_id, &po)
             .await?;
-        let mut page = page_handle
+        let page = page_handle
             .as_mut()
             .ok_or(FreeSpaceManagerError::PageDoesNotExist(page_id))?;
-        Self::set_status_inside_page(&mut page, offset, status);
+        let new_page = Self::set_status_inside_page(page, offset, status);
+        page_handle.replace(new_page);
 
         Ok(self
             .lock_cache_manager
@@ -118,7 +119,9 @@ impl FreeSpaceManager {
 
     /// Sets the status of a field inside a page, you MUST pass an offset
     /// that fits in the buffer.
-    fn set_status_inside_page(buffer: &mut BytesMut, offset: usize, status: FreeStat) {
+    fn set_status_inside_page(src: &Bytes, offset: usize, status: FreeStat) -> Bytes {
+        let mut buffer = BytesMut::with_capacity(src.len());
+        buffer.extend_from_slice(&src[..]);
         let offset_index = offset / 8;
         let offset_subindex = offset % 8;
 
@@ -136,6 +139,8 @@ impl FreeSpaceManager {
         }
 
         buffer[offset_index] = new_value;
+
+        buffer.freeze()
     }
 }
 
@@ -161,14 +166,14 @@ mod tests {
     use tempfile::TempDir;
     use uuid::Uuid;
 
-    use crate::engine::io::FileManager;
+    use crate::engine::io::block_layer::file_manager::FileManager;
 
     use super::*;
 
     /// Gets the status of a field inside a page, you MUST pass an offset
     /// that fits in the buffer.
     //This was in the implementation, I just only needed it for unit tests
-    fn get_status_inside_page(buffer: &BytesMut, offset: usize) -> FreeStat {
+    fn get_status_inside_page(buffer: &Bytes, offset: usize) -> FreeStat {
         let offset_index = offset / 8;
         let offset_subindex = offset % 8;
 
@@ -187,11 +192,13 @@ mod tests {
         let mut test = BytesMut::with_capacity(2);
         test.put_u16(0x0);
 
-        for i in 0..test.capacity() * 8 {
+        let mut test = test.freeze();
+
+        for i in 0..test.len() * 8 {
             assert_eq!(get_status_inside_page(&test, i), FreeStat::Free);
-            FreeSpaceManager::set_status_inside_page(&mut test, i, FreeStat::InUse);
+            test = FreeSpaceManager::set_status_inside_page(&test, i, FreeStat::InUse);
             assert_eq!(get_status_inside_page(&test, i), FreeStat::InUse);
-            FreeSpaceManager::set_status_inside_page(&mut test, i, FreeStat::Free);
+            test = FreeSpaceManager::set_status_inside_page(&test, i, FreeStat::Free);
             assert_eq!(get_status_inside_page(&test, i), FreeStat::Free);
         }
 
@@ -204,11 +211,13 @@ mod tests {
         test.put_u8(0x0);
         test.put_u8(0x0);
 
+        let mut test = test.freeze();
+
         for i in 0..test.len() * 8 {
             let free_page = FreeSpaceManager::find_first_free_page_in_page(&mut test.clone());
             assert_eq!(free_page, Some(i));
 
-            FreeSpaceManager::set_status_inside_page(&mut test, i, FreeStat::InUse);
+            test = FreeSpaceManager::set_status_inside_page(&test, i, FreeStat::InUse);
         }
         assert_eq!(
             FreeSpaceManager::find_first_free_page_in_page(&mut test),

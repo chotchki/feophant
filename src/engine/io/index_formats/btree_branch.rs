@@ -8,6 +8,7 @@ use crate::{
     engine::{
         io::{
             encode_size, expected_encoded_size,
+            format_traits::Serializable,
             page_formats::{ItemIdData, ItemIdDataError, PageOffset},
             row_formats::{NullMask, NullMaskError},
             ConstEncodedSize, EncodedSize, SelfEncodedSize, SizeError,
@@ -15,8 +16,8 @@ use crate::{
         objects::{types::BaseSqlTypesError, SqlTuple},
     },
 };
-use bytes::{BufMut, Bytes, BytesMut};
-use std::{convert::TryFrom, num::TryFromIntError, ops::RangeBounds};
+use bytes::BufMut;
+use std::{num::TryFromIntError, ops::RangeBounds};
 use thiserror::Error;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -42,7 +43,6 @@ impl BTreeBranch {
 
     pub fn add(
         &mut self,
-        old_pointer: PageOffset,
         left_pointer: PageOffset,
         key: SqlTuple,
         right_pointer: PageOffset,
@@ -78,7 +78,6 @@ impl BTreeBranch {
     /// **WARNING** If this function fails the branch should be considered poisoned and not used.
     pub fn add_and_split(
         &mut self,
-        old_pointer: PageOffset,
         left_pointer: PageOffset,
         key: SqlTuple,
         right_pointer: PageOffset,
@@ -141,32 +140,6 @@ impl BTreeBranch {
 
         Ok(index_search_start(&self.keys, &self.pointers, range)?)
     }
-
-    pub fn serialize(&self) -> Result<Bytes, BTreeBranchError> {
-        let mut buffer = BytesMut::with_capacity(PAGE_SIZE as usize);
-        buffer.put_u8(NodeType::Branch as u8);
-
-        BTreeNode::write_node(&mut buffer, Some(self.parent_node))?;
-
-        encode_size(&mut buffer, self.keys.len());
-
-        for key in self.keys.iter() {
-            BTreeNode::write_sql_tuple(&mut buffer, key);
-        }
-
-        for pointer in self.pointers.iter() {
-            let pointer_u64 = u64::try_from(pointer.0)?;
-            buffer.put_uint_le(pointer_u64, PageOffset::encoded_size());
-        }
-
-        //Zero pad to page size
-        if buffer.len() < PAGE_SIZE as usize {
-            let free_space = vec![0; PAGE_SIZE as usize - buffer.len()];
-            buffer.extend_from_slice(&free_space);
-        }
-
-        Ok(buffer.freeze())
-    }
 }
 
 impl SelfEncodedSize for BTreeBranch {
@@ -179,11 +152,25 @@ impl SelfEncodedSize for BTreeBranch {
             new_size += tup.encoded_size();
         }
 
-        for point in self.pointers.iter() {
-            new_size += PageOffset::encoded_size();
-        }
+        new_size += self.pointers.len() * PageOffset::encoded_size();
 
         new_size
+    }
+}
+
+impl Serializable for BTreeBranch {
+    fn serialize(&self, buffer: &mut impl BufMut) {
+        buffer.put_u8(NodeType::Branch as u8);
+
+        BTreeNode::write_node(buffer, Some(self.parent_node));
+
+        encode_size(buffer, self.keys.len());
+
+        for key in self.keys.iter() {
+            BTreeNode::write_sql_tuple(buffer, key);
+        }
+
+        self.pointers.iter().for_each(|p| p.serialize(buffer));
     }
 }
 
@@ -233,6 +220,7 @@ mod tests {
             Attribute, Index,
         },
     };
+    use bytes::BytesMut;
     use uuid::Uuid;
 
     fn get_index() -> Index {
@@ -278,8 +266,9 @@ mod tests {
             pointers,
         };
 
-        let mut test_serial = test.serialize()?;
-        let test_parse = BTreeNode::parse(&mut test_serial, &get_index())?;
+        let mut buffer = BytesMut::with_capacity(PAGE_SIZE as usize);
+        test.serialize(&mut buffer);
+        let test_parse = BTreeNode::parse(&mut buffer, &get_index())?;
 
         match test_parse {
             BTreeNode::Branch(b) => assert_eq!(test, b),
