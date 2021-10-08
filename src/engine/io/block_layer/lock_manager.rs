@@ -1,10 +1,9 @@
 use std::sync::Arc;
 
-use super::file_manager::{FileManager, FileManagerError};
 use crate::engine::io::page_formats::{PageId, PageOffset};
 use moka::future::Cache;
 use thiserror::Error;
-use tokio::sync::RwLock;
+use tokio::sync::{OwnedRwLockReadGuard, OwnedRwLockWriteGuard, RwLock};
 
 /// The LockManager is used for cooperative access to pages in the system.
 ///
@@ -16,45 +15,60 @@ use tokio::sync::RwLock;
 
 #[derive(Clone)]
 pub struct LockManager {
-    file_manager: Arc<FileManager>,
-    locks: Cache<(PageId, PageOffset), Arc<RwLock<()>>>,
+    locks: Cache<(PageId, PageOffset), Arc<RwLock<(PageId, PageOffset)>>>,
 }
 
 impl LockManager {
-    pub fn new(file_manager: Arc<FileManager>) -> LockManager {
+    pub fn new() -> LockManager {
         LockManager {
-            file_manager,
             locks: Cache::new(1000),
         }
     }
 
-    pub async fn get_offset(&self, page_id: PageId) -> Result<PageOffset, LockManagerError> {
-        Ok(self.file_manager.get_offset(&page_id).await?)
-    }
-
-    pub async fn get_offset_non_zero(
+    async fn get_lock(
         &self,
         page_id: PageId,
-    ) -> Result<PageOffset, LockManagerError> {
-        let mut offset = PageOffset(0);
-        while offset == PageOffset(0) {
-            offset = self.file_manager.get_offset(&page_id).await?;
-        }
-        Ok(offset)
+        offset: PageOffset,
+    ) -> Arc<RwLock<(PageId, PageOffset)>> {
+        self.locks
+            .get_or_insert_with((page_id, offset), async move {
+                Arc::new(RwLock::const_new((page_id, offset)))
+            })
+            .await
     }
 
-    pub async fn get_lock(&self, page_id: PageId, offset: PageOffset) -> Arc<RwLock<()>> {
-        self.locks
-            .get_or_insert_with(
-                (page_id, offset),
-                async move { Arc::new(RwLock::const_new(())) },
-            )
-            .await
+    pub async fn read(
+        &self,
+        page_id: PageId,
+        offset: PageOffset,
+    ) -> OwnedRwLockReadGuard<(PageId, PageOffset)> {
+        self.get_lock(page_id, offset).await.read_owned().await
+    }
+
+    pub async fn write(
+        &self,
+        page_id: PageId,
+        offset: PageOffset,
+    ) -> OwnedRwLockWriteGuard<(PageId, PageOffset)> {
+        self.get_lock(page_id, offset).await.write_owned().await
     }
 }
 
 #[derive(Debug, Error)]
-pub enum LockManagerError {
-    #[error(transparent)]
-    FileManagerError(#[from] FileManagerError),
+pub enum LockManagerError {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    #[test]
+    fn test_locking() -> Result<(), Box<dyn std::error::Error>> {
+        let tmp = TempDir::new()?;
+        let tmp_dir = tmp.path().as_os_str().to_os_string();
+
+        //todo!("Figure out the new model");
+
+        Ok(())
+    }
 }

@@ -1,8 +1,8 @@
 use super::super::objects::Table;
 use super::super::transactions::TransactionId;
-use super::block_layer::file_manager::FileManagerError;
+use super::block_layer::file_manager2::FileManager2;
 use super::block_layer::free_space_manager::{FreeSpaceManager, FreeSpaceManagerError, FreeStat};
-use super::block_layer::lock_cache_manager::{LockCacheManager, LockCacheManagerError};
+use super::block_layer::lock_manager::LockManager;
 use super::format_traits::Serializable;
 use super::page_formats::{PageData, PageDataError, PageId, PageOffset, PageType, UInt12};
 use super::row_formats::{ItemPointer, RowData, RowDataError};
@@ -16,17 +16,23 @@ use thiserror::Error;
 /// The row manager is a mapper between rows and pages on disk.
 ///
 /// It operates at the lowest level, no visibility checks are done.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct RowManager {
+    file_manager: Arc<FileManager2>,
     free_space_manager: FreeSpaceManager,
-    lock_cache_manager: LockCacheManager,
+    lock_manager: LockManager,
 }
 
 impl RowManager {
-    pub fn new(lock_cache_manager: LockCacheManager) -> RowManager {
+    pub fn new(
+        file_manager: Arc<FileManager2>,
+        free_space_manager: FreeSpaceManager,
+        lock_manager: LockManager,
+    ) -> RowManager {
         RowManager {
-            free_space_manager: FreeSpaceManager::new(lock_cache_manager.clone()),
-            lock_cache_manager,
+            file_manager,
+            free_space_manager,
+            lock_manager,
         }
     }
 
@@ -52,14 +58,13 @@ impl RowManager {
             resource_key: table.id,
             page_type: PageType::Data,
         };
-        let mut page_handle = self
-            .lock_cache_manager
-            .get_page_for_update(page_id, &row_pointer.page)
+
+        let page_lock = self.lock_manager.write(page_id, row_pointer.page).await;
+
+        let page_buffer = self
+            .file_manager
+            .get_page(&page_id, &row_pointer.page)
             .await?;
-        let page_buffer = page_handle
-            .as_mut()
-            .ok_or(RowManagerError::NonExistentPage(row_pointer.page))?
-            .clone();
 
         let mut page = PageData::parse(table, row_pointer.page, &page_buffer)?;
         let mut row = page
@@ -80,10 +85,10 @@ impl RowManager {
         row.max = Some(current_tran_id);
 
         page.update(row, row_pointer.count)?;
-        page.serialize_and_pad(&mut page_handle);
+        let new_page = page.serialize_and_pad();
 
-        self.lock_cache_manager
-            .update_page(page_id, row_pointer.page, page_handle)
+        self.file_manager
+            .update_page(&page_id, &row_pointer.page, new_page)
             .await?;
 
         Ok(())
@@ -102,14 +107,13 @@ impl RowManager {
             resource_key: table.id,
             page_type: PageType::Data,
         };
-        let mut old_page_handle = self
-            .lock_cache_manager
-            .get_page_for_update(page_id, &row_pointer.page)
+
+        let page_lock = self.lock_manager.write(page_id, row_pointer.page).await;
+
+        let mut old_page_buffer = self
+            .file_manager
+            .get_page(&page_id, &row_pointer.page)
             .await?;
-        let old_page_buffer = old_page_handle
-            .as_mut()
-            .ok_or(RowManagerError::NonExistentPage(row_pointer.page))?
-            .clone();
 
         let mut old_page = PageData::parse(table.clone(), row_pointer.page, &old_page_buffer)?;
 
@@ -162,6 +166,9 @@ impl RowManager {
             resource_key: table.id,
             page_type: PageType::Data,
         };
+
+        let page_lock_cache = self.lock_manager.get_lock(page_id, row_pointer.page).await;
+        let page_lock = page_lock_cache.read().await;
 
         let page_handle = self
             .lock_cache_manager

@@ -11,15 +11,7 @@ use tokio::sync::mpsc::{self, UnboundedSender};
 use tokio::sync::oneshot::error::RecvError;
 use tokio::sync::oneshot::{self, Sender};
 
-//Inner Types
-mod file_executor;
-use file_executor::FileExecutor;
-use file_executor::FileExecutorError;
-mod file_operations;
-mod request_type;
-use request_type::RequestType;
-mod resource_formatter;
-pub use resource_formatter::ResourceFormatter;
+
 
 #[derive(Clone, Debug)]
 pub struct FileManager {
