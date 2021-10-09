@@ -53,7 +53,7 @@ impl FileOperations {
             file.set_len(chunk_size_u64).await?;
         }
 
-        Self::update_chunk(file, page_offset, buffer).await;
+        Self::update_chunk(file, page_offset, buffer).await?;
         Ok(())
     }
 

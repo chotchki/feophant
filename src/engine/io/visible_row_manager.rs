@@ -18,7 +18,7 @@ use log::debug;
 use std::sync::Arc;
 use thiserror::Error;
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct VisibleRowManager {
     row_manager: RowManager,
     tran_manager: TransactionManager,
@@ -35,7 +35,7 @@ impl VisibleRowManager {
     pub async fn insert_row(
         self,
         current_tran_id: TransactionId,
-        table: Arc<Table>,
+        table: &Arc<Table>,
         user_data: SqlTuple,
     ) -> Result<ItemPointer, VisibleRowManagerError> {
         self.row_manager
@@ -47,7 +47,7 @@ impl VisibleRowManager {
     pub async fn get(
         &self,
         tran_id: TransactionId,
-        table: Arc<Table>,
+        table: &Arc<Table>,
         row_pointer: ItemPointer,
     ) -> Result<RowData, VisibleRowManagerError> {
         let row = self.row_manager.get(table, row_pointer).await?;
@@ -63,12 +63,14 @@ impl VisibleRowManager {
     pub fn get_stream(
         self,
         tran_id: TransactionId,
-        table: Arc<Table>,
+        table: &Arc<Table>,
     ) -> impl Stream<Item = Result<RowData, VisibleRowManagerError>> {
+        let table = table.clone();
+
         try_stream! {
             let tm = self.tran_manager;
 
-            for await row in self.row_manager.get_stream(table) {
+            for await row in self.row_manager.get_stream(&table) {
                 let unwrap_row = row?;
                 if VisibleRowManager::is_visible(tm.clone(), tran_id, &unwrap_row).await? {
                     debug!("Found visible row {:?}", unwrap_row);

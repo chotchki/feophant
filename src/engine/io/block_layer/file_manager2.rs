@@ -83,7 +83,7 @@ impl FileManager2 {
         page_id: &PageId,
     ) -> Result<(PageOffset, OwnedRwLockWriteGuard<(PageId, PageOffset)>), FileManager2Error> {
         loop {
-            let (offset, write_lock) = self.get_next_offset(&page_id).await?;
+            let (offset, write_lock) = self.get_next_offset(page_id).await?;
             if offset != PageOffset(0) {
                 return Ok((offset, write_lock));
             }
@@ -107,7 +107,9 @@ impl FileManager2 {
             .await?;
         let mut file = file_handle.lock().await;
 
-        self.page_cache.insert((page_id, guard.1), page.clone());
+        self.page_cache
+            .insert((page_id, guard.1), page.clone())
+            .await;
         let _ = FileOperations::add_chunk(file.deref_mut(), &guard.1, page).await?;
         Ok(())
     }
@@ -117,6 +119,8 @@ impl FileManager2 {
         page_id: &PageId,
         offset: &PageOffset,
     ) -> Result<(Bytes, OwnedRwLockReadGuard<(PageId, PageOffset)>), FileManager2Error> {
+        let read_lock = self.lock_manager.read(*page_id, *offset).await;
+
         let data_dir = self.data_dir.clone();
         let page_id = *page_id;
         let offset = *offset;
@@ -142,7 +146,6 @@ impl FileManager2 {
             })
             .await?;
 
-        let read_lock = self.lock_manager.read(page_id, offset).await;
         Ok((chunk, read_lock))
     }
 
@@ -151,6 +154,8 @@ impl FileManager2 {
         page_id: &PageId,
         offset: &PageOffset,
     ) -> Result<(Bytes, OwnedRwLockWriteGuard<(PageId, PageOffset)>), FileManager2Error> {
+        let write_lock = self.lock_manager.write(*page_id, *offset).await;
+
         let data_dir = self.data_dir.clone();
         let page_id = *page_id;
         let offset = *offset;
@@ -176,7 +181,6 @@ impl FileManager2 {
             })
             .await?;
 
-        let write_lock = self.lock_manager.write(page_id, offset).await;
         Ok((chunk, write_lock))
     }
 
@@ -197,7 +201,9 @@ impl FileManager2 {
             .await?;
         let mut file = file_handle.lock().await;
 
-        self.page_cache.insert((page_id, guard.1), page.clone());
+        self.page_cache
+            .insert((page_id, guard.1), page.clone())
+            .await;
         let _ = FileOperations::update_chunk(file.deref_mut(), &guard.1, page).await?;
         Ok(())
     }
@@ -355,32 +361,27 @@ mod tests {
         };
 
         let test_page = get_test_page(1);
-        let test_po = fm.get_next_offset(&page_id).await?;
-        fm.add_page(&page_id, &test_po, test_page.clone()).await?;
+        let (test_po, test_guard) = fm.get_next_offset(&page_id).await?;
+        fm.add_page(test_guard, test_page.clone()).await?;
 
         assert_eq!(test_po, PageOffset(0));
 
-        let test_page_get = fm.get_page(&page_id, &test_po).await?;
-
+        let (test_page_get, test_guard) = fm.get_page_for_update(&page_id, &test_po).await?;
         assert_eq!(test_page, test_page_get);
 
         let test_page2 = get_test_page(2);
-        fm.update_page(&page_id, &test_po, test_page2.clone())
-            .await?;
+        fm.update_page(test_guard, test_page2.clone()).await?;
 
-        let test_page_get2 = fm.get_page(&page_id, &test_po).await?;
-
+        let (test_page_get2, _test_page_guard2) = fm.get_page(&page_id, &test_po).await?;
         assert_eq!(test_page2, test_page_get2);
 
         let fm2 = FileManager2::new(tmp_dir.as_os_str().to_os_string())?;
         let test_page3 = get_test_page(3);
-        let test_po3 = fm2.get_next_offset(&page_id).await?;
-        fm2.add_page(&page_id, &test_po3, test_page3.clone())
-            .await?;
+        let (test_po3, test_guard3) = fm2.get_next_offset(&page_id).await?;
+        fm2.add_page(test_guard3, test_page3.clone()).await?;
         assert!(test_po3 > test_po);
 
-        let test_page_get2 = fm2.get_page(&page_id, &test_po).await?;
-
+        let (test_page_get2, _test_guard2) = fm2.get_page(&page_id, &test_po).await?;
         assert_eq!(test_page2, test_page_get2);
 
         Ok(())

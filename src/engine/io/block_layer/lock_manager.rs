@@ -54,6 +54,12 @@ impl LockManager {
     }
 }
 
+impl Default for LockManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum LockManagerError {}
 

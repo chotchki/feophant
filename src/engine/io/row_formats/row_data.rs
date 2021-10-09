@@ -160,12 +160,17 @@ impl fmt::Display for RowData {
 
 impl EncodedSize<&SqlTuple> for RowData {
     fn encoded_size(input: &SqlTuple) -> usize {
-        size_of::<u64>()
+        let mut size = size_of::<u64>()
             + size_of::<u64>()
             + ItemPointer::encoded_size()
             + InfoMask::encoded_size()
-            + NullMask::encoded_size(input)
-            + input.encoded_size()
+            + input.encoded_size();
+
+        if input.iter().any(|i| i.is_none()) {
+            size += NullMask::encoded_size(input);
+        }
+
+        size
     }
 }
 

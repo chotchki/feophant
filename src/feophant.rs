@@ -1,7 +1,7 @@
 use crate::{
     codec::{NetworkFrame, PgCodec},
     engine::{
-        io::block_layer::file_manager::{FileManager, FileManagerError},
+        io::block_layer::file_manager2::{FileManager2, FileManager2Error},
         transactions::TransactionManager,
         Engine,
     },
@@ -25,12 +25,12 @@ pub struct FeOphant {
     listener: TcpListener,
     transaction_manager: TransactionManager,
     engine: Engine,
-    file_manager: Arc<FileManager>,
+    file_manager: Arc<FileManager2>,
 }
 
 impl FeOphant {
     pub async fn new(data_dir: OsString, port: u16) -> Result<FeOphant, FeOphantError> {
-        let file_manager = Arc::new(FileManager::new(data_dir)?);
+        let file_manager = Arc::new(FileManager2::new(data_dir)?);
         let transaction_manager = TransactionManager::new();
         let engine = Engine::new(file_manager.clone(), transaction_manager.clone());
 
@@ -105,11 +105,6 @@ impl FeOphant {
         }
 
         //Clean up
-        match self.file_manager.shutdown().await {
-            Ok(_) => info!("File Manager shutdown!"),
-            Err(e) => error!("Had an error shutting down I/O {0}", e),
-        }
-
         match shutdown_sender {
             Some(s) => {
                 debug!("Attempting to signal shutdown.");
@@ -130,7 +125,7 @@ pub enum FeOphantError {
     #[error("Can't start the FeOphant twice")]
     CantStartTwice(),
     #[error(transparent)]
-    FileManagerError(#[from] FileManagerError),
+    FileManager2Error(#[from] FileManager2Error),
     #[error(transparent)]
     IOError(#[from] std::io::Error),
     #[error(transparent)]

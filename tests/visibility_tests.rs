@@ -1,7 +1,7 @@
 use feophantlib::engine::{
     get_row, get_table,
     io::{
-        block_layer::{file_manager::FileManager, lock_cache_manager::LockCacheManager},
+        block_layer::{file_manager2::FileManager2, free_space_manager::FreeSpaceManager},
         row_formats::RowData,
         RowManager, VisibleRowManager,
     },
@@ -27,21 +27,19 @@ async fn test_row_manager_visibility() -> Result<(), Box<dyn std::error::Error>>
     )])?;
 
     let table = get_table();
+    let fm = Arc::new(FileManager2::new(tmp_dir.clone())?);
+    let fsm = FreeSpaceManager::new(fm.clone());
+    let rm = RowManager::new(fm.clone(), fsm);
     let mut tm = TransactionManager::new();
-    let fm = Arc::new(FileManager::new(tmp_dir)?);
-    let rm = RowManager::new(LockCacheManager::new(fm));
     let vm = VisibleRowManager::new(rm.clone(), tm.clone());
     let row = get_row("test".to_string());
 
     info!("Insert a row that should be seen.");
     let tran_id = tm.start_trans().await?;
-    let row_pointer = rm
-        .clone()
-        .insert_row(tran_id, table.clone(), row.clone())
-        .await?;
+    let row_pointer = rm.clone().insert_row(tran_id, &table, row.clone()).await?;
     let res: Vec<RowData> = vm
         .clone()
-        .get_stream(tran_id, table.clone())
+        .get_stream(tran_id, &table)
         .map(Result::unwrap)
         .collect()
         .await;
@@ -51,7 +49,7 @@ async fn test_row_manager_visibility() -> Result<(), Box<dyn std::error::Error>>
     let tran_id_2 = tm.start_trans().await?;
     let res: Vec<RowData> = vm
         .clone()
-        .get_stream(tran_id_2, table.clone())
+        .get_stream(tran_id_2, &table)
         .map(Result::unwrap)
         .collect()
         .await;
@@ -64,12 +62,12 @@ async fn test_row_manager_visibility() -> Result<(), Box<dyn std::error::Error>>
     let tran_id_3 = tm.start_trans().await?;
     debug!("On transaction {:?}, viewing as {:?}", tran_id_3, tran_id);
     rm.clone()
-        .delete_row(tran_id_3, table.clone(), row_pointer)
+        .delete_row(tran_id_3, &table, row_pointer)
         .await?;
     tm.commit_trans(tran_id_3).await?;
     let res: Vec<RowData> = vm
         .clone()
-        .get_stream(tran_id, table.clone())
+        .get_stream(tran_id, &table)
         .map(Result::unwrap)
         .collect()
         .await;
@@ -78,7 +76,7 @@ async fn test_row_manager_visibility() -> Result<(), Box<dyn std::error::Error>>
     info!("It should be gone in the present");
     let res: Vec<RowData> = vm
         .clone()
-        .get_stream(tran_id_3, table.clone())
+        .get_stream(tran_id_3, &table)
         .map(Result::unwrap)
         .collect()
         .await;

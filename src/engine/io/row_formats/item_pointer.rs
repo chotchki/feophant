@@ -74,6 +74,18 @@ mod tests {
     use super::*;
 
     #[test]
+    fn sizes_match() -> Result<(), Box<dyn std::error::Error>> {
+        let test = ItemPointer::new(PageOffset(1), UInt12::new(2)?);
+        let calc_len = ItemPointer::encoded_size();
+
+        let mut buffer = BytesMut::new();
+        test.serialize(&mut buffer);
+
+        assert_eq!(calc_len, buffer.freeze().len());
+        Ok(())
+    }
+
+    #[test]
     fn test_item_pointer_roundtrip() -> Result<(), Box<dyn std::error::Error>> {
         let test = ItemPointer::new(PageOffset(1), UInt12::new(1).unwrap());
 

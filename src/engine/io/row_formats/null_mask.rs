@@ -93,13 +93,7 @@ impl NullMask {
 impl EncodedSize<&SqlTuple> for NullMask {
     fn encoded_size(input: &SqlTuple) -> usize {
         //Discussion here: https://github.com/rust-lang/rfcs/issues/2844
-        for i in input.iter() {
-            if i.is_none() {
-                return (input.len() + 8 - 1) / 8;
-            }
-        }
-
-        0
+        (input.len() + 8 - 1) / 8
     }
 }
 
@@ -129,6 +123,21 @@ mod tests {
             None,
             Some(BaseSqlTypes::Bool(true)),
         ])
+    }
+
+    #[test]
+    fn sizes_match() -> Result<(), Box<dyn std::error::Error>> {
+        let test = SqlTuple(vec![
+            Some(BaseSqlTypes::Text("test".to_string())),
+            Some(BaseSqlTypes::Integer(0)),
+        ]);
+
+        let calc_len = NullMask::encoded_size(&test);
+
+        let buffer = NullMask::serialize(&test);
+
+        assert_eq!(calc_len, buffer.len());
+        Ok(())
     }
 
     #[test]
@@ -192,6 +201,7 @@ mod tests {
             Some(BaseSqlTypes::Bool(true)),
             Some(BaseSqlTypes::Bool(true)),
         ]);
-        assert_eq!(0, NullMask::encoded_size(&none_null))
+        assert_eq!(1, NullMask::encoded_size(&none_null));
+        assert_eq!(1, NullMask::serialize(&none_null).len());
     }
 }

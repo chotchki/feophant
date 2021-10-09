@@ -59,3 +59,9 @@ Rust's inability to treat enum variants as a type is a HUGE pain. I end up havin
 ## Legal Stuff (Note I'm not a lawyer!)
 
 I am explicitly striving for SQL+Driver compatibility with [PostgreSQL](https://www.postgresql.org) so things such as system tables and code that handles them will be named the same. I don't think this violates their [trademark policy](https://www.postgresql.org/about/policies/trademarks/) but if I am please just reach out to me! I have also gone with a pretty restrictive license but I'm not tied to it if that is causing an issue for others who are using the code.
+
+test engine::analyzer::definition_lookup::tests::test_def_lookup has been running for over 60 seconds
+test engine::io::block_layer::free_space_manager::tests::test_get_next has been running for over 60 seconds
+test engine::io::row_manager::tests::test_row_manager_crud has been running for over 60 seconds
+test engine::io::row_manager::tests::test_row_manager_mass_insert has been running for over 60 seconds
+test engine::tests::create_insert_select has been running for over 60 seconds

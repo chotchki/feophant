@@ -22,7 +22,7 @@ use super::{
 /// The goal of the constraint manager is to ensure all constrainst are satisfied
 /// before we hand it off deeper into the stack. For now its taking on the null checks
 /// of RowData
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct ConstraintManager {
     index_manager: IndexManager,
     vis_row_man: VisibleRowManager,
@@ -39,7 +39,7 @@ impl ConstraintManager {
     pub async fn insert_row(
         self,
         current_tran_id: TransactionId,
-        table: Arc<Table>,
+        table: &Arc<Table>,
         user_data: SqlTuple,
     ) -> Result<ItemPointer, ConstraintManagerError> {
         //column count check
@@ -82,7 +82,7 @@ impl ConstraintManager {
 
         Ok(self
             .vis_row_man
-            .insert_row(current_tran_id, table, user_data)
+            .insert_row(current_tran_id, &table, user_data)
             .await?)
     }
 
@@ -90,7 +90,7 @@ impl ConstraintManager {
     pub async fn get(
         &self,
         tran_id: TransactionId,
-        table: Arc<Table>,
+        table: &Arc<Table>,
         row_pointer: ItemPointer,
     ) -> Result<RowData, ConstraintManagerError> {
         Ok(self.vis_row_man.get(tran_id, table, row_pointer).await?)
@@ -104,7 +104,7 @@ impl ConstraintManager {
         table: Arc<Table>,
     ) -> impl Stream<Item = Result<RowData, ConstraintManagerError>> {
         try_stream! {
-            for await row in self.vis_row_man.get_stream(tran_id, table) {
+            for await row in self.vis_row_man.get_stream(tran_id, &table) {
                 let unwrap_row = row?;
                 yield unwrap_row;
             }

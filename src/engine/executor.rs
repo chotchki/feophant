@@ -17,7 +17,7 @@ use uuid::Uuid;
 
 //TODO way too many clones / Arc flipping. Unsure if I could make use of references better
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Executor {
     cons_man: ConstraintManager,
 }
@@ -47,9 +47,7 @@ impl Executor {
             Plan::FullTableScan(fts) => {
                 self.full_table_scan(tran_id, fts.src_table.clone(), fts.target_type.clone())
             }
-            Plan::ModifyTable(mt) => {
-                self.modify_table(tran_id, mt.table.clone(), mt.source.clone())
-            }
+            Plan::ModifyTable(mt) => self.modify_table(tran_id, &mt.table, mt.source.clone()),
             Plan::StaticData(sd) => self.static_data(sd.clone()),
         }
     }
@@ -98,16 +96,17 @@ impl Executor {
     fn modify_table(
         self,
         tran_id: TransactionId,
-        table: Arc<Table>,
+        table: &Arc<Table>,
         source: Arc<Plan>,
     ) -> Pin<Box<impl Stream<Item = Result<SqlTuple, ExecutorError>>>> {
         let vis = self.clone().cons_man;
+        let table = table.clone();
 
         let s = try_stream! {
             for await val in self.clone().execute_plans(tran_id, source) {
                 let unwrapped_val = val?;
                 vis.clone()
-                    .insert_row(tran_id, table.clone(), unwrapped_val.clone())
+                    .insert_row(tran_id, &table, unwrapped_val.clone())
                     .await?;
                 yield unwrapped_val;
             }
@@ -147,7 +146,7 @@ impl Executor {
             Some(BaseSqlTypes::Text(create_table.table_name.clone())),
         ]);
 
-        cm.insert_row(tran_id, pg_class, table_row).await?;
+        cm.insert_row(tran_id, &pg_class, table_row).await?;
 
         let mut primary_key_cols = vec![];
 
@@ -168,7 +167,7 @@ impl Executor {
                 Some(BaseSqlTypes::Bool(create_table.provided_columns[i].null)),
             ]);
             cm.clone()
-                .insert_row(tran_id, pg_attribute.clone(), table_row)
+                .insert_row(tran_id, &pg_attribute, table_row)
                 .await?;
 
             if create_table.provided_columns[i].primary_key {
@@ -192,7 +191,7 @@ impl Executor {
             let pg_index = SystemTables::PgIndex.value();
             self.cons_man
                 .clone()
-                .insert_row(tran_id, pg_index, primary_key_index)
+                .insert_row(tran_id, &pg_index, primary_key_index)
                 .await?;
 
             //Now we can insert the constraint
@@ -209,7 +208,7 @@ impl Executor {
             let pg_constraint = SystemTables::PgConstraint.value();
             self.cons_man
                 .clone()
-                .insert_row(tran_id, pg_constraint, primary_key_constraint)
+                .insert_row(tran_id, &pg_constraint, primary_key_constraint)
                 .await?;
         }
 
