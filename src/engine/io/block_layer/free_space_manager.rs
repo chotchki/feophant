@@ -51,7 +51,7 @@ impl FreeSpaceManager {
                     // Note: due to possible timing issues the next page might not be sequentially
                     // next so we will check again on the next loop
 
-                    let (_, next_guard) = self.file_manager.get_next_offset(&page_id).await?;
+                    let (_, next_guard) = self.file_manager.get_next_offset(&free_id).await?;
 
                     let mut buffer = BytesMut::with_capacity(PAGE_SIZE as usize);
                     let new_page = vec![FreeStat::Free as u8; PAGE_SIZE as usize];
@@ -60,8 +60,6 @@ impl FreeSpaceManager {
                     self.file_manager
                         .add_page(next_guard, buffer.freeze())
                         .await?;
-
-                    offset += PageOffset(1);
                 }
             }
         }
