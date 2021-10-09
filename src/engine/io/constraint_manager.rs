@@ -73,7 +73,7 @@ impl ConstraintManager {
         for c in &table.constraints {
             match c {
                 crate::engine::objects::Constraint::PrimaryKey(p) => {
-                    //So for a primary key we have to check for no other dups in the table
+                    //TODO So for a primary key we have to check for no other dups in the table
 
                     //So what I want to do is ask the index manager to to get active rows matching the key
                 }
@@ -82,13 +82,13 @@ impl ConstraintManager {
 
         Ok(self
             .vis_row_man
-            .insert_row(current_tran_id, &table, user_data)
+            .insert_row(current_tran_id, table, user_data)
             .await?)
     }
 
     /// Gets a specific tuple from below, at the moment just a passthrough
     pub async fn get(
-        &self,
+        &mut self,
         tran_id: TransactionId,
         table: &Arc<Table>,
         row_pointer: ItemPointer,

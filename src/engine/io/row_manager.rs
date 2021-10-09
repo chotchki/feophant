@@ -33,7 +33,7 @@ impl RowManager {
     }
 
     pub async fn insert_row(
-        self,
+        &self,
         current_tran_id: TransactionId,
         table: &Arc<Table>,
         user_data: SqlTuple,
@@ -45,7 +45,7 @@ impl RowManager {
     //Note this is a logical delete
     //TODO debating if this should respect the visibility map, probably yes just trying to limit the pain
     pub async fn delete_row(
-        self,
+        &self,
         current_tran_id: TransactionId,
         table: &Arc<Table>,
         row_pointer: ItemPointer,
@@ -179,7 +179,7 @@ impl RowManager {
 
     // Provides an unfiltered view of the underlying table
     pub fn get_stream(
-        self,
+        &self,
         table: &Arc<Table>,
     ) -> impl Stream<Item = Result<RowData, RowManagerError>> {
         let page_id = PageId {
@@ -187,7 +187,7 @@ impl RowManager {
             page_type: PageType::Data,
         };
 
-        let file_manager = self.file_manager;
+        let file_manager = self.file_manager.clone();
         let table = table.clone();
 
         try_stream! {
@@ -248,7 +248,7 @@ impl RowManager {
                 Err(_) => {
                     //We got here because we asked for an offset that didn't exist yet.
                     let (new_page_offset, new_page_guard) =
-                        self.file_manager.get_next_offset_non_zero(&page_id).await?;
+                        self.file_manager.get_next_offset(&page_id).await?;
 
                     let mut new_page = PageData::new(new_page_offset);
                     let new_row_pointer = new_page.insert(current_tran_id, table, user_data)?; //TODO Will NOT handle overly large rows
@@ -291,6 +291,12 @@ mod tests {
     use crate::engine::get_row;
     use crate::engine::get_table;
     use futures::pin_mut;
+    use log::LevelFilter;
+    use simplelog::ColorChoice;
+    use simplelog::CombinedLogger;
+    use simplelog::Config;
+    use simplelog::TermLogger;
+    use simplelog::TerminalMode;
     use tempfile::TempDir;
     use tokio_stream::StreamExt;
 
@@ -349,19 +355,17 @@ mod tests {
         let table = get_table();
         let fm = Arc::new(FileManager2::new(tmp_dir.clone())?);
         let fsm = FreeSpaceManager::new(fm.clone());
-        let rm = RowManager::new(fm, fsm);
+        let mut rm = RowManager::new(fm, fsm);
 
         let tran_id = TransactionId::new(1);
 
         let insert_pointer = rm
-            .clone()
             .insert_row(tran_id, &table, get_row("test".to_string()))
             .await?;
 
         let tran_id_2 = TransactionId::new(3);
 
         let update_pointer = rm
-            .clone()
             .update_row(
                 tran_id_2,
                 &table,
@@ -372,19 +376,12 @@ mod tests {
 
         //Now let's make sure the update took
         pin_mut!(rm);
-        let result_rows: Vec<RowData> = rm
-            .clone()
-            .get_stream(&table)
-            .map(Result::unwrap)
-            .collect()
-            .await;
+        let result_rows: Vec<RowData> = rm.get_stream(&table).map(Result::unwrap).collect().await;
         assert_eq!(result_rows.len(), 2);
 
         let tran_id_3 = TransactionId::new(3);
 
-        rm.clone()
-            .delete_row(tran_id_3, &table, update_pointer)
-            .await?;
+        rm.delete_row(tran_id_3, &table, update_pointer).await?;
 
         Ok(())
     }

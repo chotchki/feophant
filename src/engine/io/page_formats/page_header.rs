@@ -107,6 +107,18 @@ mod tests {
     use super::*;
 
     #[test]
+    fn sizes_match() -> Result<(), Box<dyn std::error::Error>> {
+        let mut test = PageHeader::new();
+        let calc_len = PageHeader::encoded_size();
+
+        let mut buffer = BytesMut::new();
+        test.serialize(&mut buffer);
+
+        assert_eq!(calc_len, buffer.freeze().len());
+        Ok(())
+    }
+
+    #[test]
     fn test_roundtrip() -> Result<(), Box<dyn std::error::Error>> {
         let test = PageHeader::new();
         let mut buffer = BytesMut::new();

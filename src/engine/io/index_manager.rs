@@ -25,7 +25,6 @@ use super::page_formats::{PageId, PageType};
 use super::row_formats::ItemPointer;
 use crate::engine::io::format_traits::Serializable;
 use crate::engine::io::index_formats::BTreeBranch;
-use crate::engine::io::SelfEncodedSize;
 use crate::engine::objects::{Index, SqlTuple};
 use std::num::TryFromIntError;
 use std::sync::Arc;
@@ -76,8 +75,6 @@ impl IndexManager {
                 .await?;
             return Ok(());
         }
-
-        debug!("expand offset {0}", page_offset);
 
         //Lock the leafs left and right if they exist
         let left_neighbor = leaf.left_node;
@@ -157,11 +154,11 @@ impl IndexManager {
                     return Ok(());
                 } else {
                     //Need to split the branch and move up a level
-                    let (middle_key, new_right) =
-                        b.add_and_split(new_left_offset, split_key, new_right_offset)?;
-
                     let (new_right_offset, new_right_guard) =
                         self.file_manager.get_next_offset_non_zero(&page_id).await?;
+
+                    let (middle_key, new_right) =
+                        b.add_and_split(new_left_offset, split_key, new_right_offset)?;
 
                     self.file_manager
                         .update_page(new_right_guard, new_right.serialize_and_pad())
@@ -192,15 +189,13 @@ impl IndexManager {
             page_type: PageType::Data,
         };
 
-        let (mut first_page, first_guard) =
+        let (mut first_page, _first_guard) =
             self.file_manager.get_page(&page_id, &PageOffset(0)).await?;
         let first_node = BTreeFirstPage::parse(&mut first_page)?;
 
         let mut current_offset = first_node.root_offset;
         loop {
-            debug!("scan {0}", current_offset);
-
-            let (mut current_page, current_guard) = self
+            let (mut current_page, _current_guard) = self
                 .file_manager
                 .get_page(&page_id, &current_offset)
                 .await?;

@@ -33,7 +33,7 @@ impl VisibleRowManager {
     }
 
     pub async fn insert_row(
-        self,
+        &self,
         current_tran_id: TransactionId,
         table: &Arc<Table>,
         user_data: SqlTuple,
@@ -45,14 +45,14 @@ impl VisibleRowManager {
     }
 
     pub async fn get(
-        &self,
+        &mut self,
         tran_id: TransactionId,
         table: &Arc<Table>,
         row_pointer: ItemPointer,
     ) -> Result<RowData, VisibleRowManagerError> {
         let row = self.row_manager.get(table, row_pointer).await?;
 
-        if VisibleRowManager::is_visible(self.tran_manager.clone(), tran_id, &row).await? {
+        if VisibleRowManager::is_visible(&mut self.tran_manager, tran_id, &row).await? {
             Ok(row)
         } else {
             Err(VisibleRowManagerError::NotVisibleRow(row))
@@ -61,22 +61,19 @@ impl VisibleRowManager {
 
     // Provides a filtered view that respects transaction visability
     pub fn get_stream(
-        self,
+        &self,
         tran_id: TransactionId,
         table: &Arc<Table>,
     ) -> impl Stream<Item = Result<RowData, VisibleRowManagerError>> {
+        let rm = self.row_manager.clone();
+        let mut tm = self.tran_manager.clone();
         let table = table.clone();
 
         try_stream! {
-            let tm = self.tran_manager;
-
-            for await row in self.row_manager.get_stream(&table) {
+            for await row in rm.get_stream(&table) {
                 let unwrap_row = row?;
-                if VisibleRowManager::is_visible(tm.clone(), tran_id, &unwrap_row).await? {
-                    debug!("Found visible row {:?}", unwrap_row);
+                if VisibleRowManager::is_visible(&mut tm, tran_id, &unwrap_row).await? {
                     yield unwrap_row;
-                } else {
-                    debug!("Found not visible row {:?}", unwrap_row);
                 }
             }
         }
@@ -84,7 +81,7 @@ impl VisibleRowManager {
 
     //TODO I want to find a way to NOT depend on tm
     async fn is_visible(
-        mut tm: TransactionManager,
+        tm: &mut TransactionManager,
         tran_id: TransactionId,
         row_data: &RowData,
     ) -> Result<bool, VisibleRowManagerError> {
