@@ -4,6 +4,7 @@ use bytes::{Bytes, BytesMut};
 use std::convert::TryFrom;
 use std::num::TryFromIntError;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::{io::SeekFrom, path::Path};
 use thiserror::Error;
 use tokio::fs;
@@ -119,6 +120,8 @@ impl FileOperations {
 
 #[derive(Debug, Error)]
 pub enum FileOperationsError {
+    #[error(transparent)]
+    FileOperationsError(#[from] Arc<FileOperationsError>),
     #[error("Read {0} bytes instead of a page, the buffer has {1}")]
     IncompleteRead(usize, usize),
     #[error(transparent)]

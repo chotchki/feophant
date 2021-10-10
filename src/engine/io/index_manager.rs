@@ -190,7 +190,15 @@ impl IndexManager {
         };
 
         let (mut first_page, _first_guard) =
-            self.file_manager.get_page(&page_id, &PageOffset(0)).await?;
+            match self.file_manager.get_page(&page_id, &PageOffset(0)).await {
+                Ok(s) => s,
+                Err(FileManager2Error::PageDoesNotExist(_)) => {
+                    return Ok(None);
+                }
+                Err(e) => {
+                    return Err(IndexManagerError::FileManager2Error(e));
+                }
+            };
         let first_node = BTreeFirstPage::parse(&mut first_page)?;
 
         let mut current_offset = first_node.root_offset;

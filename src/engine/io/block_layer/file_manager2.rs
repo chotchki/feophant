@@ -115,14 +115,14 @@ impl FileManager2 {
         let file_number = offset.get_file_number();
         let file_handles = self.file_handles.clone();
 
-        let chunk = self
+        let chunk = match self
             .page_cache
             .get_or_try_insert_with((page_id, offset), async move {
                 let file_handle = file_handles
                     .get_or_try_insert_with((page_id, file_number), async move {
                         let handle =
                             FileOperations::open_path(&data_dir, &page_id, file_number).await?;
-                        Ok::<Arc<Mutex<File>>, FileManager2Error>(Arc::new(Mutex::const_new(
+                        Ok::<Arc<Mutex<File>>, FileOperationsError>(Arc::new(Mutex::const_new(
                             handle,
                         )))
                     })
@@ -130,9 +130,19 @@ impl FileManager2 {
                 let mut file = file_handle.lock().await;
 
                 let chunk = FileOperations::read_chunk(file.deref_mut(), &offset).await?;
-                Ok::<Bytes, FileManager2Error>(chunk)
+                Ok::<Bytes, FileOperationsError>(chunk)
             })
-            .await?;
+            .await
+        {
+            Ok(s) => s,
+            Err(e) => {
+                if let FileOperationsError::FileTooSmall(_, _) = e.as_ref() {
+                    return Err(FileManager2Error::PageDoesNotExist(offset));
+                } else {
+                    return Err(FileManager2Error::ArcFileOperationsError(e));
+                }
+            }
+        };
 
         Ok((chunk, read_lock))
     }
@@ -150,14 +160,14 @@ impl FileManager2 {
         let file_number = offset.get_file_number();
         let file_handles = self.file_handles.clone();
 
-        let chunk = self
+        let chunk = match self
             .page_cache
             .get_or_try_insert_with((page_id, offset), async move {
                 let file_handle = file_handles
                     .get_or_try_insert_with((page_id, file_number), async move {
                         let handle =
                             FileOperations::open_path(&data_dir, &page_id, file_number).await?;
-                        Ok::<Arc<Mutex<File>>, FileManager2Error>(Arc::new(Mutex::const_new(
+                        Ok::<Arc<Mutex<File>>, FileOperationsError>(Arc::new(Mutex::const_new(
                             handle,
                         )))
                     })
@@ -165,9 +175,19 @@ impl FileManager2 {
                 let mut file = file_handle.lock().await;
 
                 let chunk = FileOperations::read_chunk(file.deref_mut(), &offset).await?;
-                Ok::<Bytes, FileManager2Error>(chunk)
+                Ok::<Bytes, FileOperationsError>(chunk)
             })
-            .await?;
+            .await
+        {
+            Ok(s) => s,
+            Err(e) => {
+                if let FileOperationsError::FileTooSmall(_, _) = e.as_ref() {
+                    return Err(FileManager2Error::PageDoesNotExist(offset));
+                } else {
+                    return Err(FileManager2Error::ArcFileOperationsError(e));
+                }
+            }
+        };
 
         Ok((chunk, write_lock))
     }
@@ -309,10 +329,14 @@ pub enum FileManager2Error {
     FileManager2Error(#[from] Arc<FileManager2Error>),
     #[error(transparent)]
     FileOperationsError(#[from] FileOperationsError),
+    #[error(transparent)]
+    ArcFileOperationsError(#[from] Arc<FileOperationsError>),
     #[error("Incorrect page size of {0} on file {1} found. System cannot function")]
     IncorrectPageSize(u64, PathBuf),
     #[error(transparent)]
     IOError(#[from] std::io::Error),
+    #[error("Page {0} does not exist")]
+    PageDoesNotExist(PageOffset),
     #[error("Need a directory to store the data. Got ({0}) may be stripped of non Unicode chars.")]
     NeedDirectory(String),
     #[error(transparent)]
