@@ -78,18 +78,6 @@ impl FileManager2 {
         Ok((new_po, write_lock))
     }
 
-    async fn get_next_offset_non_zero(
-        &self,
-        page_id: &PageId,
-    ) -> Result<(PageOffset, OwnedRwLockWriteGuard<(PageId, PageOffset)>), FileManager2Error> {
-        loop {
-            let (offset, write_lock) = self.get_next_offset(page_id).await?;
-            if offset != PageOffset(0) {
-                return Ok((offset, write_lock));
-            }
-        }
-    }
-
     pub async fn add_page(
         &self,
         guard: OwnedRwLockWriteGuard<(PageId, PageOffset)>,
