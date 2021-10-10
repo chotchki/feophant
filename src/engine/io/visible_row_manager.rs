@@ -14,7 +14,6 @@ use super::{
 };
 use async_stream::try_stream;
 use futures::stream::Stream;
-use log::debug;
 use std::sync::Arc;
 use thiserror::Error;
 
@@ -79,6 +78,24 @@ impl VisibleRowManager {
         }
     }
 
+    pub async fn any_visible(
+        &mut self,
+        table: &Arc<Table>,
+        tran_id: TransactionId,
+        ptrs: &Vec<ItemPointer>,
+    ) -> Result<bool, VisibleRowManagerError> {
+        for p in ptrs {
+            match self.get(tran_id, table, *p).await {
+                Ok(o) => return Ok(true),
+                Err(VisibleRowManagerError::NotVisibleRow(_)) => continue,
+                Err(e) => {
+                    return Err(e);
+                }
+            }
+        }
+        return Ok(false);
+    }
+
     //TODO I want to find a way to NOT depend on tm
     async fn is_visible(
         tm: &mut TransactionManager,
@@ -100,6 +117,7 @@ impl VisibleRowManager {
         }
 
         //TODO check hint bits
+
         if row_data.min > tran_id {
             return Ok(false);
         }

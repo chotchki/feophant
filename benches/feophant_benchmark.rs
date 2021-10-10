@@ -3,8 +3,8 @@ use criterion::Criterion;
 use criterion::{criterion_group, criterion_main};
 use feophantlib::engine::get_row;
 use feophantlib::engine::get_table;
-use feophantlib::engine::io::block_layer::file_manager::FileManager;
-use feophantlib::engine::io::block_layer::lock_cache_manager::LockCacheManager;
+use feophantlib::engine::io::block_layer::file_manager2::FileManager2;
+use feophantlib::engine::io::block_layer::free_space_manager::FreeSpaceManager;
 use feophantlib::engine::io::row_formats::RowData;
 use feophantlib::engine::io::RowManager;
 use feophantlib::engine::transactions::TransactionId;
@@ -20,27 +20,29 @@ async fn row_manager_mass_insert(row_count: usize) -> Result<(), Box<dyn std::er
     let tmp_dir = tmp.path().as_os_str().to_os_string();
 
     let table = get_table();
-    let fm = Arc::new(FileManager::new(tmp_dir.clone())?);
-    let rm = RowManager::new(LockCacheManager::new(fm));
+    let fm = Arc::new(FileManager2::new(tmp_dir.clone())?);
+    let fsm = FreeSpaceManager::new(fm.clone());
+    let rm = RowManager::new(fm, fsm);
 
     let tran_id = TransactionId::new(1);
 
     for i in 0..row_count {
         rm.clone()
-            .insert_row(tran_id, table.clone(), get_row(i.to_string()))
+            .insert_row(tran_id, &table, get_row(i.to_string()))
             .await?;
     }
 
     drop(rm);
 
     //Now let's make sure they're really in the table, persisting across restarts
-    let fm = Arc::new(FileManager::new(tmp_dir)?);
-    let rm = RowManager::new(LockCacheManager::new(fm));
+    let fm = Arc::new(FileManager2::new(tmp_dir.clone())?);
+    let fsm = FreeSpaceManager::new(fm.clone());
+    let rm = RowManager::new(fm, fsm);
 
     pin_mut!(rm);
     let result_rows: Vec<RowData> = rm
         .clone()
-        .get_stream(table.clone())
+        .get_stream(&table)
         .map(Result::unwrap)
         .collect()
         .await;

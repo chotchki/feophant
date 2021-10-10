@@ -8,18 +8,19 @@ use crate::{
     engine::{
         objects::{
             types::{BaseSqlTypes, BaseSqlTypesMapper},
-            SqlTuple, Table,
+            SqlTuple, SqlTupleError, Table,
         },
         transactions::TransactionId,
     },
 };
 
 use super::{
+    index_manager::IndexManagerError,
     row_formats::{ItemPointer, RowData},
     IndexManager, VisibleRowManager, VisibleRowManagerError,
 };
 
-/// The goal of the constraint manager is to ensure all constrainst are satisfied
+/// The goal of the constraint manager is to ensure all constraints are satisfied
 /// before we hand it off deeper into the stack. For now its taking on the null checks
 /// of RowData
 #[derive(Clone)]
@@ -37,7 +38,7 @@ impl ConstraintManager {
     }
 
     pub async fn insert_row(
-        self,
+        &mut self,
         current_tran_id: TransactionId,
         table: &Arc<Table>,
         user_data: SqlTuple,
@@ -73,6 +74,31 @@ impl ConstraintManager {
         for c in &table.constraints {
             match c {
                 crate::engine::objects::Constraint::PrimaryKey(p) => {
+                    match self
+                        .index_manager
+                        .search_for_key(
+                            &p.index,
+                            &user_data
+                                .clone()
+                                .filter_map(&table.sql_type, &p.index.columns)?,
+                        )
+                        .await?
+                    {
+                        Some(rows) => {
+                            //We need to check if each of these rows are alive
+                            if self
+                                .vis_row_man
+                                .any_visible(&table, current_tran_id, &rows)
+                                .await?
+                            {
+                                return Err(ConstraintManagerError::PrimaryKeyViolation());
+                            }
+                        }
+                        None => {
+                            continue;
+                        }
+                    }
+
                     //TODO So for a primary key we have to check for no other dups in the table
 
                     //So what I want to do is ask the index manager to to get active rows matching the key
@@ -114,6 +140,12 @@ impl ConstraintManager {
 
 #[derive(Error, Debug)]
 pub enum ConstraintManagerError {
+    #[error(transparent)]
+    IndexManagerError(#[from] IndexManagerError),
+    #[error("Primary Key violation")]
+    PrimaryKeyViolation(),
+    #[error(transparent)]
+    SqlTupleError(#[from] SqlTupleError),
     #[error("Table definition length {0} does not match columns passed {1}")]
     TableRowSizeMismatch(usize, usize),
     #[error("Table definition type {0} does not match column passed {1}")]

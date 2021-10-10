@@ -291,12 +291,6 @@ mod tests {
     use crate::engine::get_row;
     use crate::engine::get_table;
     use futures::pin_mut;
-    use log::LevelFilter;
-    use simplelog::ColorChoice;
-    use simplelog::CombinedLogger;
-    use simplelog::Config;
-    use simplelog::TermLogger;
-    use simplelog::TerminalMode;
     use tempfile::TempDir;
     use tokio_stream::StreamExt;
 

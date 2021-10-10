@@ -128,11 +128,11 @@ impl Executor {
 
     //Bypass planning since there isn't anything optimize
     pub async fn execute_utility(
-        &self,
+        &mut self,
         tran_id: TransactionId,
         parse_tree: ParseTree,
     ) -> Result<Vec<SqlTuple>, ExecutorError> {
-        let cm = self.cons_man.clone();
+        let mut cm = self.cons_man.clone();
 
         let create_table = match parse_tree {
             ParseTree::CreateTable(t) => t,
