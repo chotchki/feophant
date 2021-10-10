@@ -27,10 +27,14 @@
         let page = get_page_for_read()
 */
 
-pub mod file_manager;
+//pub mod file_manager;
+pub mod file_manager2;
+
+pub mod file_operations;
 
 pub mod free_space_manager;
 
-pub mod lock_cache_manager;
-
 pub mod lock_manager;
+
+mod resource_formatter;
+pub use resource_formatter::ResourceFormatter;

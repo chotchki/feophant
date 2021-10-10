@@ -1,6 +1,5 @@
 //! A struct to uniquely identify a page in all operations. This replaces adding additional arguments everywhere.
 
-use crate::engine::io::block_layer::file_manager::ResourceFormatter;
 use nom::{
     bytes::complete::tag_no_case,
     error::{convert_error, make_error, ContextError, ErrorKind, ParseError, VerboseError},
@@ -12,6 +11,8 @@ use std::{
 };
 use thiserror::Error;
 use uuid::Uuid;
+
+use crate::engine::io::block_layer::ResourceFormatter;
 
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub struct PageId {

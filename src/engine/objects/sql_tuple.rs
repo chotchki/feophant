@@ -93,6 +93,21 @@ mod tests {
     }
 
     #[test]
+    fn sizes_match() -> Result<(), Box<dyn std::error::Error>> {
+        let test = SqlTuple(vec![
+            Some(BaseSqlTypes::Text("test".to_string())),
+            Some(BaseSqlTypes::Integer(0)),
+        ]);
+        let calc_len = test.encoded_size();
+
+        let mut buffer = BytesMut::new();
+        test.serialize(&mut buffer);
+
+        assert_eq!(calc_len, buffer.freeze().len());
+        Ok(())
+    }
+
+    #[test]
     fn test_sql_tuple_filter() -> Result<(), Box<dyn std::error::Error>> {
         let source = get_src_type();
 

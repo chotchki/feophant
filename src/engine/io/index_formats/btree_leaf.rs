@@ -8,7 +8,7 @@ use crate::{
         io::{
             encode_size, expected_encoded_size,
             format_traits::Serializable,
-            page_formats::{ItemIdData, ItemIdDataError, PageOffset},
+            page_formats::PageOffset,
             row_formats::{ItemPointer, NullMask, NullMaskError},
             ConstEncodedSize, EncodedSize, SelfEncodedSize, SizeError,
         },
@@ -118,19 +118,19 @@ impl BTreeLeaf {
             new_size += NullMask::encoded_size(new_key);
             new_size += new_key.encoded_size();
             new_size += expected_encoded_size(1); //New Item Id
-            new_size += ItemIdData::encoded_size()
+            new_size += ItemPointer::encoded_size()
         }
 
-        for (tup, iids) in self.nodes.iter() {
+        for (tup, ips) in self.nodes.iter() {
             new_size += NullMask::encoded_size(tup);
             new_size += tup.encoded_size();
 
             if new_key_present && tup == new_key {
-                new_size += expected_encoded_size(iids.len() + 1);
-                new_size += ItemIdData::encoded_size() * (iids.len() + 1);
+                new_size += expected_encoded_size(ips.len() + 1);
+                new_size += ItemPointer::encoded_size() * (ips.len() + 1);
             } else {
-                new_size += expected_encoded_size(iids.len());
-                new_size += ItemIdData::encoded_size() * iids.len();
+                new_size += expected_encoded_size(ips.len());
+                new_size += ItemPointer::encoded_size() * ips.len();
             }
         }
 
@@ -154,12 +154,12 @@ impl SelfEncodedSize for BTreeLeaf {
 
         new_size += expected_encoded_size(self.nodes.len());
 
-        for (tup, iids) in self.nodes.iter() {
+        for (tup, ips) in self.nodes.iter() {
             new_size += NullMask::encoded_size(tup);
             new_size += tup.encoded_size();
 
-            new_size += expected_encoded_size(iids.len());
-            new_size += ItemIdData::encoded_size() * iids.len();
+            new_size += expected_encoded_size(ips.len());
+            new_size += ItemPointer::encoded_size() * ips.len();
         }
 
         new_size
@@ -176,12 +176,12 @@ impl Serializable for BTreeLeaf {
 
         encode_size(buffer, self.nodes.len());
 
-        for (key, iids) in self.nodes.iter() {
+        for (key, ips) in self.nodes.iter() {
             BTreeNode::write_sql_tuple(buffer, key);
 
-            encode_size(buffer, iids.len());
-            for iid in iids {
-                iid.serialize(buffer);
+            encode_size(buffer, ips.len());
+            for ip in ips {
+                ip.serialize(buffer);
             }
         }
     }
@@ -195,8 +195,6 @@ pub enum BTreeLeafError {
     BTreeNodeError(#[from] BTreeNodeError),
     #[error("Buffer too short to parse")]
     BufferTooShort(),
-    #[error(transparent)]
-    ItemIdDataError(#[from] ItemIdDataError),
     #[error("Key too large size: {0}")]
     KeyTooLarge(usize),
     #[error("Missing Data for Node Type need {0}, have {1}")]
@@ -217,7 +215,6 @@ pub enum BTreeLeafError {
 
 #[cfg(test)]
 mod tests {
-    use core::slice::SplitInclusiveMut;
     use std::sync::Arc;
 
     use super::*;
@@ -264,6 +261,30 @@ mod tests {
             SqlTuple(vec![Some(BaseSqlTypes::Integer(index as u32))]),
             ItemPointer::new(PageOffset(index), UInt12::new(index as u16).unwrap()),
         )
+    }
+
+    #[test]
+    fn sizes_match() -> Result<(), Box<dyn std::error::Error>> {
+        let mut test = BTreeLeaf {
+            parent_node: PageOffset(1),
+            left_node: Some(PageOffset(2)),
+            right_node: Some(PageOffset(3)),
+            nodes: BTreeMap::new(),
+        };
+        test.add(
+            SqlTuple(vec![
+                Some(BaseSqlTypes::Text("test".to_string())),
+                Some(BaseSqlTypes::Integer(0)),
+            ]),
+            ItemPointer::new(PageOffset(1), UInt12::new(2)?),
+        )?;
+        let calc_len = test.encoded_size();
+
+        let mut buffer = BytesMut::new();
+        test.serialize(&mut buffer);
+
+        assert_eq!(calc_len, buffer.freeze().len());
+        Ok(())
     }
 
     #[test]

@@ -4,6 +4,7 @@ use bytes::{Bytes, BytesMut};
 use std::convert::TryFrom;
 use std::num::TryFromIntError;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::{io::SeekFrom, path::Path};
 use thiserror::Error;
 use tokio::fs;
@@ -14,7 +15,7 @@ use tokio::{
 };
 
 use crate::constants::PAGE_SIZE;
-use crate::engine::io::block_layer::file_manager::ResourceFormatter;
+use crate::engine::io::block_layer::ResourceFormatter;
 use crate::engine::io::page_formats::{PageId, PageOffset};
 pub struct FileOperations {}
 
@@ -42,10 +43,10 @@ impl FileOperations {
     /// Note the File Handle AND PageOffset should point to where the add should occur
     /// If the file is larger than requested nothing is done.
     pub async fn add_chunk(
-        file: File,
+        file: &mut File,
         page_offset: &PageOffset,
         buffer: Bytes,
-    ) -> Result<File, FileOperationsError> {
+    ) -> Result<(), FileOperationsError> {
         let metadata = file.metadata().await?;
         let chunk_size_u64 = u64::try_from(page_offset.get_file_chunk_size())?;
 
@@ -53,7 +54,8 @@ impl FileOperations {
             file.set_len(chunk_size_u64).await?;
         }
 
-        Self::update_chunk(file, page_offset, buffer).await
+        Self::update_chunk(file, page_offset, buffer).await?;
+        Ok(())
     }
 
     //Makes the prefix folder so we don't fill up folders. Will consider more nesting eventually
@@ -72,16 +74,19 @@ impl FileOperations {
     }
 
     pub async fn read_chunk(
-        mut file: File,
+        file: &mut File,
         page_offset: &PageOffset,
-    ) -> Result<(File, Option<Bytes>), FileOperationsError> {
+    ) -> Result<Bytes, FileOperationsError> {
         let mut buffer = BytesMut::with_capacity(PAGE_SIZE as usize);
 
         let file_meta = file.metadata().await?;
 
         let file_len = file_meta.len();
         if u64::try_from(page_offset.get_file_chunk_size())? > file_len {
-            return Ok((file, None));
+            return Err(FileOperationsError::FileTooSmall(
+                page_offset.get_file_chunk_size(),
+                file_len,
+            ));
         }
 
         file.seek(SeekFrom::Start(u64::try_from(page_offset.get_file_seek())?))
@@ -94,14 +99,14 @@ impl FileOperations {
             }
         }
 
-        Ok((file, Some(buffer.freeze())))
+        Ok(buffer.freeze())
     }
 
     pub async fn update_chunk(
-        mut file: File,
+        file: &mut File,
         page_offset: &PageOffset,
         mut buffer: Bytes,
-    ) -> Result<File, FileOperationsError> {
+    ) -> Result<(), FileOperationsError> {
         file.seek(SeekFrom::Start(u64::try_from(page_offset.get_file_seek())?))
             .await?;
 
@@ -109,18 +114,22 @@ impl FileOperations {
 
         //file.sync_all().await?;
 
-        Ok(file)
+        Ok(())
     }
 }
 
 #[derive(Debug, Error)]
 pub enum FileOperationsError {
+    #[error(transparent)]
+    FileOperationsError(#[from] Arc<FileOperationsError>),
     #[error("Read {0} bytes instead of a page, the buffer has {1}")]
     IncompleteRead(usize, usize),
     #[error(transparent)]
     IOError(#[from] std::io::Error),
     #[error(transparent)]
     TryFromIntError(#[from] TryFromIntError),
+    #[error("File too small for requested read {0}, size is {1}")]
+    FileTooSmall(usize, u64),
 }
 
 #[cfg(test)]

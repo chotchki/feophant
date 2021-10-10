@@ -33,8 +33,8 @@ pub use test_objects::get_table;
 pub mod transactions;
 use transactions::{TransactionId, TransactionManager};
 
-use self::io::block_layer::file_manager::FileManager;
-use self::io::block_layer::lock_cache_manager::LockCacheManager;
+use self::io::block_layer::file_manager2::FileManager2;
+use self::io::block_layer::free_space_manager::FreeSpaceManager;
 use self::io::ConstraintManager;
 use self::io::IndexManager;
 use self::objects::QueryResult;
@@ -43,17 +43,18 @@ use std::sync::Arc;
 use thiserror::Error;
 use tokio_stream::StreamExt;
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Engine {
     analyzer: Analyzer,
     executor: Executor,
 }
 
 impl Engine {
-    pub fn new(file_manager: Arc<FileManager>, tran_manager: TransactionManager) -> Engine {
-        let lock_cache = LockCacheManager::new(file_manager);
-        let vis_row_man = VisibleRowManager::new(RowManager::new(lock_cache.clone()), tran_manager);
-        let index_manager = IndexManager::new(lock_cache);
+    pub fn new(file_manager: Arc<FileManager2>, tran_manager: TransactionManager) -> Engine {
+        let fsm = FreeSpaceManager::new(file_manager.clone());
+        let vis_row_man =
+            VisibleRowManager::new(RowManager::new(file_manager.clone(), fsm), tran_manager);
+        let index_manager = IndexManager::new(file_manager);
         let con_man = ConstraintManager::new(index_manager, vis_row_man.clone());
         Engine {
             analyzer: Analyzer::new(vis_row_man),
@@ -142,7 +143,7 @@ mod tests {
 
         let mut transaction_manager = TransactionManager::new();
         let mut engine = Engine::new(
-            Arc::new(FileManager::new(tmp_dir)?),
+            Arc::new(FileManager2::new(tmp_dir)?),
             transaction_manager.clone(),
         );
 

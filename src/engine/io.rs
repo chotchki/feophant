@@ -14,9 +14,6 @@ mod index_formats;
 mod index_manager;
 pub use index_manager::IndexManager;
 
-mod index_row_manager;
-pub use index_row_manager::IndexRowManager;
-
 pub mod page_formats;
 
 pub mod row_formats;

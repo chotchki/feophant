@@ -97,7 +97,7 @@ impl PageData {
     }
 
     pub fn parse(
-        table: Arc<Table>,
+        table: &Arc<Table>,
         page: PageOffset,
         buffer: &Bytes,
     ) -> Result<PageData, PageDataError> {
@@ -202,7 +202,7 @@ mod tests {
         pd.serialize(&mut serial);
 
         assert_eq!(PAGE_SIZE as usize, serial.len());
-        let pg_parsed = PageData::parse(table.clone(), PageOffset(0), &serial.freeze()).unwrap();
+        let pg_parsed = PageData::parse(&table, PageOffset(0), &serial.freeze()).unwrap();
 
         pin_mut!(pg_parsed);
         let result_rows: Vec<RowData> = pg_parsed.get_stream().collect().await;
@@ -241,7 +241,7 @@ mod tests {
         }
         let mut serial = BytesMut::with_capacity(PAGE_SIZE as usize);
         pd.serialize(&mut serial);
-        let pg_parsed = PageData::parse(table.clone(), PageOffset(0), &serial.freeze()).unwrap();
+        let pg_parsed = PageData::parse(&table, PageOffset(0), &serial.freeze()).unwrap();
 
         pin_mut!(pg_parsed);
         let result_rows: Vec<RowData> = pg_parsed.get_stream().collect().await;

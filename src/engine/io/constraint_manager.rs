@@ -8,21 +8,22 @@ use crate::{
     engine::{
         objects::{
             types::{BaseSqlTypes, BaseSqlTypesMapper},
-            SqlTuple, Table,
+            SqlTuple, SqlTupleError, Table,
         },
         transactions::TransactionId,
     },
 };
 
 use super::{
+    index_manager::IndexManagerError,
     row_formats::{ItemPointer, RowData},
     IndexManager, VisibleRowManager, VisibleRowManagerError,
 };
 
-/// The goal of the constraint manager is to ensure all constrainst are satisfied
+/// The goal of the constraint manager is to ensure all constraints are satisfied
 /// before we hand it off deeper into the stack. For now its taking on the null checks
 /// of RowData
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct ConstraintManager {
     index_manager: IndexManager,
     vis_row_man: VisibleRowManager,
@@ -37,9 +38,9 @@ impl ConstraintManager {
     }
 
     pub async fn insert_row(
-        self,
+        &mut self,
         current_tran_id: TransactionId,
-        table: Arc<Table>,
+        table: &Arc<Table>,
         user_data: SqlTuple,
     ) -> Result<ItemPointer, ConstraintManagerError> {
         //column count check
@@ -73,24 +74,64 @@ impl ConstraintManager {
         for c in &table.constraints {
             match c {
                 crate::engine::objects::Constraint::PrimaryKey(p) => {
-                    //So for a primary key we have to check for no other dups in the table
-
-                    //So what I want to do is ask the index manager to to get active rows matching the key
+                    debug!("searching for {:?}", user_data);
+                    match self
+                        .index_manager
+                        .search_for_key(
+                            &p.index,
+                            &user_data
+                                .clone()
+                                .filter_map(&table.sql_type, &p.index.columns)?,
+                        )
+                        .await?
+                    {
+                        Some(rows) => {
+                            //We need to check if each of these rows are alive
+                            if self
+                                .vis_row_man
+                                .any_visible(table, current_tran_id, &rows)
+                                .await?
+                            {
+                                return Err(ConstraintManagerError::PrimaryKeyViolation());
+                            }
+                        }
+                        None => {
+                            continue;
+                        }
+                    }
                 }
             }
         }
 
-        Ok(self
+        //Insert the row
+        let row_item_ptr = self
             .vis_row_man
-            .insert_row(current_tran_id, table, user_data)
-            .await?)
+            .insert_row(current_tran_id, table, user_data.clone())
+            .await?;
+
+        //Update the indexes
+        //TODO figure out if that makes sense in this layer
+        for i in &table.indexes {
+            let tuple_for_index = match user_data.clone().filter_map(&table.sql_type, &i.columns) {
+                Ok(u) => u,
+                Err(_) => {
+                    continue;
+                }
+            };
+
+            self.index_manager
+                .add(i, tuple_for_index, row_item_ptr)
+                .await?;
+        }
+
+        Ok(row_item_ptr)
     }
 
     /// Gets a specific tuple from below, at the moment just a passthrough
     pub async fn get(
-        &self,
+        &mut self,
         tran_id: TransactionId,
-        table: Arc<Table>,
+        table: &Arc<Table>,
         row_pointer: ItemPointer,
     ) -> Result<RowData, ConstraintManagerError> {
         Ok(self.vis_row_man.get(tran_id, table, row_pointer).await?)
@@ -104,7 +145,7 @@ impl ConstraintManager {
         table: Arc<Table>,
     ) -> impl Stream<Item = Result<RowData, ConstraintManagerError>> {
         try_stream! {
-            for await row in self.vis_row_man.get_stream(tran_id, table) {
+            for await row in self.vis_row_man.get_stream(tran_id, &table) {
                 let unwrap_row = row?;
                 yield unwrap_row;
             }
@@ -114,6 +155,12 @@ impl ConstraintManager {
 
 #[derive(Error, Debug)]
 pub enum ConstraintManagerError {
+    #[error(transparent)]
+    IndexManagerError(#[from] IndexManagerError),
+    #[error("Primary Key violation")]
+    PrimaryKeyViolation(),
+    #[error(transparent)]
+    SqlTupleError(#[from] SqlTupleError),
     #[error("Table definition length {0} does not match columns passed {1}")]
     TableRowSizeMismatch(usize, usize),
     #[error("Table definition type {0} does not match column passed {1}")]

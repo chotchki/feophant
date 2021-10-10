@@ -14,11 +14,10 @@ use super::{
 };
 use async_stream::try_stream;
 use futures::stream::Stream;
-use log::debug;
 use std::sync::Arc;
 use thiserror::Error;
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct VisibleRowManager {
     row_manager: RowManager,
     tran_manager: TransactionManager,
@@ -33,9 +32,9 @@ impl VisibleRowManager {
     }
 
     pub async fn insert_row(
-        self,
+        &self,
         current_tran_id: TransactionId,
-        table: Arc<Table>,
+        table: &Arc<Table>,
         user_data: SqlTuple,
     ) -> Result<ItemPointer, VisibleRowManagerError> {
         self.row_manager
@@ -45,14 +44,14 @@ impl VisibleRowManager {
     }
 
     pub async fn get(
-        &self,
+        &mut self,
         tran_id: TransactionId,
-        table: Arc<Table>,
+        table: &Arc<Table>,
         row_pointer: ItemPointer,
     ) -> Result<RowData, VisibleRowManagerError> {
         let row = self.row_manager.get(table, row_pointer).await?;
 
-        if VisibleRowManager::is_visible(self.tran_manager.clone(), tran_id, &row).await? {
+        if VisibleRowManager::is_visible(&mut self.tran_manager, tran_id, &row).await? {
             Ok(row)
         } else {
             Err(VisibleRowManagerError::NotVisibleRow(row))
@@ -61,28 +60,45 @@ impl VisibleRowManager {
 
     // Provides a filtered view that respects transaction visability
     pub fn get_stream(
-        self,
+        &self,
         tran_id: TransactionId,
-        table: Arc<Table>,
+        table: &Arc<Table>,
     ) -> impl Stream<Item = Result<RowData, VisibleRowManagerError>> {
-        try_stream! {
-            let tm = self.tran_manager;
+        let rm = self.row_manager.clone();
+        let mut tm = self.tran_manager.clone();
+        let table = table.clone();
 
-            for await row in self.row_manager.get_stream(table) {
+        try_stream! {
+            for await row in rm.get_stream(&table) {
                 let unwrap_row = row?;
-                if VisibleRowManager::is_visible(tm.clone(), tran_id, &unwrap_row).await? {
-                    debug!("Found visible row {:?}", unwrap_row);
+                if VisibleRowManager::is_visible(&mut tm, tran_id, &unwrap_row).await? {
                     yield unwrap_row;
-                } else {
-                    debug!("Found not visible row {:?}", unwrap_row);
                 }
             }
         }
     }
 
+    pub async fn any_visible(
+        &mut self,
+        table: &Arc<Table>,
+        tran_id: TransactionId,
+        ptrs: &Vec<ItemPointer>,
+    ) -> Result<bool, VisibleRowManagerError> {
+        for p in ptrs {
+            match self.get(tran_id, table, *p).await {
+                Ok(o) => return Ok(true),
+                Err(VisibleRowManagerError::NotVisibleRow(_)) => continue,
+                Err(e) => {
+                    return Err(e);
+                }
+            }
+        }
+        return Ok(false);
+    }
+
     //TODO I want to find a way to NOT depend on tm
     async fn is_visible(
-        mut tm: TransactionManager,
+        tm: &mut TransactionManager,
         tran_id: TransactionId,
         row_data: &RowData,
     ) -> Result<bool, VisibleRowManagerError> {
@@ -101,6 +117,7 @@ impl VisibleRowManager {
         }
 
         //TODO check hint bits
+
         if row_data.min > tran_id {
             return Ok(false);
         }

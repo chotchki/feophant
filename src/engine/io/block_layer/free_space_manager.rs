@@ -4,20 +4,21 @@
 
 use super::{
     super::page_formats::{PageId, PageOffset, PageType},
-    lock_cache_manager::{LockCacheManager, LockCacheManagerError},
+    file_manager2::{FileManager2, FileManager2Error},
 };
 use crate::constants::PAGE_SIZE;
-use bytes::{Buf, Bytes, BytesMut};
+use bytes::{Buf, BytesMut};
+use std::sync::Arc;
 use thiserror::Error;
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct FreeSpaceManager {
-    lock_cache_manager: LockCacheManager,
+    file_manager: Arc<FileManager2>,
 }
 
 impl FreeSpaceManager {
-    pub fn new(lock_cache_manager: LockCacheManager) -> FreeSpaceManager {
-        FreeSpaceManager { lock_cache_manager }
+    pub fn new(file_manager: Arc<FileManager2>) -> FreeSpaceManager {
+        FreeSpaceManager { file_manager }
     }
 
     pub async fn get_next_free_page(
@@ -30,9 +31,8 @@ impl FreeSpaceManager {
             page_type: PageType::FreeSpaceMap,
         };
         loop {
-            let page_handle = self.lock_cache_manager.get_page(free_id, &offset).await?;
-            match page_handle.as_ref() {
-                Some(s) => {
+            match self.file_manager.get_page(&free_id, &offset).await {
+                Ok((s, _read_guard)) => {
                     let mut page_frozen = s.clone();
                     match Self::find_first_free_page_in_page(&mut page_frozen) {
                         Some(s) => {
@@ -46,26 +46,20 @@ impl FreeSpaceManager {
                         }
                     }
                 }
-                None => {
-                    drop(page_handle);
-                    //Get the next offset, BUT since there could be a gap, we're going to blindly write all free
-                    //and loop to get it again.
-                    let next_po = self.lock_cache_manager.get_offset(free_id).await?;
-                    let mut new_page_handle = self
-                        .lock_cache_manager
-                        .get_page_for_update(free_id, &next_po)
-                        .await?;
+                Err(_) => {
+                    // Create the next offset page and loop again as a test.
+                    // Note: due to possible timing issues the next page might not be sequentially
+                    // next so we will check again on the next loop
+
+                    let (_, next_guard) = self.file_manager.get_next_offset(&free_id).await?;
 
                     let mut buffer = BytesMut::with_capacity(PAGE_SIZE as usize);
                     let new_page = vec![FreeStat::Free as u8; PAGE_SIZE as usize];
                     buffer.extend_from_slice(&new_page);
-                    new_page_handle.replace(buffer.freeze());
 
-                    self.lock_cache_manager
-                        .add_page(free_id, next_po, new_page_handle)
+                    self.file_manager
+                        .add_page(next_guard, buffer.freeze())
                         .await?;
-
-                    continue; //No increment since we could be at a gap
                 }
             }
         }
@@ -81,21 +75,23 @@ impl FreeSpaceManager {
             resource_key: page_id.resource_key,
             page_type: PageType::FreeSpaceMap,
         };
-        let (po, offset) = po.get_bitmask_offset();
-        let mut page_handle = self
-            .lock_cache_manager
-            .get_page_for_update(free_id, &po)
-            .await?;
-        let page = page_handle
-            .as_mut()
-            .ok_or(FreeSpaceManagerError::PageDoesNotExist(page_id))?;
-        let new_page = Self::set_status_inside_page(page, offset, status);
-        page_handle.replace(new_page);
+        let (fs_po, inner_offset) = po.get_bitmask_offset();
 
-        Ok(self
-            .lock_cache_manager
-            .update_page(free_id, po, page_handle)
-            .await?)
+        let (page, page_guard) = self
+            .file_manager
+            .get_page_for_update(&free_id, &fs_po)
+            .await?;
+
+        let mut buffer = BytesMut::with_capacity(PAGE_SIZE as usize);
+        buffer.extend_from_slice(&page);
+
+        Self::set_status_inside_page(&mut buffer, inner_offset, status);
+
+        self.file_manager
+            .update_page(page_guard, buffer.freeze())
+            .await?;
+
+        Ok(())
     }
 
     fn find_first_free_page_in_page(buffer: &mut impl Buf) -> Option<usize> {
@@ -119,9 +115,7 @@ impl FreeSpaceManager {
 
     /// Sets the status of a field inside a page, you MUST pass an offset
     /// that fits in the buffer.
-    fn set_status_inside_page(src: &Bytes, offset: usize, status: FreeStat) -> Bytes {
-        let mut buffer = BytesMut::with_capacity(src.len());
-        buffer.extend_from_slice(&src[..]);
+    fn set_status_inside_page(buffer: &mut BytesMut, offset: usize, status: FreeStat) {
         let offset_index = offset / 8;
         let offset_subindex = offset % 8;
 
@@ -133,47 +127,40 @@ impl FreeSpaceManager {
                 pre_load = !pre_load;
                 new_value = current_value & pre_load;
             }
-            FreeStat::InUse => {
+            FreeStat::Full => {
                 new_value = current_value | pre_load;
             }
         }
 
         buffer[offset_index] = new_value;
-
-        buffer.freeze()
     }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum FreeStat {
     Free = 0,
-    InUse = 1,
+    Full = 1,
 }
 
 #[derive(Debug, Error)]
 pub enum FreeSpaceManagerError {
     #[error(transparent)]
-    LockCacheManagerError(#[from] LockCacheManagerError),
-    #[error("Page Offset {0} doesn't exist")]
-    PageDoesNotExist(PageId),
+    FileManager2Error(#[from] FileManager2Error),
 }
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-
     use bytes::BufMut;
+    use std::sync::Arc;
     use tempfile::TempDir;
     use uuid::Uuid;
-
-    use crate::engine::io::block_layer::file_manager::FileManager;
 
     use super::*;
 
     /// Gets the status of a field inside a page, you MUST pass an offset
     /// that fits in the buffer.
     //This was in the implementation, I just only needed it for unit tests
-    fn get_status_inside_page(buffer: &Bytes, offset: usize) -> FreeStat {
+    fn get_status_inside_page(buffer: &BytesMut, offset: usize) -> FreeStat {
         let offset_index = offset / 8;
         let offset_subindex = offset % 8;
 
@@ -182,7 +169,7 @@ mod tests {
         if bit_value == 0 {
             FreeStat::Free
         } else {
-            FreeStat::InUse
+            FreeStat::Full
         }
     }
 
@@ -192,13 +179,11 @@ mod tests {
         let mut test = BytesMut::with_capacity(2);
         test.put_u16(0x0);
 
-        let mut test = test.freeze();
-
         for i in 0..test.len() * 8 {
             assert_eq!(get_status_inside_page(&test, i), FreeStat::Free);
-            test = FreeSpaceManager::set_status_inside_page(&test, i, FreeStat::InUse);
-            assert_eq!(get_status_inside_page(&test, i), FreeStat::InUse);
-            test = FreeSpaceManager::set_status_inside_page(&test, i, FreeStat::Free);
+            FreeSpaceManager::set_status_inside_page(&mut test, i, FreeStat::Full);
+            assert_eq!(get_status_inside_page(&test, i), FreeStat::Full);
+            FreeSpaceManager::set_status_inside_page(&mut test, i, FreeStat::Free);
             assert_eq!(get_status_inside_page(&test, i), FreeStat::Free);
         }
 
@@ -211,13 +196,11 @@ mod tests {
         test.put_u8(0x0);
         test.put_u8(0x0);
 
-        let mut test = test.freeze();
-
         for i in 0..test.len() * 8 {
             let free_page = FreeSpaceManager::find_first_free_page_in_page(&mut test.clone());
             assert_eq!(free_page, Some(i));
 
-            test = FreeSpaceManager::set_status_inside_page(&test, i, FreeStat::InUse);
+            FreeSpaceManager::set_status_inside_page(&mut test, i, FreeStat::Full);
         }
         assert_eq!(
             FreeSpaceManager::find_first_free_page_in_page(&mut test),
@@ -232,9 +215,8 @@ mod tests {
         let tmp = TempDir::new()?;
         let tmp_dir = tmp.path().as_os_str().to_os_string();
 
-        let fm = Arc::new(FileManager::new(tmp_dir)?);
-        let lm = LockCacheManager::new(fm);
-        let fsm = FreeSpaceManager::new(lm);
+        let fm = Arc::new(FileManager2::new(tmp_dir)?);
+        let fsm = FreeSpaceManager::new(fm);
 
         let page_id = PageId {
             resource_key: Uuid::new_v4(),
@@ -244,7 +226,7 @@ mod tests {
         let first_free = fsm.get_next_free_page(page_id).await?;
         assert_eq!(first_free, PageOffset(0));
 
-        fsm.mark_page(page_id, first_free, FreeStat::InUse).await?;
+        fsm.mark_page(page_id, first_free, FreeStat::Full).await?;
 
         let second_free = fsm.get_next_free_page(page_id).await?;
         assert_eq!(second_free, PageOffset(1));

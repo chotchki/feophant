@@ -17,7 +17,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use thiserror::Error;
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Analyzer {
     dl: DefinitionLookup,
 }

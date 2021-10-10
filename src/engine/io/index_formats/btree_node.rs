@@ -53,7 +53,8 @@ impl BTreeNode {
     pub fn write_node(buffer: &mut impl BufMut, node: Option<PageOffset>) {
         match node {
             Some(pn) => pn.serialize(buffer),
-            None => buffer.put_uint_le(0, size_of::<usize>()),
+            //TODO Fix when https://github.com/tokio-rs/bytes/pull/511 is accepted
+            None => buffer.put_uint_le(usize::MAX as u64, size_of::<usize>()),
         }
     }
 
@@ -143,7 +144,7 @@ impl BTreeNode {
         }
         let value = buffer.get_uint_le(size_of::<PageOffset>());
         let mut node = None;
-        if value != 0 {
+        if value != u64::try_from(usize::MAX)? {
             node = Some(PageOffset(usize::try_from(value)?));
         }
         Ok(node)

@@ -21,7 +21,7 @@ use tokio::pin;
 use tokio_stream::StreamExt;
 use uuid::Uuid;
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct DefinitionLookup {
     vis_row_man: VisibleRowManager,
 }
@@ -99,7 +99,7 @@ impl DefinitionLookup {
         let row_stream = self
             .vis_row_man
             .clone()
-            .get_stream(tran_id, SystemTables::PgClass.value());
+            .get_stream(tran_id, &SystemTables::PgClass.value());
         pin!(row_stream);
         while let Some(row_res) = row_stream.next().await {
             let row = row_res?;
@@ -118,10 +118,7 @@ impl DefinitionLookup {
     ) -> Result<Vec<RowData>, DefinitionLookupError> {
         let mut columns = vec![];
         let pg_attr = SystemTables::PgAttribute.value();
-        let row_stream = self
-            .vis_row_man
-            .clone()
-            .get_stream(tran_id, pg_attr.clone());
+        let row_stream = self.vis_row_man.clone().get_stream(tran_id, &pg_attr);
         pin!(row_stream);
         while let Some(row_res) = row_stream.next().await {
             let row = row_res?;
@@ -181,7 +178,7 @@ impl DefinitionLookup {
         let row_stream = self
             .vis_row_man
             .clone()
-            .get_stream(tran_id, SystemTables::PgIndex.value());
+            .get_stream(tran_id, &SystemTables::PgIndex.value());
         pin!(row_stream);
         while let Some(row_res) = row_stream.next().await {
             let row = row_res?;
@@ -253,7 +250,7 @@ impl DefinitionLookup {
         let row_stream = self
             .vis_row_man
             .clone()
-            .get_stream(tran_id, SystemTables::PgConstraint.value());
+            .get_stream(tran_id, &SystemTables::PgConstraint.value());
         pin!(row_stream);
         while let Some(row_res) = row_stream.next().await {
             let row = row_res?;
@@ -322,8 +319,8 @@ pub enum DefinitionLookupError {
 mod tests {
     use tempfile::TempDir;
 
-    use crate::engine::io::block_layer::file_manager::FileManager;
-    use crate::engine::io::block_layer::lock_cache_manager::LockCacheManager;
+    use crate::engine::io::block_layer::file_manager2::FileManager2;
+    use crate::engine::io::block_layer::free_space_manager::FreeSpaceManager;
 
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::super::super::io::RowManager;
@@ -336,9 +333,10 @@ mod tests {
         let tmp = TempDir::new()?;
         let tmp_dir = tmp.path().as_os_str().to_os_string();
 
-        let fm = Arc::new(FileManager::new(tmp_dir)?);
+        let fm = Arc::new(FileManager2::new(tmp_dir.clone())?);
+        let fsm = FreeSpaceManager::new(fm.clone());
+        let rm = RowManager::new(fm, fsm);
         let tm = TransactionManager::new();
-        let rm = RowManager::new(LockCacheManager::new(fm));
         let vm = VisibleRowManager::new(rm, tm);
         let dl = DefinitionLookup::new(vm);
 
@@ -355,9 +353,10 @@ mod tests {
         let tmp = TempDir::new()?;
         let tmp_dir = tmp.path().as_os_str().to_os_string();
 
-        let fm = Arc::new(FileManager::new(tmp_dir)?);
+        let fm = Arc::new(FileManager2::new(tmp_dir.clone())?);
+        let fsm = FreeSpaceManager::new(fm.clone());
+        let rm = RowManager::new(fm, fsm);
         let tm = TransactionManager::new();
-        let rm = RowManager::new(LockCacheManager::new(fm));
         let vm = VisibleRowManager::new(rm, tm);
         let dl = DefinitionLookup::new(vm);
 
@@ -378,10 +377,11 @@ mod tests {
         let tmp = TempDir::new()?;
         let tmp_dir = tmp.path().as_os_str().to_os_string();
 
-        let fm = Arc::new(FileManager::new(tmp_dir)?);
+        let fm = Arc::new(FileManager2::new(tmp_dir.clone())?);
+        let fsm = FreeSpaceManager::new(fm.clone());
+        let rm = RowManager::new(fm.clone(), fsm);
         let mut tm = TransactionManager::new();
-        let rm = RowManager::new(LockCacheManager::new(fm.clone()));
-        let vm = VisibleRowManager::new(rm.clone(), tm.clone());
+        let vm = VisibleRowManager::new(rm, tm.clone());
         let dl = DefinitionLookup::new(vm);
         let mut engine = Engine::new(fm, tm.clone());
 
