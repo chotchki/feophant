@@ -189,6 +189,8 @@ impl IndexManager {
             page_type: PageType::Data,
         };
 
+        debug!("index searching for {:?}", key);
+
         let (mut first_page, _first_guard) =
             match self.file_manager.get_page(&page_id, &PageOffset(0)).await {
                 Ok(s) => s,

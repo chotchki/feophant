@@ -74,6 +74,7 @@ impl ConstraintManager {
         for c in &table.constraints {
             match c {
                 crate::engine::objects::Constraint::PrimaryKey(p) => {
+                    debug!("searching for {:?}", user_data);
                     match self
                         .index_manager
                         .search_for_key(
@@ -88,7 +89,7 @@ impl ConstraintManager {
                             //We need to check if each of these rows are alive
                             if self
                                 .vis_row_man
-                                .any_visible(&table, current_tran_id, &rows)
+                                .any_visible(table, current_tran_id, &rows)
                                 .await?
                             {
                                 return Err(ConstraintManagerError::PrimaryKeyViolation());
@@ -98,18 +99,32 @@ impl ConstraintManager {
                             continue;
                         }
                     }
-
-                    //TODO So for a primary key we have to check for no other dups in the table
-
-                    //So what I want to do is ask the index manager to to get active rows matching the key
                 }
             }
         }
 
-        Ok(self
+        //Insert the row
+        let row_item_ptr = self
             .vis_row_man
-            .insert_row(current_tran_id, table, user_data)
-            .await?)
+            .insert_row(current_tran_id, table, user_data.clone())
+            .await?;
+
+        //Update the indexes
+        //TODO figure out if that makes sense in this layer
+        for i in &table.indexes {
+            let tuple_for_index = match user_data.clone().filter_map(&table.sql_type, &i.columns) {
+                Ok(u) => u,
+                Err(_) => {
+                    continue;
+                }
+            };
+
+            self.index_manager
+                .add(i, tuple_for_index, row_item_ptr)
+                .await?;
+        }
+
+        Ok(row_item_ptr)
     }
 
     /// Gets a specific tuple from below, at the moment just a passthrough
