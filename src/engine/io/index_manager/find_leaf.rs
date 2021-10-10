@@ -41,8 +41,7 @@ pub async fn find_leaf(
                     if first_node.root_offset == PageOffset(0) {
                         debug!("root is zero");
 
-                        let (root_offset, root_guard) =
-                            fm.get_next_offset_non_zero(&page_id).await?;
+                        let (root_offset, root_guard) = fm.get_next_offset(&page_id).await?;
                         let root_node = BTreeLeaf::new(offset);
                         fm.add_page(root_guard, root_node.serialize_and_pad())
                             .await?;
@@ -79,7 +78,7 @@ pub async fn find_leaf(
                         continue;
                     }
 
-                    let (root_offset, root_guard) = fm.get_next_offset_non_zero(&page_id).await?;
+                    let (root_offset, root_guard) = fm.get_next_offset(&page_id).await?;
                     let root_node = BTreeLeaf::new(new_offset);
                     fm.add_page(root_guard, root_node.serialize_and_pad())
                         .await?;
@@ -155,7 +154,7 @@ mod tests {
         let (first_offset, first_guard) = fm.get_next_offset(&page_id).await?;
         assert_eq!(first_offset, PageOffset(0));
 
-        let (root_offset, root_guard) = fm.get_next_offset_non_zero(&page_id).await?;
+        let (root_offset, root_guard) = fm.get_next_offset(&page_id).await?;
         assert_ne!(root_offset, PageOffset(0));
 
         let btfp = BTreeFirstPage { root_offset };

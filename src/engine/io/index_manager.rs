@@ -125,7 +125,7 @@ impl IndexManager {
             if parent_node_offset == PageOffset(0) {
                 //We've hit the top of the system so we'll have to remake the root page
                 let (new_root_offset, new_root_guard) =
-                    self.file_manager.get_next_offset_non_zero(&page_id).await?;
+                    self.file_manager.get_next_offset(&page_id).await?;
 
                 let new_root =
                     BTreeBranch::new(PageOffset(0), new_left_offset, split_key, new_right_offset);
@@ -155,7 +155,7 @@ impl IndexManager {
                 } else {
                     //Need to split the branch and move up a level
                     let (new_right_offset, new_right_guard) =
-                        self.file_manager.get_next_offset_non_zero(&page_id).await?;
+                        self.file_manager.get_next_offset(&page_id).await?;
 
                     let (middle_key, new_right) =
                         b.add_and_split(new_left_offset, split_key, new_right_offset)?;

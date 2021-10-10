@@ -80,7 +80,7 @@ mod tests {
         let (first_offset, first_guard) = fm.get_next_offset(&page_id).await?;
         assert_eq!(first_offset, PageOffset(0));
 
-        let (root_offset, _root_guard) = fm.get_next_offset_non_zero(&page_id).await?;
+        let (root_offset, _root_guard) = fm.get_next_offset(&page_id).await?;
         assert_ne!(root_offset, PageOffset(0));
 
         let btfp = BTreeFirstPage { root_offset };

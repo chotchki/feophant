@@ -23,8 +23,8 @@ pub async fn split_leaf(
         page_type: PageType::Data,
     };
 
-    let (left_node_offset, left_node_guard) = fm.get_next_offset_non_zero(&page_id).await?;
-    let (right_node_offset, right_node_guard) = fm.get_next_offset_non_zero(&page_id).await?;
+    let (left_node_offset, left_node_guard) = fm.get_next_offset(&page_id).await?;
+    let (right_node_offset, right_node_guard) = fm.get_next_offset(&page_id).await?;
 
     let (new_split_key, new_right_node) =
         leaf.add_and_split(left_node_offset, right_node_offset, new_key, item_ptr)?;
@@ -98,7 +98,7 @@ mod tests {
             page_type: PageType::Data,
         };
 
-        let (parent_offset, _parent_guard) = fm.get_next_offset_non_zero(&page_id).await?;
+        let (parent_offset, _parent_guard) = fm.get_next_offset(&page_id).await?;
         let mut leaf = BTreeLeaf::new(parent_offset);
         //let leaf_size = leaf.nodes.len();
 

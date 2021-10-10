@@ -78,7 +78,7 @@ impl FileManager2 {
         Ok((new_po, write_lock))
     }
 
-    pub async fn get_next_offset_non_zero(
+    async fn get_next_offset_non_zero(
         &self,
         page_id: &PageId,
     ) -> Result<(PageOffset, OwnedRwLockWriteGuard<(PageId, PageOffset)>), FileManager2Error> {
