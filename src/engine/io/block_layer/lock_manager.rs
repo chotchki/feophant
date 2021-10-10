@@ -10,9 +10,6 @@ use tokio::sync::{OwnedRwLockReadGuard, OwnedRwLockWriteGuard, RwLock};
 /// Before accessing the I/O layer you must get a read or write lock on
 /// the page you need to access. Only AFTER you have the lock you should
 /// ask for the page.
-///
-/// TODO: Find a way that I can do this in a type enforcing way.
-
 #[derive(Clone)]
 pub struct LockManager {
     locks: Cache<(PageId, PageOffset), Arc<RwLock<(PageId, PageOffset)>>>,
