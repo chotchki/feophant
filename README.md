@@ -6,11 +6,14 @@ We now have support for persistent storage! Not crash safe but I'm getting there
 
 [![Latest Build][build-badge]][build-url]
 [![codecov][codecov-badge]][codecov-url]
+[![dependency status][dep-badge]][dep-url]
 
 [build-badge]: https://github.com/chotchki/feophant/actions/workflows/test_source_coverage.yaml/badge.svg
 [build-url]: https://github.com/chotchki/feophant/actions/workflows/test_source_coverage.yaml
 [codecov-badge]: https://codecov.io/gh/chotchki/feophant/branch/main/graph/badge.svg?token=6JV9391LY0
 [codecov-url]: https://codecov.io/gh/chotchki/feophant
+[dep-badge]: https://deps.rs/repo/github/chotchki/feophant/status.svg
+[dep-url]: https://deps.rs/repo/github/chotchki/feophant
 
 [Website](https://feophant.com)
 
