@@ -63,8 +63,7 @@ impl IndexManager {
         };
 
         //Find the target leaf
-        let (page_guard, page_offset, mut leaf) =
-            find_leaf(&self.file_manager, index_def, &new_key).await?;
+        let (page_guard, mut leaf) = find_leaf(&self.file_manager, index_def, &new_key).await?;
 
         //If the key fits in the leaf, we add it and are done
         if leaf.can_fit(&new_key) {

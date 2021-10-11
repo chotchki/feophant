@@ -108,7 +108,7 @@ mod tests {
 
     #[test]
     fn sizes_match() -> Result<(), Box<dyn std::error::Error>> {
-        let mut test = PageHeader::new();
+        let test = PageHeader::new();
         let calc_len = PageHeader::encoded_size();
 
         let mut buffer = BytesMut::new();

@@ -2,8 +2,8 @@ use std::ops::{Bound, RangeBounds};
 use thiserror::Error;
 
 pub fn index_search_start<'a, K, R, T>(
-    keys: &Vec<K>,
-    pointers: &'a Vec<T>,
+    keys: &[K],
+    pointers: &'a [T],
     range: R,
 ) -> Result<&'a T, IndexSearchError>
 where

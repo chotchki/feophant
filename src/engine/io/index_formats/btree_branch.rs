@@ -120,7 +120,7 @@ impl BTreeBranch {
         (PageOffset::encoded_size()) + //Parent Pointer
         expected_encoded_size(self.keys.len() + 1) + //Length assuming inserted
         self.keys.iter().fold(0, |acc, tup| acc +
-            NullMask::encoded_size(&tup) +
+            NullMask::encoded_size(tup) +
             tup.encoded_size()) + //Keys
          NullMask::encoded_size(new_key) +  //New key null mask
         new_key.encoded_size() + //New Key
@@ -224,7 +224,6 @@ mod tests {
     use uuid::Uuid;
 
     fn get_index() -> Index {
-        let tbl_uuid = Uuid::new_v4();
         let attrs = vec![
             Attribute::new(
                 "foo".to_string(),

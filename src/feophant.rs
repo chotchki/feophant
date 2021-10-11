@@ -25,7 +25,6 @@ pub struct FeOphant {
     listener: TcpListener,
     transaction_manager: TransactionManager,
     engine: Engine,
-    file_manager: Arc<FileManager2>,
 }
 
 impl FeOphant {
@@ -43,7 +42,6 @@ impl FeOphant {
             listener,
             transaction_manager,
             engine,
-            file_manager,
         })
     }
 

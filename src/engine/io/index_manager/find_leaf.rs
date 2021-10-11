@@ -17,14 +17,7 @@ pub async fn find_leaf(
     fm: &FileManager2,
     index_def: &Index,
     new_key: &SqlTuple,
-) -> Result<
-    (
-        OwnedRwLockWriteGuard<(PageId, PageOffset)>,
-        PageOffset,
-        BTreeLeaf,
-    ),
-    FindLeafError,
-> {
+) -> Result<(OwnedRwLockWriteGuard<(PageId, PageOffset)>, BTreeLeaf), FindLeafError> {
     let page_id = PageId {
         resource_key: index_def.id,
         page_type: PageType::Data,
@@ -64,7 +57,7 @@ pub async fn find_leaf(
                             continue;
                         }
                         BTreeNode::Leaf(l) => {
-                            return Ok((page_guard, offset, l));
+                            return Ok((page_guard, l));
                         }
                     }
                 }
@@ -90,7 +83,7 @@ pub async fn find_leaf(
                     offset = root_offset;
                     continue;
                 }
-                return Err(FindLeafError::FileManager2Error(e));
+                return Err(FindLeafError::FileManager2(e));
             }
         }
     }
@@ -99,13 +92,13 @@ pub async fn find_leaf(
 #[derive(Debug, Error)]
 pub enum FindLeafError {
     #[error(transparent)]
-    BTreeBranchError(#[from] BTreeBranchError),
+    BTreeBranch(#[from] BTreeBranchError),
     #[error(transparent)]
-    BTreeFirstPageError(#[from] BTreeFirstPageError),
+    BTreeFirstPage(#[from] BTreeFirstPageError),
     #[error(transparent)]
-    BTreeNodeError(#[from] BTreeNodeError),
+    BTreeNode(#[from] BTreeNodeError),
     #[error(transparent)]
-    FileManager2Error(#[from] FileManager2Error),
+    FileManager2(#[from] FileManager2Error),
 }
 
 #[cfg(test)]
@@ -168,13 +161,13 @@ mod tests {
         fm.update_page(root_guard, root.serialize_and_pad()).await?;
 
         // Okay now its time to actually test
-        let (_, offset, leaf) = find_leaf(&fm, &index, &key).await?;
+        let (guard, leaf) = find_leaf(&fm, &index, &key).await?;
         assert_eq!(leaf, root);
-        assert_ne!(offset, PageOffset(0));
+        assert_ne!(guard.1, PageOffset(0));
 
-        let (_, offset2, leaf2) = find_leaf(&fm, &index, &key).await?;
+        let (guard2, leaf2) = find_leaf(&fm, &index, &key).await?;
         assert_eq!(leaf2, root);
-        assert_eq!(offset, offset2);
+        assert_eq!(guard.1, guard2.1);
         Ok(())
     }
 }

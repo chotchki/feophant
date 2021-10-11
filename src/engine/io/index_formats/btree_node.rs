@@ -59,7 +59,7 @@ impl BTreeNode {
     }
 
     pub fn write_sql_tuple(buffer: &mut impl BufMut, tuple: &SqlTuple) {
-        let nulls = NullMask::serialize(&tuple);
+        let nulls = NullMask::serialize(tuple);
         buffer.put(nulls);
 
         tuple.serialize(buffer);
@@ -96,12 +96,12 @@ impl BTreeNode {
                 buckets.insert(bucket, items);
             }
 
-            return Ok(BTreeNode::Leaf(BTreeLeaf {
+            Ok(BTreeNode::Leaf(BTreeLeaf {
                 parent_node,
                 left_node,
                 right_node,
                 nodes: buckets,
-            }));
+            }))
         } else {
             let keys_count = parse_size(buffer)?;
             let mut keys = Vec::with_capacity(keys_count);
@@ -127,11 +127,11 @@ impl BTreeNode {
                 pointers.push(pointer);
             }
 
-            return Ok(BTreeNode::Branch(BTreeBranch {
+            Ok(BTreeNode::Branch(BTreeBranch {
                 parent_node,
                 keys,
                 pointers,
-            }));
+            }))
         }
     }
 
@@ -156,8 +156,8 @@ impl BTreeNode {
     ) -> Result<SqlTuple, BTreeNodeError> {
         let nulls = NullMask::parse(buffer, index_def.columns.len())?;
         let mut bucket = vec![];
-        for c in 0..index_def.columns.len() {
-            if nulls[c] {
+        for (c, item) in nulls.iter().enumerate().take(index_def.columns.len()) {
+            if *item {
                 bucket.push(None);
             } else {
                 let key = BaseSqlTypes::deserialize(&index_def.columns[c].1, buffer)?;
