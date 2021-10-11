@@ -23,6 +23,7 @@ Launch the server
 `./feophant`
 
 Lauch a postgres client application to test
+`./pgbench -i -h 127.0.0.1 -p 50000`
 `./pgbench -h 127.0.0.1 -p 50000`
 `./psql -h 127.0.0.1 -p 50000`
 

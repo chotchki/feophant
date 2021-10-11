@@ -165,9 +165,12 @@ mod tests {
         assert_eq!(leaf, root);
         assert_ne!(guard.1, PageOffset(0));
 
+        let po1 = guard.1;
+        drop(guard);
+
         let (guard2, leaf2) = find_leaf(&fm, &index, &key).await?;
         assert_eq!(leaf2, root);
-        assert_eq!(guard.1, guard2.1);
+        assert_eq!(po1, guard2.1);
         Ok(())
     }
 }
