@@ -3,8 +3,8 @@
 
 use crate::engine::objects::{ParseTree, RawColumn};
 
-use super::super::super::objects::RawCreateTableCommand;
-use super::super::common::{
+use super::super::super::super::objects::RawCreateTableCommand;
+use super::super::super::common::{
     match_close_paren, match_comma, match_open_paren, maybe_take_whitespace, parse_sql_identifier,
     take_whitespace,
 };

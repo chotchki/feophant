@@ -9,6 +9,8 @@ use nom::IResult;
 
 use crate::engine::objects::ParseExpression;
 
+use super::constants::parse_sql_string;
+
 pub(super) fn parse_sql_identifier<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
     input: &'a str,
 ) -> IResult<&'a str, &'a str, E> {
@@ -26,21 +28,6 @@ pub(super) fn parse_expression<'a, E: ParseError<&'a str> + ContextError<&'a str
     input: &'a str,
 ) -> IResult<&'a str, ParseExpression, E> {
     cut(alt((parse_sql_string, parse_sql_integer, parse_sql_null)))(input)
-}
-
-fn parse_sql_string<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
-    input: &'a str,
-) -> IResult<&'a str, ParseExpression, E> {
-    //Code from here: https://stackoverflow.com/a/58520871
-    let seq = recognize(separated_list1(tag("''"), many0(none_of("'"))));
-    let unquote = escaped_transform(none_of("'"), '\'', tag("'"));
-    let (input, (_, sql_value, _)) = tuple((
-        maybe_take_whitespace,
-        delimited(tag("'"), map_parser(seq, unquote), tag("'")),
-        maybe_take_whitespace,
-    ))(input)?;
-
-    Ok((input, ParseExpression::String(sql_value)))
 }
 
 fn parse_sql_integer<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
@@ -126,22 +113,5 @@ mod tests {
         assert_eq!(test, value);
     }
 
-    #[test]
-    fn test_parse_sql_string() {
-        let test = "'one''two'";
-        let expected = ParseExpression::String("one'two".to_string());
 
-        let res = parse_sql_string::<VerboseError<&str>>(test);
-        let res = match res {
-            Ok(o) => o,
-            Err(e) => {
-                println!("{} {:?}", e, e);
-                panic!("Ah crap");
-            }
-        };
-        //assert!(res.is_ok());
-        let (output, value) = res;
-        assert_eq!(output.len(), 0);
-        assert_eq!(expected, value);
-    }
 }

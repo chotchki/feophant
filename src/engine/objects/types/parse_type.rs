@@ -45,7 +45,7 @@ mod tests {
     use nom::Finish;
 
     use super::*;
-
+    /*
     #[test]
     fn test_mapping() -> Result<(), Box<dyn std::error::Error>> {
         let (_, res) = parse_type::<VerboseError<&str>>("bool").finish()?;
@@ -79,4 +79,5 @@ mod tests {
         );
         Ok(())
     }
+    */
 }

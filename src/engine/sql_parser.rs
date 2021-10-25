@@ -1,15 +1,27 @@
 //! Top Level of the sql parsing engine
+/*
+    Need to re-organize this better:
 
+        Sql_Parser
+            Tokens <--- not needed by nom
+            Comments
+            Constants
+            Identifiers
+            Expressions
+            Commands
+
+*/
+
+mod commands;
 mod common;
-mod create;
-mod insert;
-mod select;
+mod constants;
 
-use self::select::parse_select;
+use self::commands::select::parse_select;
 
 use super::objects::ParseTree;
-use create::parse_create_table;
-use insert::parse_insert;
+use commands::create::parse_create_table;
+use commands::insert::parse_insert;
+use constants::parse_sql_string;
 use nom::branch::alt;
 use nom::bytes::complete::tag;
 use nom::combinator::{complete, opt};

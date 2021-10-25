@@ -3,8 +3,8 @@
 
 use crate::engine::objects::{ParseExpression, ParseTree};
 
-use super::super::objects::RawInsertCommand;
-use super::common::{
+use super::super::super::objects::RawInsertCommand;
+use super::super::common::{
     match_close_paren, match_comma, match_open_paren, maybe_take_whitespace, parse_column_names,
     parse_expression, parse_sql_identifier, take_whitespace,
 };
@@ -15,7 +15,7 @@ use nom::multi::separated_list0;
 use nom::sequence::tuple;
 use nom::IResult;
 
-pub(super) fn parse_insert<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
+pub fn parse_insert<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
     input: &'a str,
 ) -> IResult<&'a str, ParseTree, E> {
     let (input, (_, (_, table_name, _, provided_columns, _, provided_values))) = tuple((
