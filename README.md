@@ -1,65 +1,66 @@
 # FeOphant
 
-A SQL database server written in Rust and inspired by PostreSQL.
+A SQL database server I wrote from scratch in Rust — point `psql` at it and run a query, real rows come back. ~10,000 lines of database internals, built by hand in 2021, before GenAI existed. If you want a look at how I think through a hard system with no assistant in the loop, this is the cleanest one I've got.
 
-We now have support for persistent storage! Not crash safe but I'm getting there!
+## What's under it
 
-[![Latest Build][build-badge]][build-url]
-[![codecov][codecov-badge]][codecov-url]
-[![dependency status][dep-badge]][dep-url]
+Real subsystems, not a SQL-string-to-HashMap toy:
 
-[build-badge]: https://github.com/chotchki/feophant/actions/workflows/test_source_coverage.yaml/badge.svg
-[build-url]: https://github.com/chotchki/feophant/actions/workflows/test_source_coverage.yaml
-[codecov-badge]: https://codecov.io/gh/chotchki/feophant/branch/main/graph/badge.svg?token=6JV9391LY0
-[codecov-url]: https://codecov.io/gh/chotchki/feophant
-[dep-badge]: https://deps.rs/repo/github/chotchki/feophant/status.svg
-[dep-url]: https://deps.rs/repo/github/chotchki/feophant
+- **Postgres v3 wire protocol** — a hand-written decoder/encoder, startup and SSL negotiation. Real Postgres clients connect with no shim.
+- **Heap storage** — 8KB pages laid out like Postgres's own (page header, item pointers, per-row `info_mask` hint bits and a null bitmap). Rows hit disk and come back.
+- **B-tree index** — leaf and branch nodes, node splits and the search down to a leaf. It's what enforces the primary key.
+- **MVCC** — a transaction manager off Postgres's clog model, visibility computed from the hint bits. It gets its OWN test suite, because visibility is the corner I trusted myself on least.
+- **System catalogs** — `pg_class`, `pg_attribute`, `pg_index` and `pg_constraint`, so a real client can introspect the schema.
 
-[Website](https://feophant.com)
+One query walks the whole stack:
 
-## Launch
+```mermaid
+flowchart TD
+    C["Postgres client · psql / tokio-postgres"] -->|"v3 wire protocol"| E["Wire codec + SQL parser + engine"]
+    E --> T["Trigger Manager"]
+    T --> S["Security Manager"]
+    S --> CM["Constraint Manager"]
+    CM --> V["Visible-Row Manager · MVCC"]
+    V --> R["Row Manager · heap tuples, hint bits"]
+    R --> IO["I/O Manager · pages, free-space, locks"]
+    IO --> D[("8KB pages on disk")]
+    K["Null / Unique / Custom constraints"] -.-> CM
+    TX["Transaction Manager"] -.-> V
+    IDX["B-tree Index Manager"] -.-> V
+```
 
-Launch the server
-`./feophant`
+## Where I diverged from Postgres (on purpose)
 
-Lauch a postgres client application to test
-`./pgbench -i -h 127.0.0.1 -p 50000`
-`./pgbench -h 127.0.0.1 -p 50000`
-`./psql -h 127.0.0.1 -p 50000`
+Copying Postgres exactly would've taught me nothing, so I changed the parts worth changing:
 
-Benchmark to aid in profiling
-`cargo instruments --bench feophant_benchmark -t time`
+- **async/Tokio, not multi-process shared memory** — a different concurrency model on purpose (and no SYSV shared memory to babysit).
+- **64/128-bit transaction IDs and UUIDs instead of OIDs** — to make the vacuum / transaction-ID-wraparound problem just go away. That quibble is what started the whole thing.
+- **Schema-as-code** — the idea I was chasing: your schema IS your binary. Change it by shipping a new binary, and the compiler drops whatever your workload never touches. On-disk format migration is the hard part (it's where I stopped).
 
-## What works user facing
-* Connecting unauthenticated using a postgres client/driver. 
-* You can create tables, insert data and query single tables.
-* Data is persisted to disk, not crash safe and the on disk format is NOT stable.
+## What works
 
-## Postgres Divergance
+Connect any Postgres driver (unauthenticated), `CREATE TABLE`, `INSERT` and `SELECT` against a single table. Data survives a restart.
 
-Its kinda pointless to blindly reproduce what has already been done so I'm making the following changes to the db server design vs Postgres.
+Proven in the tests, not just asserted:
 
-* Rust's memory safety and strong type system.
-* Multi-threaded async design based on Tokio instead of Postgres's multi-process design.
-* * Perk of this is not needing to manage SYSV shared memory. (Postgres largely fixed this but I think its still worth noting).
-* Want to avoid vaccuum for transaction wrap around. Will try 64-bit transaction IDs but might go to 128-bit.
-* * I can avoid the need to freeze Transaction IDs however the hint bits will need scanning to ensure that they are updated.
-* Replacing OIDs with UUIDv4s.
+- real clients drive it — the suite runs on [`tokio-postgres`](https://github.com/chotchki/feophant/blob/main/tests/sql_simple_select.rs)
+- the primary key holds — [a duplicate insert FAILS](https://github.com/chotchki/feophant/blob/main/tests/sql_primary_key_insert.rs)
+- MVCC visibility has [its own suite](https://github.com/chotchki/feophant/blob/main/tests/visibility_tests.rs)
+- persistence is real — [a benchmark](https://github.com/chotchki/feophant/blob/main/benches/feophant_benchmark.rs) tears down the row manager, rebuilds it from disk and re-reads all 500 rows
 
-* I think I've figured out what the core divergeance from Postgres that I'm interested in. I love Postgres's transactional DDLs but version controlling a schema is awful. What if I make the database server a library and your schema is code? You supply a new binary that runs as the database server and if you need to change it you just deploy the binary instead? Then the compiler can optimize out anything you don't need to run the system in your use case. The hardest part is dealing with schema changes that affect your on disk format.
+## What's not done
 
+Paused in 2021. No WAL, so it is NOT crash-safe — a `kill -9` mid-write can leave the on-disk format inconsistent, and that format isn't stable across versions. Single-table only, no joins. It's a database CORE, not a finished database.
 
-### Rust Notes
+The honest reason it stopped: I needed a parser combinator nom didn't have — `take_until_parser_matches`, to scan forward across multiple SQL statements — and got stuck trying to upstream it ([nom#1441](https://github.com/rust-bakery/nom/pull/1441)). The PR stalled, I was carrying [my own fork](https://github.com/chotchki/nom/tree/take_until_parser_matches), and the side project lost its thread there.
 
-How to setup modules sanely: https://dev.to/stevepryde/intro-to-rust-modules-3g8k
+## Run it
 
-Reasonable application error type creation: https://github.com/dtolnay/anyhow
+```
+cargo run                        # start the server
+psql -h 127.0.0.1 -p 50000       # connect a real client and query it
+```
 
-Library Errors: https://github.com/dtolnay/thiserror
+## License
 
-Rust's inability to treat enum variants as a type is a HUGE pain. I end up having an enum to hold data and another enum to validate and match the sub type. The [RFC](https://github.com/rust-lang/rfcs/pull/2593) to fix this was postponed indefinately.
-
-
-## Legal Stuff (Note I'm not a lawyer!)
-
-I am explicitly striving for SQL+Driver compatibility with [PostgreSQL](https://www.postgresql.org) so things such as system tables and code that handles them will be named the same. I don't think this violates their [trademark policy](https://www.postgresql.org/about/policies/trademarks/) but if I am please just reach out to me! I have also gone with a pretty restrictive license but I'm not tied to it if that is causing an issue for others who are using the code.
+AGPL-3.0-or-later — 100% my code, so the license is a choice, not an inheritance.
